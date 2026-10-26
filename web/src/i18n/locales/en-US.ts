@@ -2414,6 +2414,21 @@ const enUS = {
       installParserHint: 'Browse parser plugins in Extension Market →',
       confirmUpload: 'Upload',
       cancelUpload: 'Cancel',
+      filesSelected: '{{files}} file(s) selected',
+      uploadingFilesProgress: 'Uploading {{current}} of {{total}} files...',
+      uploadPartialFailure: '{{files}} file(s) failed to upload',
+      selectAll: 'Select all files',
+      selectRow: 'Select this file',
+      selectedCount: '{{files}} file(s) selected',
+      clearSelection: 'Clear selection',
+      deleteSelected: 'Delete selected',
+      deleteSingleConfirm: 'Delete "{{name}}"? This action cannot be undone.',
+      deleteBatchConfirm:
+        'Delete the {{files}} selected file(s)? This action cannot be undone.',
+      deletePartialFailure: '{{files}} file(s) failed to delete',
+      deleting: 'Deleting...',
+      noCommonParser:
+        'No parser supports all selected file types. Please upload these files in smaller batches.',
     },
     deleteKnowledgeBaseConfirmation:
       'Are you sure you want to delete this knowledge base? All documents in this knowledge base will be deleted.',

@@ -2425,6 +2425,24 @@ const jaJP = {
       installParserHint: 'マーケットプレイスでパーサープラグインを探す →',
       confirmUpload: 'アップロード',
       cancelUpload: 'キャンセル',
+      filesSelected: '{{files}} 件のファイルを選択中',
+      uploadingFilesProgress:
+        '{{current}}/{{total}} 件のファイルをアップロード中...',
+      uploadPartialFailure:
+        '{{files}} 件のファイルのアップロードに失敗しました',
+      selectAll: 'すべてのファイルを選択',
+      selectRow: 'このファイルを選択',
+      selectedCount: '{{files}} 件を選択中',
+      clearSelection: '選択を解除',
+      deleteSelected: '選択したファイルを削除',
+      deleteSingleConfirm:
+        '「{{name}}」を削除しますか？この操作は元に戻せません。',
+      deleteBatchConfirm:
+        '選択した {{files}} 件のファイルを削除しますか？この操作は元に戻せません。',
+      deletePartialFailure: '{{files}} 件のファイルの削除に失敗しました',
+      deleting: '削除中...',
+      noCommonParser:
+        '選択したすべてのファイル形式に対応するパーサーがありません。ファイルを分けてアップロードしてください。',
     },
     deleteKnowledgeBaseConfirmation:
       '本当にこの知識ベースを削除しますか？この知識ベースに紐付けられたドキュメントは削除されます。',

@@ -2438,6 +2438,21 @@ const ruRU = {
       installParserHint: 'Найти плагины-парсеры в маркетплейсе →',
       confirmUpload: 'Загрузить',
       cancelUpload: 'Отмена',
+      filesSelected: 'Выбрано файлов: {{files}}',
+      uploadingFilesProgress: 'Загрузка файлов {{current}} из {{total}}...',
+      uploadPartialFailure: 'Не удалось загрузить файлов: {{files}}',
+      selectAll: 'Выбрать все файлы',
+      selectRow: 'Выбрать этот файл',
+      selectedCount: 'Выбрано: {{files}}',
+      clearSelection: 'Снять выбор',
+      deleteSelected: 'Удалить выбранные',
+      deleteSingleConfirm: 'Удалить «{{name}}»? Это действие нельзя отменить.',
+      deleteBatchConfirm:
+        'Удалить выбранные файлы ({{files}})? Это действие нельзя отменить.',
+      deletePartialFailure: 'Не удалось удалить файлов: {{files}}',
+      deleting: 'Удаление...',
+      noCommonParser:
+        'Нет парсера, поддерживающего все выбранные типы файлов. Загрузите файлы меньшими партиями.',
     },
     deleteKnowledgeBaseConfirmation:
       'Вы уверены, что хотите удалить эту базу знаний? Все документы будут удалены.',

@@ -2365,6 +2365,22 @@ const thTH = {
       installParserHint: 'เรียกดูปลั๊กอินตัวแยกวิเคราะห์ใน Marketplace →',
       confirmUpload: 'อัปโหลด',
       cancelUpload: 'ยกเลิก',
+      filesSelected: 'เลือกแล้ว {{files}} ไฟล์',
+      uploadingFilesProgress: 'กำลังอัปโหลด {{current}}/{{total}} ไฟล์...',
+      uploadPartialFailure: 'อัปโหลดไม่สำเร็จ {{files}} ไฟล์',
+      selectAll: 'เลือกไฟล์ทั้งหมด',
+      selectRow: 'เลือกไฟล์นี้',
+      selectedCount: 'เลือกแล้ว {{files}} ไฟล์',
+      clearSelection: 'ยกเลิกการเลือก',
+      deleteSelected: 'ลบที่เลือก',
+      deleteSingleConfirm:
+        'ลบ "{{name}}" หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้',
+      deleteBatchConfirm:
+        'ลบไฟล์ที่เลือก {{files}} ไฟล์หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้',
+      deletePartialFailure: 'ลบไม่สำเร็จ {{files}} ไฟล์',
+      deleting: 'กำลังลบ...',
+      noCommonParser:
+        'ไม่มีตัวแยกวิเคราะห์ที่รองรับไฟล์ทุกประเภทที่เลือก โปรดอัปโหลดเป็นชุดเล็ก ๆ',
     },
     deleteKnowledgeBaseConfirmation:
       'คุณแน่ใจหรือไม่ว่าต้องการลบฐานความรู้นี้? เอกสารทั้งหมดในฐานความรู้นี้จะถูกลบ',

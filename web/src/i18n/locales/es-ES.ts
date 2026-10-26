@@ -2452,6 +2452,22 @@ const esES = {
       installParserHint: 'Buscar plugins de analizador en el Marketplace →',
       confirmUpload: 'Subir',
       cancelUpload: 'Cancelar',
+      filesSelected: '{{files}} archivo(s) seleccionado(s)',
+      uploadingFilesProgress: 'Subiendo {{current}} de {{total}} archivos...',
+      uploadPartialFailure: 'Error al subir {{files}} archivo(s)',
+      selectAll: 'Seleccionar todos los archivos',
+      selectRow: 'Seleccionar este archivo',
+      selectedCount: '{{files}} seleccionado(s)',
+      clearSelection: 'Borrar selección',
+      deleteSelected: 'Eliminar seleccionados',
+      deleteSingleConfirm:
+        '¿Eliminar «{{name}}»? Esta acción no se puede deshacer.',
+      deleteBatchConfirm:
+        '¿Eliminar los {{files}} archivos seleccionados? Esta acción no se puede deshacer.',
+      deletePartialFailure: 'Error al eliminar {{files}} archivo(s)',
+      deleting: 'Eliminando...',
+      noCommonParser:
+        'Ningún analizador admite todos los tipos de archivo seleccionados. Suba los archivos en lotes más pequeños.',
     },
     deleteKnowledgeBaseConfirmation:
       '¿Estás seguro de que deseas eliminar esta base de conocimiento? Todos los documentos de esta base se eliminarán.',

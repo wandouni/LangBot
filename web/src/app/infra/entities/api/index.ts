@@ -491,6 +491,7 @@ export interface ApiRespKnowledgeBaseFiles {
 export interface KnowledgeBaseFile {
   uuid: string;
   file_name: string;
+  original_file_name?: string | null;
   status: string;
 }
 

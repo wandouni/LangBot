@@ -2400,6 +2400,21 @@ const viVN = {
       installParserHint: 'Duyệt plugin trình phân tích trong Marketplace →',
       confirmUpload: 'Tải lên',
       cancelUpload: 'Hủy',
+      filesSelected: 'Đã chọn {{files}} tệp',
+      uploadingFilesProgress: 'Đang tải lên {{current}}/{{total}} tệp...',
+      uploadPartialFailure: 'Tải lên thất bại {{files}} tệp',
+      selectAll: 'Chọn tất cả tệp',
+      selectRow: 'Chọn tệp này',
+      selectedCount: 'Đã chọn {{files}} tệp',
+      clearSelection: 'Bỏ chọn',
+      deleteSelected: 'Xóa mục đã chọn',
+      deleteSingleConfirm: 'Xóa "{{name}}"? Không thể hoàn tác thao tác này.',
+      deleteBatchConfirm:
+        'Xóa {{files}} tệp đã chọn? Không thể hoàn tác thao tác này.',
+      deletePartialFailure: 'Xóa thất bại {{files}} tệp',
+      deleting: 'Đang xóa...',
+      noCommonParser:
+        'Không có trình phân tích nào hỗ trợ tất cả các loại tệp đã chọn. Vui lòng tải lên thành các lô nhỏ hơn.',
     },
     deleteKnowledgeBaseConfirmation:
       'Bạn có chắc chắn muốn xóa cơ sở tri thức này không? Tất cả tài liệu trong cơ sở tri thức này sẽ bị xóa.',

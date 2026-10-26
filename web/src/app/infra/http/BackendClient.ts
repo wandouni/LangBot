@@ -891,11 +891,17 @@ export class BackendClient extends BaseHttpClient {
   }
 
   // ============ File management API ============
-  public uploadDocumentFile(file: File): Promise<{ file_id: string }> {
+  public uploadDocumentFile(file: File): Promise<{
+    file_id: string;
+    original_file_name?: string | null;
+  }> {
     const formData = new FormData();
     formData.append('file', file);
 
-    return this.request<{ file_id: string }>({
+    return this.request<{
+      file_id: string;
+      original_file_name?: string | null;
+    }>({
       method: 'post',
       url: '/api/v1/files/documents',
       data: formData,
@@ -929,11 +935,20 @@ export class BackendClient extends BaseHttpClient {
     uuid: string,
     file_id: string,
     parserPluginId?: string,
+    originalFileName?: string,
   ): Promise<object> {
-    return this.post(`/api/v1/knowledge/bases/${uuid}/files`, {
-      file_id,
-      parser_plugin_id: parserPluginId,
-    });
+    const body: {
+      file_id: string;
+      parser_plugin_id?: string;
+      original_file_name?: string;
+    } = { file_id };
+    if (parserPluginId) {
+      body.parser_plugin_id = parserPluginId;
+    }
+    if (originalFileName) {
+      body.original_file_name = originalFileName;
+    }
+    return this.post(`/api/v1/knowledge/bases/${uuid}/files`, body);
   }
 
   public getKnowledgeBaseFiles(
