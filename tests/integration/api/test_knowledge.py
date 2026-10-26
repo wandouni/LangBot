@@ -303,8 +303,23 @@ class TestKnowledgeBaseFilesEndpoints:
         assert called.await_count == 1
         assert called.await_args.args[0].workspace_uuid == '00000000-0000-0000-0000-00000000000a'
         assert called.await_args.args[1:] == ('test-kb-uuid', 'test-file-id')
-        assert called.await_args.kwargs == {'parser_plugin_id': 'test/parser'}
+        assert called.await_args.kwargs == {'parser_plugin_id': 'test/parser', 'original_file_name': None}
         assert data['data'] == {'task_id': 'test-task-id'}
+
+    @pytest.mark.asyncio
+    async def test_add_file_forwards_normalized_original_name(self, quart_test_client, fake_knowledge_app):
+        response = await quart_test_client.post(
+            '/api/v1/knowledge/bases/test-kb-uuid/files',
+            headers={'Authorization': 'Bearer test_token'},
+            json={
+                'file_id': 'test-file-id',
+                'original_file_name': 'C:\\fakepath\\报告.pdf',
+            },
+        )
+
+        assert response.status_code == 200
+        called = fake_knowledge_app.knowledge_service.store_file
+        assert called.await_args.kwargs['original_file_name'] == '报告.pdf'
 
     @pytest.mark.asyncio
     async def test_delete_file_from_knowledge_base(self, quart_test_client, fake_knowledge_app):

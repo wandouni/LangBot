@@ -85,6 +85,9 @@ class File(Base):
     )
     kb_id = sqlalchemy.Column(sqlalchemy.String(255), nullable=True)
     file_name = sqlalchemy.Column(sqlalchemy.String)
+    # Display-only source name supplied by the uploader. NULL for historical rows.
+    # Never use this column as a storage key, filesystem path, or identity.
+    original_file_name = sqlalchemy.Column(sqlalchemy.String(512), nullable=True)
     extension = sqlalchemy.Column(sqlalchemy.String)
     created_at = sqlalchemy.Column(sqlalchemy.DateTime, default=sqlalchemy.func.now())
     status = sqlalchemy.Column(

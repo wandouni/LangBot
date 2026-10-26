@@ -1,5 +1,7 @@
 import quart
 
+from langbot.pkg.utils.filename import normalize_display_file_name
+
 from ....authz import Permission, has_permission
 from ....context import RequestContext
 from ......operation_trace import service as settings_service
@@ -130,11 +132,13 @@ class KnowledgeBaseRouterGroup(group.RouterGroup):
             if not file_id:
                 return self.http_status(400, -1, 'File ID is required')
             parser_plugin_id = json_data.get('parser_plugin_id')
+            original_file_name = normalize_display_file_name(json_data.get('original_file_name'))
             task_id = await self.ap.knowledge_service.store_file(
                 request_context,
                 knowledge_base_uuid,
                 file_id,
                 parser_plugin_id=parser_plugin_id,
+                original_file_name=original_file_name,
             )
             return self.success({'task_id': task_id})
 

@@ -95,11 +95,13 @@ class TestStoreFile:
         kb.ap.task_mgr.create_user_task = Mock(side_effect=create_user_task)
 
         object_key = _upload_key('documents/test.pdf')
-        task_id = await kb.store_file(CONTEXT, object_key)
+        task_id = await kb.store_file(CONTEXT, object_key, original_file_name='报告.pdf')
 
         assert task_id == 'task-1'
         kb.ap.storage_mgr.storage_provider.exists.assert_awaited_once_with(object_key)
         kb.ap.persistence_mgr.execute_async.assert_awaited_once()
+        insert_statement = kb.ap.persistence_mgr.execute_async.await_args.args[0]
+        assert insert_statement.compile().params['original_file_name'] == '报告.pdf'
         call_kwargs = kb.ap.task_mgr.create_user_task.call_args.kwargs
         assert call_kwargs['kind'] == 'knowledge-operation'
         assert call_kwargs['name'] == f'knowledge-store-file-{object_key}'
@@ -206,6 +208,8 @@ class TestStoreZipFile:
             )
         forwarded_keys = [call.args[1] for call in kb.store_file.await_args_list]
         assert forwarded_keys == saved_names
+        forwarded_names = [call.kwargs['original_file_name'] for call in kb.store_file.await_args_list]
+        assert forwarded_names == ['doc1.pdf', 'doc2.txt', 'subdir/doc3.md', 'page.html']
         kb.ap.storage_mgr.storage_provider.delete.assert_awaited_once_with(zip_key)
 
     @pytest.mark.asyncio

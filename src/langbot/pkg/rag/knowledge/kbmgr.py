@@ -18,6 +18,7 @@ from langbot.pkg.api.http.service.tenant import TenantContext, require_workspace
 from langbot.pkg.core import app, taskmgr
 from langbot.pkg.core.task_boundary import run_in_workspace_uow
 from langbot.pkg.entity.persistence import rag as persistence_rag
+from langbot.pkg.utils.filename import normalize_display_file_name
 from langbot.pkg.workspace.errors import WorkspaceInvariantError, WorkspaceNotFoundError
 
 from .base import KnowledgeBaseInterface
@@ -336,6 +337,7 @@ class RuntimeKnowledgeBase(KnowledgeBaseInterface):
         execution_context: ExecutionContext,
         file_id: str,
         parser_plugin_id: str | None = None,
+        original_file_name: str | None = None,
     ) -> str:
         await self._assert_execution_context(execution_context)
         self._require_upload_object_key(execution_context, file_id)
@@ -362,6 +364,7 @@ class RuntimeKnowledgeBase(KnowledgeBaseInterface):
             'workspace_uuid': execution_context.workspace_uuid,
             'kb_id': kb_id,
             'file_name': file_name,
+            'original_file_name': normalize_display_file_name(original_file_name, allow_path=True),
             'extension': extension,
             'status': 'pending',
         }
@@ -490,6 +493,7 @@ class RuntimeKnowledgeBase(KnowledgeBaseInterface):
                                 execution_context,
                                 extracted_object_key,
                                 parser_plugin_id=parser_plugin_id,
+                                original_file_name=normalize_display_file_name(file_info.filename, allow_path=True),
                             )
                         except Exception:
                             await self.ap.storage_mgr.delete_scoped_object_key(

@@ -7,6 +7,8 @@ import asyncio
 
 import quart.datastructures
 
+from langbot.pkg.utils.filename import normalize_display_file_name
+
 from ...authz import Permission
 from ...context import RequestContext
 from .. import group
@@ -175,5 +177,6 @@ class FilesRouterGroup(group.RouterGroup):
             return self.success(
                 data={
                     'file_id': file_key,
+                    'original_file_name': normalize_display_file_name(file.filename),
                 }
             )

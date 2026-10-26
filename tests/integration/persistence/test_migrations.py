@@ -196,6 +196,31 @@ class TestSQLiteMigrationUpgrade:
         assert 'enabled' not in columns
 
     @pytest.mark.asyncio
+    async def test_upgrade_0040_adds_knowledge_file_original_name(self, sqlite_engine):
+        async with sqlite_engine.begin() as conn:
+            await conn.exec_driver_sql(
+                'CREATE TABLE knowledge_base_files ('
+                'uuid VARCHAR(255) PRIMARY KEY, workspace_uuid VARCHAR(36) NOT NULL, '
+                'kb_id VARCHAR(255), file_name VARCHAR(255))'
+            )
+
+        def column_names(sync_conn):
+            return {
+                column['name']: column for column in sqlalchemy.inspect(sync_conn).get_columns('knowledge_base_files')
+            }
+
+        await run_alembic_stamp(sqlite_engine, '0040_session_summaries')
+        await run_alembic_upgrade(sqlite_engine, 'head')
+        async with sqlite_engine.connect() as conn:
+            columns = await conn.run_sync(column_names)
+        assert columns['original_file_name']['nullable'] is True
+
+        await run_alembic_downgrade(sqlite_engine, '0040_session_summaries')
+        async with sqlite_engine.connect() as conn:
+            columns = await conn.run_sync(column_names)
+        assert 'original_file_name' not in columns
+
+    @pytest.mark.asyncio
     async def test_upgrade_from_0012_adds_knowledge_base_embedding_dimension(self, sqlite_engine):
         """The PostgreSQL pgvector revision also evolves the OSS ORM schema."""
 

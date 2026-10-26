@@ -303,6 +303,7 @@ class KnowledgeService:
         kb_uuid: str,
         file_id: str,
         parser_plugin_id: str | None = None,
+        original_file_name: str | None = None,
     ) -> str:
         """存储文件"""
         execution_context = self._execution_context(context)
@@ -312,7 +313,12 @@ class KnowledgeService:
 
         await self._check_doc_capability(context, kb_uuid, 'document upload')
 
-        result = await runtime_kb.store_file(execution_context, file_id, parser_plugin_id=parser_plugin_id)
+        result = await runtime_kb.store_file(
+            execution_context,
+            file_id,
+            parser_plugin_id=parser_plugin_id,
+            original_file_name=original_file_name,
+        )
 
         # Update the KB's updated_at timestamp
         await self.ap.persistence_mgr.execute_async(

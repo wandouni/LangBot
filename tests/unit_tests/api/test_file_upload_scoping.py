@@ -52,7 +52,9 @@ async def test_document_upload_uses_dedicated_scoped_owner_type():
     )
 
     assert response.status_code == 200
-    assert (await response.get_json())['data']['file_id'] == 'scoped-document-key'
+    data = await response.get_json()
+    assert data['data']['file_id'] == 'scoped-document-key'
+    assert data['data']['original_file_name'] == 'report.pdf'
     storage_mgr.save_scoped.assert_awaited_once()
     context = storage_mgr.save_scoped.await_args.args[0]
     assert isinstance(context, RequestContext)
