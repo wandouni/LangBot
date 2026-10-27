@@ -13,3 +13,7 @@ metadata:
     vi_VN: Bảng phân tích hỏi đáp
 spec:
   path: dashboard/index.html
+execution:
+  python:
+    path: dashboard_page.py
+    attr: QAAnalyticsDashboardPage
