@@ -8,6 +8,55 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/components/providers/theme-provider';
 import { useAuthenticatedPluginAsset } from '@/hooks/useAuthenticatedPluginResource';
 
+const PAGE_PREFERENCE_PREFIX = 'langbot:plugin-page-preferences:';
+const MAX_PREFERENCE_KEYS = 20;
+const MAX_PREFERENCE_KEY_LENGTH = 64;
+const MAX_PREFERENCE_VALUE_LENGTH = 512;
+
+function pagePreferenceStorageKey(
+  author: string,
+  pluginName: string,
+  pageId: string,
+): string {
+  return `${PAGE_PREFERENCE_PREFIX}${author}/${pluginName}/${pageId}`;
+}
+
+function sanitizePagePreferences(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (Object.keys(result).length >= MAX_PREFERENCE_KEYS) break;
+    if (typeof item !== 'string') continue;
+    if (!key || key.length > MAX_PREFERENCE_KEY_LENGTH) continue;
+    result[key] = item.slice(0, MAX_PREFERENCE_VALUE_LENGTH);
+  }
+  return result;
+}
+
+function readPagePreferences(storageKey: string): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return {};
+    return sanitizePagePreferences(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+function writePagePreferences(
+  storageKey: string,
+  preferences: Record<string, string>,
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(preferences));
+  } catch {
+    // Sandboxed/private contexts may deny storage; the page still keeps its
+    // in-memory selection for this session.
+  }
+}
+
 /**
  * Plugin page that renders a plugin-provided HTML page in an iframe.
  * URL format: /home/plugin-pages?id=author/name/pageId
@@ -15,10 +64,11 @@ import { useAuthenticatedPluginAsset } from '@/hooks/useAuthenticatedPluginResou
  * The iframe communicates with the parent via postMessage:
  *
  * Parent → iframe:
- *   { type: 'langbot:context', theme: 'light'|'dark', language: 'zh-Hans'|'en-US' }
+ *   { type: 'langbot:context', theme: 'light'|'dark', language: 'zh-Hans'|'en-US', preferences: Record<string,string> }
  *
  * iframe → Parent:
  *   { type: 'langbot:api', requestId: string, endpoint: string, method: string, body?: any }
+ *   { type: 'langbot:preferences', preferences: Record<string,string> }
  *
  * Parent → iframe (response):
  *   { type: 'langbot:api:response', requestId: string, data?: any, error?: string }
@@ -117,9 +167,21 @@ function PluginPageIframe({
     pagePath,
   );
   const loading = !assetUrl || loadedAssetUrl !== assetUrl;
+  const preferenceStorageKey = pagePreferenceStorageKey(
+    author,
+    pluginName,
+    pageId,
+  );
+  const preferencesRef = useRef<Record<string, string>>(
+    readPagePreferences(preferenceStorageKey),
+  );
 
-  // Send context (theme + language) to iframe
-  // Use '*' as targetOrigin because sandboxed iframe has opaque (null) origin
+  useEffect(() => {
+    preferencesRef.current = readPagePreferences(preferenceStorageKey);
+  }, [preferenceStorageKey]);
+
+  // Send context (theme + language + persisted page preferences) to iframe.
+  // Use '*' as targetOrigin because sandboxed iframe has opaque (null) origin.
   const sendContext = useCallback(() => {
     const iframe = iframeRef.current;
     if (iframe?.contentWindow) {
@@ -128,6 +190,7 @@ function PluginPageIframe({
           type: 'langbot:context',
           theme: resolvedTheme,
           language: i18n.language,
+          preferences: preferencesRef.current,
         },
         '*',
       );
@@ -151,6 +214,17 @@ function PluginPageIframe({
 
       const data = event.data;
       if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'langbot:preferences') {
+        const preferences = sanitizePagePreferences(data.preferences);
+        if (Object.keys(preferences).length === 0) return;
+        preferencesRef.current = {
+          ...preferencesRef.current,
+          ...preferences,
+        };
+        writePagePreferences(preferenceStorageKey, preferencesRef.current);
+        return;
+      }
 
       // Validate requestId format to prevent injection
       if (data.type === 'langbot:api') {
@@ -198,7 +272,7 @@ function PluginPageIframe({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [author, pluginName, pageId]);
+  }, [author, pluginName, pageId, preferenceStorageKey]);
 
   return (
     <div className="flex flex-col h-full w-full">

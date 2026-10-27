@@ -18,6 +18,7 @@ from langbot.pkg.api.http.service.tenant import TenantContext, require_workspace
 from langbot.pkg.core import app, taskmgr
 from langbot.pkg.core.task_boundary import run_in_workspace_uow
 from langbot.pkg.entity.persistence import rag as persistence_rag
+from langbot.pkg.qa_analytics.context import mark_knowledge_base_used, record_rewritten_question
 from langbot.pkg.utils.filename import normalize_display_file_name
 from langbot.pkg.workspace.errors import WorkspaceInvariantError, WorkspaceNotFoundError
 
@@ -543,6 +544,9 @@ class RuntimeKnowledgeBase(KnowledgeBaseInterface):
         settings: dict | None = None,
     ) -> list[rag_context.RetrievalResultEntry]:
         await self._assert_execution_context(execution_context)
+        # A retrieval call is the boundary that makes this a knowledge-base
+        # question; chat-only pipelines must not appear on the dashboard.
+        mark_knowledge_base_used()
         # Merge stored retrieval_settings with per-request overrides
         stored = self.knowledge_base_entity.retrieval_settings or {}
         merged = {**stored, **(settings or {})}
@@ -550,6 +554,18 @@ class RuntimeKnowledgeBase(KnowledgeBaseInterface):
             merged['top_k'] = 5  # fallback default
 
         response = await self._retrieve(execution_context, query, merged)
+
+        # The dashboard records the plugin's query rewrite without changing
+        # retrieval ordering or the entries returned to the pipeline.
+        metadata = response.get('metadata') if isinstance(response, dict) else None
+        if metadata:
+            record_rewritten_question(metadata)
+        else:
+            results_data = response.get('results', []) if isinstance(response, dict) else []
+            for result in results_data:
+                result_metadata = result.get('metadata') if isinstance(result, dict) else None
+                if result_metadata:
+                    record_rewritten_question(result_metadata)
 
         results_data = response.get('results', [])
         entries = []

@@ -718,6 +718,11 @@ class WebSocketAdapter(abstract_platform_adapter.AbstractMessagePlatformAdapter)
             ),
         )
         object.__setattr__(event, '_langbot_pipeline_uuid', pipeline_uuid)
+        # Analytics reads the embed widget identity once at the event boundary.
+        # Do not copy these fields into plugin-visible payloads.
+        metadata = getattr(connection, 'metadata', {}) or {}
+        object.__setattr__(event, '_qa_visitor_ip', str(metadata.get('client_ip', '') or ''))
+        object.__setattr__(event, '_qa_session_id', connection.session_id or '')
 
         listeners = (
             owner_bot.adapter.listeners

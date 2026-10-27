@@ -706,7 +706,7 @@ class PluginsRouterGroup(group.RouterGroup):
         )
         async def _(author: str, plugin_name: str, request_context: RequestContext) -> str:
             """Forward a page API request to the plugin."""
-            await self._require_authenticated_plugin_runtime_context(request_context)
+            execution_context = await self._require_authenticated_plugin_runtime_context(request_context)
             data = await quart.request.json
             if not isinstance(data, dict):
                 return self.http_status(400, -1, 'invalid request body')
@@ -719,6 +719,32 @@ class PluginsRouterGroup(group.RouterGroup):
                 return self.http_status(400, -1, 'invalid page api request')
             if not endpoint.startswith('/') or '..' in endpoint:
                 return self.http_status(400, -1, 'invalid endpoint')
+
+            # The built-in Q&A dashboard keeps its read-only data path in Core.
+            # The page asset itself still comes from the installed plugin, so a
+            # missing/disabled plugin or an unavailable Runtime must fail closed
+            # instead of exposing Workspace analytics through a stale page.
+            qa_service = getattr(self.ap, 'qa_analytics_service', None)
+            if qa_service is not None and qa_service.owns_page_api(author, plugin_name):
+                try:
+                    plugin_info = await self.ap.plugin_connector.get_plugin_info(author, plugin_name)
+                except Exception:
+                    return self.http_status(400, -1, 'plugin runtime unavailable')
+                if plugin_info is None:
+                    return self.http_status(404, -1, 'plugin not installed or disabled')
+                try:
+                    data = await qa_service.handle_page_api(
+                        execution_context,
+                        endpoint,
+                        method.upper(),
+                        body,
+                    )
+                except ValueError as exc:
+                    return self.http_status(400, -1, str(exc))
+                except Exception as exc:
+                    self.ap.logger.warning(f'Q&A analytics page API failed: {type(exc).__name__}')
+                    return self.http_status(500, -1, 'analytics query failed')
+                return self.success(data=data)
 
             result = await self.ap.plugin_connector.handle_page_api(
                 author, plugin_name, page_id, endpoint, method.upper(), body

@@ -36,6 +36,7 @@ from ..api.http.service import mcp as mcp_service
 from ..api.http.service import apikey as apikey_service
 from ..api.http.service import webhook as webhook_service
 from ..api.http.service import monitoring as monitoring_service
+from ..qa_analytics import service as qa_analytics_service
 from ..operation_trace import service as workspace_settings_service
 from ..api.http.service import skill as skill_service
 from ..api.http.service import maintenance as maintenance_service
@@ -200,6 +201,8 @@ class Application:
     survey: survey_module.SurveyManager = None
 
     monitoring_service: monitoring_service.MonitoringService = None
+
+    qa_analytics_service: qa_analytics_service.QAAnalyticsService = None
 
     workspace_settings_service: workspace_settings_service.WorkspaceSettingsService = None
 
@@ -455,6 +458,29 @@ class Application:
                 * 3600
             )
 
+            qa_analytics_cfg = self.instance_config.data.get('qa_analytics', {})
+            qa_cleanup_cfg = qa_analytics_cfg.get('auto_cleanup', {}) if isinstance(qa_analytics_cfg, dict) else {}
+            qa_analytics_enabled = bool(qa_analytics_cfg.get('enabled', True)) and self.qa_analytics_service is not None
+            qa_retention_days = self._get_positive_int_config(
+                qa_analytics_cfg.get('retention_days', 90),
+                default=90,
+                name='qa_analytics.retention_days',
+            )
+            qa_cleanup_enabled = qa_analytics_enabled and bool(qa_cleanup_cfg.get('enabled', True))
+            qa_cleanup_interval_seconds = (
+                self._get_positive_float_config(
+                    qa_cleanup_cfg.get('check_interval_hours', 24),
+                    default=24,
+                    name='qa_analytics.auto_cleanup.check_interval_hours',
+                )
+                * 3600
+            )
+            qa_cleanup_batch_size = self._get_positive_int_config(
+                qa_cleanup_cfg.get('batch_size', 1000),
+                default=1000,
+                name='qa_analytics.auto_cleanup.batch_size',
+            )
+
             storage_cleanup_cfg = self.instance_config.data.get('storage', {}).get('cleanup', {})
             storage_enabled = storage_cleanup_cfg.get('enabled', True) and self.maintenance_service is not None
             storage_interval_seconds = (
@@ -485,6 +511,8 @@ class Application:
             maintenance_intervals: dict[str, float] = {}
             if monitoring_enabled:
                 maintenance_intervals['monitoring'] = monitoring_interval_seconds
+            if qa_cleanup_enabled:
+                maintenance_intervals['qa_analytics'] = qa_cleanup_interval_seconds
             if storage_enabled:
                 maintenance_intervals['storage'] = storage_interval_seconds
             if self.workspace_collaboration_service is not None:
@@ -539,6 +567,26 @@ class Application:
                                     except Exception as exc:
                                         self.logger.warning(
                                             f'Monitoring auto-cleanup failed for '
+                                            f'Workspace {context.workspace_uuid}: {exc}'
+                                        )
+                                if 'qa_analytics' in due:
+                                    try:
+                                        deleted = await self.qa_analytics_service.cleanup_expired_records(
+                                            context,
+                                            qa_retention_days,
+                                            batch_size=qa_cleanup_batch_size,
+                                        )
+                                        if deleted > 0:
+                                            self.logger.info(
+                                                f'Q&A analytics auto-cleanup: deleted {deleted} expired records '
+                                                f'for Workspace {context.workspace_uuid} '
+                                                f'(retention={qa_retention_days}d)'
+                                            )
+                                    except asyncio.CancelledError:
+                                        raise
+                                    except Exception as exc:
+                                        self.logger.warning(
+                                            f'Q&A analytics auto-cleanup failed for '
                                             f'Workspace {context.workspace_uuid}: {exc}'
                                         )
                                 if 'storage' in due:

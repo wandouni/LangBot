@@ -84,6 +84,7 @@ dependencies = [
     "valkey-glide>=2.5.2,<3.0.0; sys_platform != 'win32'", # No Windows wheels are published
     "webauthn>=3.0.0",
     "httpx[socks]>=0.28.1",
+    "jieba>=0.42.1",
 ]
 keywords = [
     "bot",

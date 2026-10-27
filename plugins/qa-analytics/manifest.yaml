@@ -1,0 +1,36 @@
+apiVersion: langbot/v1
+kind: Plugin
+metadata:
+  author: langbot-team
+  name: qa-analytics
+  version: 0.1.0
+  label:
+    en_US: Q&A Analytics
+    zh_Hans: 咨询问答看板
+    zh_Hant: 諮詢問答看板
+    ja_JP: Q&A 分析
+    es_ES: Análisis de preguntas
+    ru_RU: Аналитика вопросов
+    th_TH: แดชบอร์ดคำถาม
+    vi_VN: Bảng phân tích hỏi đáp
+  description:
+    en_US: Read-only knowledge-base Q&A analytics for the current Workspace.
+    zh_Hans: 查看当前 Workspace 的知识库咨询问答统计。
+    zh_Hant: 查看目前 Workspace 的知識庫諮詢問答統計。
+    ja_JP: 現在の Workspace のナレッジベース Q&A 統計を表示します。
+    es_ES: Estadísticas de preguntas y respuestas de la base de conocimiento del Workspace actual.
+    ru_RU: Статистика вопросов и ответов базы знаний текущего Workspace.
+    th_TH: สถิติคำถามและคำตอบจากฐานความรู้ของ Workspace ปัจจุบัน
+    vi_VN: Thống kê hỏi đáp từ cơ sở tri thức của Workspace hiện tại.
+  icon: assets/icon.svg
+spec:
+  version: 0.1.0
+  config: []
+  components:
+    Page:
+      fromDirs:
+        - path: components/pages/
+execution:
+  python:
+    path: main.py
+    attr: QAAnalyticsPlugin

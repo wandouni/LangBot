@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q&amp;A Analytics</title>
+  <style>
+    :root {
+      --bg: var(--langbot-bg, #ffffff);
+      --card: var(--langbot-bg-card, #f8fafc);
+      --text: var(--langbot-text, #0a0a0a);
+      --muted: var(--langbot-text-muted, #71717a);
+      --border: var(--langbot-border, #e4e4e7);
+      --accent: var(--langbot-accent, #2563eb);
+      --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+      --danger: #dc2626;
+      --danger-soft: #fef2f2;
+      --shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 20px;
+      transition: background 0.2s, color 0.2s;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .page { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    .header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .title { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .segmented { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+    .segmented button {
+      border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 7px;
+      font-size: 13px; white-space: nowrap; transition: background .15s, color .15s;
+    }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+    .view-tabs {
+      display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+    }
+    .view-tabs button {
+      border: 0; background: transparent; color: var(--muted); padding: 7px 14px;
+      border-radius: 7px; font-size: 13px; font-weight: 550;
+    }
+    .view-tabs button:hover { color: var(--text); }
+    .view-tabs button.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow); }
+    .icon-button {
+      display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+      border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--muted);
+    }
+    .icon-button:hover { color: var(--text); }
+    .icon-button svg { width: 16px; height: 16px; }
+    .banner {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px; border: 1px solid #fecaca; border-radius: 10px;
+      background: var(--danger-soft); color: var(--danger); font-size: 13px;
+    }
+    .banner code { font-size: 12px; opacity: .8; overflow-wrap: anywhere; }
+    .banner button { border: 0; background: transparent; color: inherit; text-decoration: underline; padding: 0; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .card { border: 1px solid var(--border); background: var(--card); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+    .card-label { color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-value { margin-top: 6px; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .card-hint { color: var(--muted); font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .grid-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 12px; }
+    .panel { border: 1px solid var(--border); background: var(--card); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+    .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .panel-title { margin: 0; font-size: 14px; font-weight: 650; }
+    .panel-sub { color: var(--muted); font-size: 11px; }
+    .word-cloud { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-height: 150px; padding: 6px 2px; }
+    .word-cloud button {
+      border: 0; background: transparent; color: var(--accent); padding: 0 1px; line-height: 1.15;
+      border-radius: 4px; transition: opacity .15s, transform .15s;
+    }
+    .word-cloud button:hover { opacity: .72; transform: translateY(-1px); }
+    .top-list { display: flex; flex-direction: column; gap: 9px; }
+    .top-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
+    .top-question {
+      border: 0; background: transparent; color: var(--text); padding: 0; text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    }
+    .top-question:hover { color: var(--accent); }
+    .top-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .top-bar { grid-column: 1 / -1; height: 5px; background: var(--accent-soft); border-radius: 999px; overflow: hidden; }
+    .top-bar > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; opacity: .78; }
+    .empty, .loading {
+      display: flex; align-items: center; justify-content: center; min-height: 120px;
+      color: var(--muted); font-size: 13px; text-align: center;
+    }
+    .table-panel { padding: 0; overflow: hidden; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .tabs { display: inline-flex; gap: 4px; }
+    .tabs button {
+      border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 7px; font-weight: 550;
+    }
+    .tabs button.active { background: var(--accent-soft); color: var(--accent); }
+    .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .filter-input {
+      width: 150px; min-width: 0; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px;
+      background: var(--bg); color: var(--text); outline: none; font-size: 12px;
+    }
+    .filter-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+    .button {
+      border: 1px solid var(--border); background: var(--bg); color: var(--text); padding: 6px 10px;
+      border-radius: 7px; font-size: 12px; white-space: nowrap;
+    }
+    .button:hover { border-color: var(--accent); color: var(--accent); }
+    .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .button.primary:hover { opacity: .9; color: #fff; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .03em; padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+    .cell-question { max-width: 420px; }
+    .clamp-two { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .cell-muted { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .cell-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; }
+    .row-action { border: 0; background: transparent; color: var(--accent); padding: 0; font-size: 12px; white-space: nowrap; }
+    .pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12px; }
+    .pagination-actions { display: flex; align-items: center; gap: 6px; }
+    .pagination button:disabled { opacity: .45; cursor: default; border-color: var(--border); color: var(--muted); }
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgb(15 23 42 / .45); display: flex; align-items: center;
+      justify-content: center; padding: 20px; z-index: 50;
+    }
+    .modal-backdrop[hidden] { display: none; }
+    .modal {
+      width: min(760px, 100%); max-height: 86vh; overflow: auto; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 20px 50px rgb(15 23 42 / .25);
+    }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+    .modal-title { margin: 0; font-size: 15px; font-weight: 650; }
+    .modal-body { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .detail-item { background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; min-width: 0; }
+    .detail-label { color: var(--muted); font-size: 11px; }
+    .detail-value { margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
+    .detail-block { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .detail-block h4 { margin: 0; padding: 8px 11px; background: var(--card); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); font-weight: 600; }
+    .detail-text { margin: 0; padding: 11px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+    .muted { color: var(--muted); }
+    mark {
+      background: var(--accent-soft);
+      color: inherit;
+      border-radius: 3px;
+      padding: 0 1px;
+    }
+    [hidden] { display: none !important; }
+    @media (max-width: 1100px) {
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-two { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .cards { grid-template-columns: minmax(0, 1fr); }
+      .header-actions { width: 100%; justify-content: space-between; }
+      .segmented { flex: 1; }
+      .segmented button { flex: 1; padding: 6px 8px; }
+      .filter-input { width: 100%; }
+      .filters { width: 100%; }
+      .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div>
+        <h1 class="title" data-i18n="title">Q&amp;A Analytics</h1>
+        <p class="subtitle" data-i18n="subtitle">Knowledge-base questions in this Workspace</p>
+      </div>
+      <div class="header-actions">
+        <div class="segmented" role="group" data-i18n-aria-label="rangeLabel" aria-label="Time range">
+          <button type="button" data-range="today" data-i18n="range.today">Today</button>
+          <button type="button" data-range="7d" data-i18n="range.7d">7 days</button>
+          <button type="button" data-range="30d" data-i18n="range.30d">30 days</button>
+          <button type="button" data-range="all" data-i18n="range.all">All</button>
+        </div>
+        <button type="button" class="icon-button" id="refreshButton" data-i18n-title="refresh" title="Refresh" aria-label="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+            <path d="M21 3v6h-6"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="banner" id="errorBanner" hidden>
+      <span><span data-i18n="loadFailed">Could not load analytics.</span> <code id="errorDetail"></code></span>
+      <button type="button" id="retryButton" data-i18n="retry">Retry</button>
+    </div>
+
+    <nav class="view-tabs" role="tablist" aria-label="Dashboard views">
+      <button type="button" role="tab" data-tab="stats" class="active" data-i18n="tabs.stats">Overview</button>
+      <button type="button" role="tab" data-tab="questions" data-i18n="tabs.questions">Questions</button>
+      <button type="button" role="tab" data-tab="visits" data-i18n="tabs.visits">Sessions</button>
+    </nav>
+
+    <div id="statsPanel">
+    <div class="loading" id="overviewLoading" data-i18n="loading">Loading…</div>
+    <div class="empty" id="overviewEmpty" hidden data-i18n="empty">No data in this range</div>
+    <section class="cards" aria-live="polite">
+      <div class="card">
+        <div class="card-label" data-i18n="cards.questions">Questions</div>
+        <div class="card-value" id="totalQuestions">-</div>
+        <div class="card-hint" data-i18n="cards.questionsHint">Completed questions in range</div>
+      </div>
+      <div class="card">
+        <div class="card-label" data-i18n="cards.sessions">Independent sessions</div>
+        <div class="card-value" id="independentSessions">-</div>
+        <div class="card-hint" data-i18n="cards.sessionsHint">Distinct visitors or chat sessions</div>
+      </div>
+      <div class="card">
+        <div class="card-label" data-i18n="cards.highFrequency">High-frequency questions</div>
+        <div class="card-value" id="highFrequency">-</div>
+        <div class="card-hint" data-i18n="cards.highFrequencyHint">Questions asked at least twice</div>
+      </div>
+      <div class="card">
+        <div class="card-label" data-i18n="cards.latency">Average latency</div>
+        <div class="card-value" id="averageLatency">-</div>
+        <div class="card-hint" data-i18n="cards.latencyHint">From question received to answer sent</div>
+      </div>
+    </section>
+
+    <section class="grid-two">
+      <div class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title" data-i18n="wordcloud.title">Keyword cloud</h2>
+          <span class="panel-sub" data-i18n="wordcloud.sub">Click a keyword to filter questions</span>
+        </div>
+        <div class="word-cloud" id="wordCloud"></div>
+        <div class="empty" id="wordCloudEmpty" hidden data-i18n="wordcloud.empty">No keywords in this range</div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title" data-i18n="top.title">Top questions</h2>
+          <span class="panel-sub" data-i18n="top.sub">Click a question to filter</span>
+        </div>
+        <div class="top-list" id="topQuestions"></div>
+        <div class="empty" id="topQuestionsEmpty" hidden data-i18n="top.empty">No frequent questions yet</div>
+      </div>
+    </section>
+    </div>
+
+    <section class="panel table-panel" id="tablePanel" hidden>
+      <div class="toolbar">
+        <div class="filters" id="questionFilters">
+          <input class="filter-input" id="keywordFilter" type="search" data-i18n="filters.keyword" data-i18n-attr="placeholder" placeholder="Search question" maxlength="200">
+          <input class="filter-input" id="questionIpFilter" type="search" data-i18n="filters.ip" data-i18n-attr="placeholder" placeholder="Visitor IP" maxlength="64">
+          <input class="filter-input" id="questionRegionFilter" type="search" data-i18n="filters.region" data-i18n-attr="placeholder" placeholder="Region" maxlength="200">
+          <button type="button" class="button primary" id="applyQuestionFilters" data-i18n="filters.apply">Filter</button>
+          <button type="button" class="button" id="resetQuestionFilters" data-i18n="filters.reset">Reset</button>
+        </div>
+        <div class="filters" id="visitFilters" hidden>
+          <input class="filter-input" id="visitIpFilter" type="search" data-i18n="filters.ip" data-i18n-attr="placeholder" placeholder="Visitor IP" maxlength="64">
+          <input class="filter-input" id="visitRegionFilter" type="search" data-i18n="filters.region" data-i18n-attr="placeholder" placeholder="Region" maxlength="200">
+          <button type="button" class="button primary" id="applyVisitFilters" data-i18n="filters.apply">Filter</button>
+          <button type="button" class="button" id="resetVisitFilters" data-i18n="filters.reset">Reset</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div class="loading" id="tableLoading" hidden data-i18n="loading">Loading…</div>
+        <div class="empty" id="tableEmpty" hidden data-i18n="empty">No data in this range</div>
+      </div>
+      <div class="pagination" id="pagination">
+        <span id="paginationInfo"></span>
+        <div class="pagination-actions">
+          <button type="button" class="button" id="prevPage" data-i18n="pagination.prev">Previous</button>
+          <button type="button" class="button" id="nextPage" data-i18n="pagination.next">Next</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="detailModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <div class="modal-head">
+        <h3 class="modal-title" id="detailTitle" data-i18n="detail.title">Question details</h3>
+        <button type="button" class="icon-button" id="closeDetail" data-i18n-aria-label="detail.close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+
+  <script src="/api/v1/plugins/_sdk/page-sdk.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var state = {
+        range: '7d',
+        tab: 'stats',
+        booted: false,
+        pendingRange: null,
+        questionPage: 1,
+        visitPage: 1,
+        questionFilters: { keyword: '', ip: '', region: '' },
+        visitFilters: { ip: '', region: '' },
+        overview: null,
+        questionData: null,
+        visitData: null,
+        detailData: null,
+        detailKeyword: '',
+        translations: {},
+        languageSeq: 0
+      };
+      var requestSeq = { overview: 0, table: 0, detail: 0 };
+      var rangeKeys = ['today', '7d', '30d', 'all'];
+
+      function t(key, fallback) {
+        if (state.translations && state.translations[key] != null) {
+          return state.translations[key];
+        }
+        if (window.langbot && typeof window.langbot.t === 'function') {
+          return window.langbot.t(key, fallback);
+        }
+        return fallback || key;
+      }
+
+      function loadPageTranslations() {
+        var seq = ++state.languageSeq;
+        var language = window.langbot && window.langbot.language ? window.langbot.language : 'en-US';
+        return api('/qa-analytics/i18n', { language: language })
+          .then(function (data) {
+            if (seq !== state.languageSeq) return;
+            state.translations = data && typeof data === 'object' ? data : {};
+          })
+          .catch(function () {
+            if (seq !== state.languageSeq) return;
+            state.translations = {};
+          })
+          .then(function () {
+            if (seq !== state.languageSeq) return;
+            applyTranslations();
+            document.documentElement.lang = locale();
+          });
+      }
+
+      function applyTranslations() {
+        var allowedAttrs = ['placeholder', 'title', 'alt', 'aria-label', 'aria-description'];
+        Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (node) {
+          var key = node.getAttribute('data-i18n');
+          var value = state.translations[key];
+          if (value == null) return;
+          var attr = node.getAttribute('data-i18n-attr');
+          if (attr && allowedAttrs.indexOf(attr) !== -1) {
+            node.setAttribute(attr, value);
+          } else {
+            node.textContent = value;
+          }
+        });
+        applyAttributeI18n();
+      }
+
+      function el(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined && text !== null) node.textContent = String(text);
+        return node;
+      }
+
+      function locale() {
+        var language = window.langbot && window.langbot.language ? window.langbot.language : 'en-US';
+        var map = {
+          'zh-Hans': 'zh-CN',
+          'zh-Hant': 'zh-TW',
+          'en-US': 'en-US',
+          'ja-JP': 'ja-JP',
+          'es-ES': 'es-ES',
+          'ru-RU': 'ru-RU',
+          'th-TH': 'th-TH',
+          'vi-VN': 'vi-VN'
+        };
+        return map[language] || language || 'en-US';
+      }
+
+      function formatDate(value) {
+        if (!value) return '-';
+        var date = new Date(value);
+        if (isNaN(date.getTime())) return value;
+        try {
+          return new Intl.DateTimeFormat(locale(), {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          }).format(date);
+        } catch (e) {
+          return date.toLocaleString();
+        }
+      }
+
+      function formatDuration(seconds) {
+        var value = Math.max(0, Number(seconds) || 0);
+        if (value < 60) return t('duration.seconds', '{n}s').replace('{n}', String(value));
+        if (value < 3600) {
+          return t('duration.minutes', '{n}m').replace('{n}', String(Math.floor(value / 60)));
+        }
+        var hours = Math.floor(value / 3600);
+        var minutes = Math.floor((value % 3600) / 60);
+        return t('duration.hours', '{h}h {m}m').replace('{h}', String(hours)).replace('{m}', String(minutes));
+      }
+
+      function formatRegion(region) {
+        if (!region) return t('unknownRegion', 'Unknown');
+        if (region === 'local') return t('localRegion', 'Local network');
+        return region;
+      }
+
+      function formatLatency(value) {
+        if (value === null || value === undefined || value === '') return '-';
+        return String(value) + ' ms';
+      }
+
+      function showError(error) {
+        var banner = document.getElementById('errorBanner');
+        var detail = document.getElementById('errorDetail');
+        banner.hidden = false;
+        detail.textContent = error && error.message ? error.message : '';
+      }
+
+      function clearError() {
+        document.getElementById('errorBanner').hidden = true;
+        document.getElementById('errorDetail').textContent = '';
+      }
+
+      function api(endpoint, payload) {
+        if (!window.langbot || typeof window.langbot.api !== 'function') {
+          return Promise.reject(new Error(t('loadFailed', 'Could not load analytics.')));
+        }
+        var body = Object.assign({}, payload || {}, {
+          range: state.range,
+          tz_offset_minutes: new Date().getTimezoneOffset()
+        });
+        return window.langbot.api(endpoint, body, 'POST');
+      }
+
+      function setRange(range, persist) {
+        if (rangeKeys.indexOf(range) === -1) range = '7d';
+        state.range = range;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-range]'), function (button) {
+          button.classList.toggle('active', button.getAttribute('data-range') === range);
+        });
+        if (persist) {
+          window.parent.postMessage({
+            type: 'langbot:preferences',
+            preferences: { qaAnalyticsRange: range }
+          }, '*');
+        }
+        state.questionPage = 1;
+        state.visitPage = 1;
+        if (state.booted) refreshAll();
+      }
+
+      function refreshAll() {
+        clearError();
+        loadOverview();
+        if (state.tab !== 'stats') loadTable();
+      }
+
+      function loadOverview() {
+        var seq = ++requestSeq.overview;
+        var loading = document.getElementById('overviewLoading');
+        loading.hidden = false;
+        api('/qa-analytics/overview').then(function (data) {
+          if (seq !== requestSeq.overview) return;
+          state.overview = data;
+          renderOverview();
+        }).catch(function (error) {
+          if (seq !== requestSeq.overview) return;
+          showError(error);
+        }).finally(function () {
+          if (seq === requestSeq.overview) loading.hidden = true;
+        });
+      }
+
+      function renderLocalizedContent() {
+        if (state.overview) renderOverview();
+        if (state.tab !== 'stats') {
+          var tableData = state.tab === 'questions' ? state.questionData : state.visitData;
+          if (tableData) renderTable();
+        }
+        if (state.detailData && !document.getElementById('detailModal').hidden) {
+          renderDetail(state.detailData);
+        }
+      }
+
+      function renderOverview() {
+        var data = state.overview || {};
+        document.getElementById('overviewEmpty').hidden = state.overview === null || data.total_questions !== 0;
+        document.getElementById('totalQuestions').textContent =
+          typeof data.total_questions === 'number' ? data.total_questions.toLocaleString(locale()) : '-';
+        document.getElementById('independentSessions').textContent =
+          typeof data.independent_sessions === 'number' ? data.independent_sessions.toLocaleString(locale()) : '-';
+        document.getElementById('highFrequency').textContent =
+          typeof data.high_frequency_types === 'number' ? data.high_frequency_types.toLocaleString(locale()) : '-';
+        document.getElementById('averageLatency').textContent = formatLatency(data.average_latency_ms);
+        renderWordCloud(data.word_cloud || []);
+        renderTopQuestions(data.top_questions || []);
+      }
+
+      function renderWordCloud(words) {
+        var container = document.getElementById('wordCloud');
+        var empty = document.getElementById('wordCloudEmpty');
+        container.textContent = '';
+        if (!words.length) {
+          empty.hidden = false;
+          return;
+        }
+        empty.hidden = true;
+        var max = Math.max.apply(null, words.map(function (item) { return item.count || 0; })) || 1;
+        words.forEach(function (item, index) {
+          var ratio = Math.max(0, Number(item.count) || 0) / max;
+          var button = el('button', null, item.word);
+          button.type = 'button';
+          button.style.fontSize = (12 + ratio * 26).toFixed(1) + 'px';
+          button.style.fontWeight = ratio > 0.55 ? '650' : '500';
+          button.style.opacity = (0.55 + ratio * 0.45).toFixed(2);
+          button.style.color = 'hsl(' + ((index * 47) % 360) + ' 68% 45%)';
+          button.title = item.word + ' · ' + item.count;
+          button.addEventListener('click', function () {
+            document.getElementById('keywordFilter').value = item.word;
+            state.questionFilters.keyword = item.word;
+            state.questionPage = 1;
+            switchTab('questions');
+            document.querySelector('.table-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          container.appendChild(button);
+        });
+      }
+
+      function renderTopQuestions(items) {
+        var container = document.getElementById('topQuestions');
+        var empty = document.getElementById('topQuestionsEmpty');
+        container.textContent = '';
+        if (!items.length) {
+          empty.hidden = false;
+          return;
+        }
+        empty.hidden = true;
+        var max = Math.max.apply(null, items.map(function (item) { return item.count || 0; })) || 1;
+        items.forEach(function (item) {
+          var row = el('div', 'top-row');
+          var button = el('button', 'top-question', item.question || '-');
+          button.type = 'button';
+          button.title = item.question || '';
+          button.addEventListener('click', function () {
+            document.getElementById('keywordFilter').value = item.question || '';
+            state.questionFilters.keyword = item.question || '';
+            state.questionPage = 1;
+            switchTab('questions');
+            document.querySelector('.table-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          var count = el('span', 'top-count', String(item.count || 0));
+          var bar = el('div', 'top-bar');
+          var fill = el('span');
+          fill.style.width = Math.max(4, ((Number(item.count) || 0) / max) * 100) + '%';
+          bar.appendChild(fill);
+          row.appendChild(button);
+          row.appendChild(count);
+          row.appendChild(bar);
+          container.appendChild(row);
+        });
+      }
+
+      function switchTab(tab) {
+        state.tab = ['stats', 'questions', 'visits'].indexOf(tab) === -1 ? 'stats' : tab;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (button) {
+          button.classList.toggle('active', button.getAttribute('data-tab') === state.tab);
+        });
+        document.getElementById('statsPanel').hidden = state.tab !== 'stats';
+        document.getElementById('tablePanel').hidden = state.tab === 'stats';
+        document.getElementById('questionFilters').hidden = state.tab !== 'questions';
+        document.getElementById('visitFilters').hidden = state.tab !== 'visits';
+        if (state.tab === 'stats') renderOverview();
+        else loadTable();
+      }
+
+      function loadTable() {
+        if (state.tab === 'stats') return;
+        var seq = ++requestSeq.table;
+        var loading = document.getElementById('tableLoading');
+        var empty = document.getElementById('tableEmpty');
+        loading.hidden = false;
+        empty.hidden = true;
+        document.getElementById('tableBody').textContent = '';
+        var request;
+        if (state.tab === 'questions') {
+          request = api('/qa-analytics/questions', {
+            page: state.questionPage,
+            page_size: 20,
+            keyword: state.questionFilters.keyword,
+            ip: state.questionFilters.ip,
+            region: state.questionFilters.region
+          });
+        } else {
+          request = api('/qa-analytics/visits', {
+            page: state.visitPage,
+            page_size: 20,
+            ip: state.visitFilters.ip,
+            region: state.visitFilters.region
+          });
+        }
+        request.then(function (data) {
+          if (seq !== requestSeq.table) return;
+          if (state.tab === 'questions') state.questionData = data;
+          else state.visitData = data;
+          renderTable();
+        }).catch(function (error) {
+          if (seq !== requestSeq.table) return;
+          showError(error);
+          renderTable();
+        }).finally(function () {
+          if (seq === requestSeq.table) loading.hidden = true;
+        });
+      }
+
+      function renderTableHead() {
+        var head = document.getElementById('tableHead');
+        head.textContent = '';
+        var row = el('tr');
+        var columns = state.tab === 'questions'
+          ? ['table.time', 'table.question', 'table.rewritten', 'table.latency', 'table.ip', 'table.region', 'table.detail']
+          : ['visits.index', 'visits.ip', 'visits.region', 'visits.firstSeen', 'visits.lastSeen', 'visits.duration', 'visits.rounds'];
+        columns.forEach(function (key) {
+          row.appendChild(el('th', null, t(key, key)));
+        });
+        head.appendChild(row);
+      }
+
+      function renderTable() {
+        renderTableHead();
+        var body = document.getElementById('tableBody');
+        body.textContent = '';
+        var data = state.tab === 'questions' ? state.questionData : state.visitData;
+        var items = data && Array.isArray(data.items) ? data.items : [];
+        var empty = document.getElementById('tableEmpty');
+        if (!items.length) {
+          empty.hidden = false;
+          renderPagination(null);
+          return;
+        }
+        empty.hidden = true;
+        items.forEach(function (item) {
+          var row = el('tr');
+          if (state.tab === 'questions') {
+            row.appendChild(el('td', 'cell-muted', formatDate(item.created_at)));
+            var questionCell = el('td', 'cell-question');
+            questionCell.appendChild(el('div', 'clamp-two', item.question || '-'));
+            questionCell.title = item.question || '';
+            row.appendChild(questionCell);
+            var rewrittenCell = el('td', 'cell-question');
+            rewrittenCell.appendChild(el('div', 'clamp-two', item.rewritten_question || '-'));
+            rewrittenCell.title = item.rewritten_question || '';
+            row.appendChild(rewrittenCell);
+            row.appendChild(el('td', 'cell-muted', formatLatency(item.latency_ms)));
+            row.appendChild(el('td', 'cell-mono', item.visitor_ip || '-'));
+            row.appendChild(el('td', 'cell-muted', formatRegion(item.region)));
+            var actionCell = el('td');
+            var action = el('button', 'row-action', t('table.detail', 'Details'));
+            action.type = 'button';
+            action.addEventListener('click', function () { openDetail(item.id); });
+            actionCell.appendChild(action);
+            row.appendChild(actionCell);
+          } else {
+            row.appendChild(el('td', 'cell-muted', String((data.page - 1) * data.page_size + body.children.length + 1)));
+            row.appendChild(el('td', 'cell-mono', item.visitor_ip || '-'));
+            row.appendChild(el('td', 'cell-muted', formatRegion(item.region)));
+            row.appendChild(el('td', 'cell-muted', formatDate(item.first_seen)));
+            row.appendChild(el('td', 'cell-muted', formatDate(item.last_seen)));
+            row.appendChild(el('td', 'cell-muted', formatDuration(item.dwell_seconds)));
+            row.appendChild(el('td', 'cell-muted', item.rounds));
+          }
+          body.appendChild(row);
+        });
+        renderPagination(data);
+      }
+
+      function renderPagination(data) {
+        var info = document.getElementById('paginationInfo');
+        var prev = document.getElementById('prevPage');
+        var next = document.getElementById('nextPage');
+        if (!data || !data.total) {
+          info.textContent = '';
+          prev.disabled = true;
+          next.disabled = true;
+          return;
+        }
+        var page = data.page || 1;
+        var pages = Math.max(1, Math.ceil((data.total || 0) / (data.page_size || 20)));
+        info.textContent = t('pageInfo', 'Page {page} of {pages} · {total} records')
+          .replace('{page}', String(page))
+          .replace('{pages}', String(pages))
+          .replace('{total}', String(data.total));
+        prev.disabled = page <= 1;
+        next.disabled = page >= pages;
+      }
+
+      function applyQuestionFilters() {
+        state.questionFilters.keyword = document.getElementById('keywordFilter').value.trim();
+        state.questionFilters.ip = document.getElementById('questionIpFilter').value.trim();
+        state.questionFilters.region = document.getElementById('questionRegionFilter').value.trim();
+        state.questionPage = 1;
+        loadTable();
+      }
+
+      function resetQuestionFilters() {
+        document.getElementById('keywordFilter').value = '';
+        document.getElementById('questionIpFilter').value = '';
+        document.getElementById('questionRegionFilter').value = '';
+        state.questionFilters = { keyword: '', ip: '', region: '' };
+        state.questionPage = 1;
+        loadTable();
+      }
+
+      function applyVisitFilters() {
+        state.visitFilters.ip = document.getElementById('visitIpFilter').value.trim();
+        state.visitFilters.region = document.getElementById('visitRegionFilter').value.trim();
+        state.visitPage = 1;
+        loadTable();
+      }
+
+      function resetVisitFilters() {
+        document.getElementById('visitIpFilter').value = '';
+        document.getElementById('visitRegionFilter').value = '';
+        state.visitFilters = { ip: '', region: '' };
+        state.visitPage = 1;
+        loadTable();
+      }
+
+      function openDetail(id) {
+        if (!id) return;
+        var modal = document.getElementById('detailModal');
+        var body = document.getElementById('detailBody');
+        state.detailData = null;
+        state.detailKeyword = state.questionFilters.keyword;
+        body.textContent = '';
+        body.appendChild(el('div', 'loading', t('loading', 'Loading…')));
+        modal.hidden = false;
+        var seq = ++requestSeq.detail;
+        api('/qa-analytics/questions/detail', { id: id }).then(function (data) {
+          if (seq !== requestSeq.detail) return;
+          state.detailData = data;
+          renderDetail(data);
+        }).catch(function (error) {
+          if (seq !== requestSeq.detail) return;
+          body.textContent = '';
+          body.appendChild(el('div', 'empty', t('loadFailed', 'Could not load analytics.')));
+          showError(error);
+        });
+      }
+
+      function appendHighlighted(parent, text, keyword) {
+        var value = String(text);
+        var needle = String(keyword || '').trim();
+        if (!needle) {
+          parent.textContent = value;
+          return;
+        }
+        var lowerValue = value.toLocaleLowerCase();
+        var lowerNeedle = needle.toLocaleLowerCase();
+        var start = 0;
+        var index;
+        while ((index = lowerValue.indexOf(lowerNeedle, start)) !== -1) {
+          if (index > start) {
+            parent.appendChild(document.createTextNode(value.slice(start, index)));
+          }
+          parent.appendChild(el('mark', null, value.slice(index, index + needle.length)));
+          start = index + needle.length;
+        }
+        if (start === 0) {
+          parent.textContent = value;
+        } else if (start < value.length) {
+          parent.appendChild(document.createTextNode(value.slice(start)));
+        }
+      }
+
+      function detailItem(label, value) {
+        var item = el('div', 'detail-item');
+        item.appendChild(el('div', 'detail-label', label));
+        item.appendChild(el('div', 'detail-value', value || '-'));
+        return item;
+      }
+
+      function detailBlock(title, text, keyword) {
+        var block = el('div', 'detail-block');
+        var heading = el('h4', null, title);
+        var content = el('p', 'detail-text');
+        if (text) {
+          appendHighlighted(content, text, keyword);
+        } else {
+          content.textContent = t('noAnswer', 'No answer available');
+          content.classList.add('muted');
+        }
+        block.appendChild(heading);
+        block.appendChild(content);
+        return block;
+      }
+
+      function renderDetail(data) {
+        var body = document.getElementById('detailBody');
+        body.textContent = '';
+        var keyword = state.detailKeyword;
+        var grid = el('div', 'detail-grid');
+        grid.appendChild(detailItem(t('detail.time', 'Time'), formatDate(data.created_at)));
+        grid.appendChild(detailItem(t('detail.latency', 'Latency'), formatLatency(data.latency_ms)));
+        grid.appendChild(detailItem(t('detail.ip', 'Visitor IP'), data.visitor_ip || '-'));
+        grid.appendChild(detailItem(t('detail.region', 'Region'), formatRegion(data.region)));
+        body.appendChild(grid);
+        body.appendChild(detailBlock(t('detail.question', 'Question'), data.question, keyword));
+        body.appendChild(detailBlock(
+          t('detail.rewritten', 'Rewritten question'),
+          data.rewritten_question || t('noRewrite', 'Not provided'),
+          data.rewritten_question ? keyword : ''
+        ));
+        body.appendChild(detailBlock(t('detail.answer', 'Answer'), data.answer, keyword));
+      }
+
+      function closeDetail() {
+        document.getElementById('detailModal').hidden = true;
+        document.getElementById('detailBody').textContent = '';
+        state.detailData = null;
+        state.detailKeyword = '';
+      }
+
+      function applyAttributeI18n() {
+        var pairs = [
+          ['data-i18n-aria-label', 'aria-label'],
+          ['data-i18n-title', 'title']
+        ];
+        pairs.forEach(function (pair) {
+          Array.prototype.forEach.call(document.querySelectorAll('[' + pair[0] + ']'), function (node) {
+            var key = node.getAttribute(pair[0]);
+            var fallback = node.getAttribute(pair[1]) || key;
+            node.setAttribute(pair[1], t(key, fallback));
+          });
+        });
+      }
+
+      function applyPreferences(preferences) {
+        if (!preferences || typeof preferences !== 'object') return;
+        var range = preferences.qaAnalyticsRange;
+        if (rangeKeys.indexOf(range) !== -1) {
+          if (!state.booted) state.pendingRange = range;
+          else if (range !== state.range) setRange(range, false);
+        }
+      }
+
+      window.addEventListener('message', function (event) {
+        var data = event.data;
+        if (!data || typeof data !== 'object') return;
+        if (data.type === 'langbot:context') {
+          applyPreferences(data.preferences);
+        } else if (data.type === 'langbot:preferences') {
+          applyPreferences(data.preferences);
+        }
+      });
+
+      Array.prototype.forEach.call(document.querySelectorAll('[data-range]'), function (button) {
+        button.addEventListener('click', function () { setRange(button.getAttribute('data-range'), true); });
+      });
+      document.getElementById('refreshButton').addEventListener('click', refreshAll);
+      document.getElementById('retryButton').addEventListener('click', refreshAll);
+      document.getElementById('applyQuestionFilters').addEventListener('click', applyQuestionFilters);
+      document.getElementById('resetQuestionFilters').addEventListener('click', resetQuestionFilters);
+      document.getElementById('applyVisitFilters').addEventListener('click', applyVisitFilters);
+      document.getElementById('resetVisitFilters').addEventListener('click', resetVisitFilters);
+      document.getElementById('prevPage').addEventListener('click', function () {
+        if (state.tab === 'questions' && state.questionPage > 1) {
+          state.questionPage -= 1;
+          loadTable();
+        } else if (state.tab === 'visits' && state.visitPage > 1) {
+          state.visitPage -= 1;
+          loadTable();
+        }
+      });
+      document.getElementById('nextPage').addEventListener('click', function () {
+        if (state.tab === 'questions') {
+          state.questionPage += 1;
+        } else {
+          state.visitPage += 1;
+        }
+        loadTable();
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (button) {
+        button.addEventListener('click', function () { switchTab(button.getAttribute('data-tab')); });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('.filter-input'), function (input) {
+        input.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            if (state.tab === 'questions') applyQuestionFilters();
+            else applyVisitFilters();
+          }
+        });
+      });
+      document.getElementById('closeDetail').addEventListener('click', closeDetail);
+      document.getElementById('detailModal').addEventListener('click', function (event) {
+        if (event.target === event.currentTarget) closeDetail();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !document.getElementById('detailModal').hidden) closeDetail();
+      });
+
+      function boot(context) {
+        if (state.booted) return;
+        state.booted = true;
+        loadPageTranslations().then(renderLocalizedContent);
+        var range = state.pendingRange || '7d';
+        state.pendingRange = null;
+        setRange(range, false);
+      }
+
+      if (window.langbot && typeof window.langbot.onReady === 'function') {
+        window.langbot.onReady(boot);
+        window.langbot.onLanguageChange(function () {
+          if (!state.booted) return;
+          loadPageTranslations().then(renderLocalizedContent);
+        });
+      } else {
+        showError(new Error(t('loadFailed', 'Could not load analytics.')));
+      }
+    })();
+  </script>
+</body>
+</html>

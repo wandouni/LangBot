@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Page
+metadata:
+  name: dashboard
+  label:
+    en_US: Q&A Analytics
+    zh_Hans: 咨询问答看板
+    zh_Hant: 諮詢問答看板
+    ja_JP: Q&A 分析
+    es_ES: Análisis de preguntas
+    ru_RU: Аналитика вопросов
+    th_TH: แดชบอร์ดคำถาม
+    vi_VN: Bảng phân tích hỏi đáp
+spec:
+  path: dashboard/index.html

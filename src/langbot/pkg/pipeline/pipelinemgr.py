@@ -497,8 +497,19 @@ class RuntimePipeline:
     async def _process_query(self, query: pipeline_query.Query):
         """Close monitoring on every exit, including cancellation and plugin veto."""
         from .monitoring_helper import MonitoringHelper
+        from ..qa_analytics.context import current_collection_context
 
         status = 'error'
+        qa_context = None
+        qa_token = None
+        qa_service = getattr(self.ap, 'qa_analytics_service', None)
+        if qa_service is not None:
+            try:
+                qa_context = qa_service.begin_query(query)
+                if qa_context is not None:
+                    qa_token = current_collection_context.set(qa_context)
+            except Exception as exc:
+                self.ap.logger.warning(f'Failed to start Q&A analytics collection: {type(exc).__name__}')
         try:
             await self._process_query_body(query)
             if not query.variables.get('_monitoring_has_error'):
@@ -514,6 +525,14 @@ class RuntimePipeline:
             except Exception as exc:
                 self.ap.logger.error(f'Failed to finalize query {query.query_id}: {exc}')
             finally:
+                if qa_context is not None and qa_service is not None:
+                    try:
+                        await qa_service.finish_query(query, qa_context)
+                    except Exception as exc:
+                        self.ap.logger.warning(f'Failed to finish Q&A analytics collection: {type(exc).__name__}')
+                    finally:
+                        if qa_token is not None:
+                            current_collection_context.reset(qa_token)
                 await self.ap.query_pool.remove_query(query)
 
     async def _process_query_body(self, query: pipeline_query.Query):

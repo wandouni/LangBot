@@ -30,6 +30,7 @@ from ...api.http.service import apikey as apikey_service
 from ...api.http.service import webhook as webhook_service
 from ...skill import repository as skill_repository
 from ...api.http.service import monitoring as monitoring_service
+from ...qa_analytics import service as qa_analytics_service
 from ...operation_trace import service as operation_trace_service
 from ...api.http.service import skill as skill_service
 from ...skill import manager as skill_mgr
@@ -317,6 +318,8 @@ class BuildAppStage(stage.BootingStage):
 
         monitoring_service_inst = monitoring_service.MonitoringService(ap)
         ap.monitoring_service = monitoring_service_inst
+
+        ap.qa_analytics_service = qa_analytics_service.QAAnalyticsService(ap)
 
         maintenance_service_inst = maintenance_service.MaintenanceService(ap)
         ap.maintenance_service = maintenance_service_inst

@@ -40,6 +40,17 @@ def _is_valid_uuid(s: str) -> bool:
     return bool(re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', s))
 
 
+def _get_client_ip() -> str:
+    """Return the visitor IP exactly as the existing operation log does."""
+    try:
+        forwarded = quart.request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        if forwarded:
+            return forwarded[:64]
+        return str(quart.request.remote_addr or '')[:64]
+    except Exception:
+        return ''
+
+
 def _get_widget_template() -> str:
     """Load the widget template and refresh the cache when the file changes."""
     global _widget_template_cache, _widget_template_cache_mtime_ns
@@ -379,7 +390,12 @@ class EmbedRouterGroup(group.RouterGroup):
                     pipeline_uuid=pipeline_uuid,
                     session_type=session_type,
                     session_id=session_id,
-                    metadata={'user_agent': quart.websocket.headers.get('User-Agent', '')},
+                    metadata={
+                        'user_agent': quart.websocket.headers.get('User-Agent', ''),
+                        # Kept in memory only; the analytics collector persists it
+                        # under the Workspace retention policy.
+                        'client_ip': _get_client_ip(),
+                    },
                     send_queue_size=(
                         self.ap.instance_config.data.get('system', {})
                         .get('websocket_retention', {})

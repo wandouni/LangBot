@@ -391,6 +391,31 @@ monitoring:
         # Prevent one large Workspace backlog from monopolizing PostgreSQL.
         # Supports MONITORING__AUTO_CLEANUP__MAX_BATCHES_PER_TABLE_PER_RUN.
         max_batches_per_table_per_run: 4
+qa_analytics:
+    # Core-owned knowledge-base Q&A analytics consumed by the bundled
+    # qa-analytics plugin page. Collection never blocks an answer.
+    enabled: true
+    # Delete questions older than this many days.
+    retention_days: 90
+    # Mask the host part of visitor IPs in list views; the detail view keeps
+    # the full address for support and abuse investigation.
+    mask_ip: true
+    # Newest questions sampled for the keyword cloud, and words returned.
+    word_cloud_sample_size: 500
+    word_cloud_words: 100
+    geoip:
+        # Offline GeoIP2 City database. Regions stay unknown when disabled.
+        enabled: false
+        database_path: ''
+    page:
+        # The page data path is served by Core only for this plugin identity.
+        # Update both values if you fork the page under another identity.
+        plugin_author: 'langbot-team'
+        plugin_name: 'qa-analytics'
+    auto_cleanup:
+        enabled: true
+        check_interval_hours: 24
+        batch_size: 1000
 skills:
     # Core-owned SkillStore. Skill discovery, activation, resources, CRUD and
     # revisions remain available when Box is disabled.

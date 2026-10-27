@@ -321,3 +321,119 @@ async def test_local_install_forwards_explicit_administrator_force(plugin_securi
         'plugin_file': b'archive',
         'administrator_force': True,
     }
+
+
+def _qa_page_body(endpoint: str = '/qa-analytics/overview') -> dict:
+    return {
+        'page_id': 'dashboard',
+        'endpoint': endpoint,
+        'method': 'POST',
+        'body': {'range': '7d', 'tz_offset_minutes': 0},
+    }
+
+
+@pytest.mark.asyncio
+async def test_qa_dashboard_page_api_is_served_by_core_after_permission_check(
+    plugin_security_api,
+):
+    application, client, _ = plugin_security_api
+    service = SimpleNamespace(
+        owns_page_api=Mock(return_value=True),
+        handle_page_api=AsyncMock(return_value={'total_questions': 1}),
+    )
+    application.qa_analytics_service = service
+    application.plugin_connector.require_workspace_context = AsyncMock(
+        return_value=SimpleNamespace(
+            instance_uuid='instance-test',
+            workspace_uuid=WORKSPACE_UUID,
+            placement_generation=1,
+        )
+    )
+
+    denied = await client.post(
+        '/api/v1/plugins/langbot-team/qa-analytics/page-api',
+        headers=_headers('viewer-token'),
+        json=_qa_page_body(),
+    )
+
+    assert denied.status_code == 403
+    service.handle_page_api.assert_not_awaited()
+
+    allowed = await client.post(
+        '/api/v1/plugins/langbot-team/qa-analytics/page-api',
+        headers=_headers('manager-token'),
+        json=_qa_page_body(),
+    )
+
+    assert allowed.status_code == 200
+    assert (await allowed.get_json())['data'] == {'total_questions': 1}
+    args = service.handle_page_api.await_args.args
+    assert args[0].workspace_uuid == WORKSPACE_UUID
+    assert args[1:] == ('/qa-analytics/overview', 'POST', {'range': '7d', 'tz_offset_minutes': 0})
+    application.plugin_connector.get_plugin_info.assert_awaited_with(
+        'langbot-team',
+        'qa-analytics',
+    )
+
+
+@pytest.mark.asyncio
+async def test_qa_dashboard_page_api_fails_closed_when_plugin_is_unavailable(
+    plugin_security_api,
+):
+    application, client, _ = plugin_security_api
+    service = SimpleNamespace(
+        owns_page_api=Mock(return_value=True),
+        handle_page_api=AsyncMock(return_value={'total_questions': 1}),
+    )
+    application.qa_analytics_service = service
+    application.plugin_connector.get_plugin_info = AsyncMock(return_value=None)
+
+    missing = await client.post(
+        '/api/v1/plugins/langbot-team/qa-analytics/page-api',
+        headers=_headers('manager-token'),
+        json=_qa_page_body(),
+    )
+
+    assert missing.status_code == 404
+    service.handle_page_api.assert_not_awaited()
+
+    application.plugin_connector.get_plugin_info = AsyncMock(side_effect=RuntimeError('offline'))
+    offline = await client.post(
+        '/api/v1/plugins/langbot-team/qa-analytics/page-api',
+        headers=_headers('manager-token'),
+        json=_qa_page_body(),
+    )
+
+    assert offline.status_code == 400
+    service.handle_page_api.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_other_plugin_pages_still_use_plugin_runtime_forwarding(
+    plugin_security_api,
+):
+    application, client, _ = plugin_security_api
+    service = SimpleNamespace(
+        owns_page_api=Mock(return_value=False),
+        handle_page_api=AsyncMock(),
+    )
+    application.qa_analytics_service = service
+    application.plugin_connector.handle_page_api = AsyncMock(return_value={'data': {'forwarded': True}})
+
+    response = await client.post(
+        '/api/v1/plugins/example/secure-plugin/page-api',
+        headers=_headers('manager-token'),
+        json=_qa_page_body('/hello'),
+    )
+
+    assert response.status_code == 200
+    assert (await response.get_json())['data'] == {'forwarded': True}
+    service.handle_page_api.assert_not_awaited()
+    application.plugin_connector.handle_page_api.assert_awaited_once_with(
+        'example',
+        'secure-plugin',
+        'dashboard',
+        '/hello',
+        'POST',
+        {'range': '7d', 'tz_offset_minutes': 0},
+    )
