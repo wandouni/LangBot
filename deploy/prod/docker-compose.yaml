@@ -64,6 +64,14 @@ services:
       API__WEBHOOK_PREFIX: ${LANGBOT_WEBHOOK_PREFIX:-http://192.168.31.66:5300}
       # Optional global service/MCP API key. Leave empty to disable.
       API__GLOBAL_API_KEY: ${LANGBOT_GLOBAL_API_KEY:-}
+      # CAS 2.0 single sign-on. Keep SSO_CAS_ENABLED=false until the callback
+      # address has been registered with the identity platform. The callback
+      # URL is ${SSO_CAS_SERVICE_BASE_URL}/api/v1/user/sso/cas/callback.
+      SSO__CAS__ENABLED: ${SSO_CAS_ENABLED:-false}
+      SSO__CAS__BASE_URL: ${SSO_CAS_BASE_URL:-}
+      SSO__CAS__SERVICE_BASE_URL: ${SSO_CAS_SERVICE_BASE_URL:-}
+      SSO__CAS__STATE_SECRET: ${SSO_CAS_STATE_SECRET:-}
+      SSO__CAS__ALLOWED_USER_TYPES: ${SSO_CAS_ALLOWED_USER_TYPES:-teacher}
       # This deployment does not run the Box sandbox runtime.
       BOX__ENABLED: "false"
       # Air-gapped hardening: no Space telemetry, model gateway or marketplace.

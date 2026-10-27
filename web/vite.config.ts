@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiProxyTarget,
           changeOrigin: true,
+          // Preserve the browser-facing Host so the CAS callback can match it
+          // against the registered service_base_url (see sso.cas config).
+          xfwd: true,
           ws: true,
         },
         '/mcp': {

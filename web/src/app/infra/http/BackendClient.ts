@@ -1766,8 +1766,23 @@ export class BackendClient extends BaseHttpClient {
     space_login_enabled?: boolean;
     passkey_login_enabled?: boolean;
     passkey_supported?: boolean;
+    cas_login_enabled?: boolean;
+    cas_login_label?: string;
   }> {
     return this.get('/api/v1/user/account-info', undefined, {
+      skipWorkspace: true,
+    });
+  }
+
+  /**
+   * Redeem the short-lived HttpOnly cookie set by the CAS callback.
+   *
+   * The token never appears in the callback URL; the login page calls this
+   * same-origin endpoint and then feeds the result into the normal session
+   * bootstrap. No body is sent, so no cross-site form can trigger it.
+   */
+  public exchangeSsoSession(): Promise<{ token: string; user: string }> {
+    return this.post('/api/v1/user/sso/session', undefined, {
       skipWorkspace: true,
     });
   }

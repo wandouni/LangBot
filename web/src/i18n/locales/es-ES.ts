@@ -586,6 +586,36 @@ const esES = {
     loginLocal: 'Iniciar sesión con cuenta local',
     loginWithPassword: 'Iniciar sesión con contraseña',
     loginWithPasskey: 'Iniciar sesión con Passkey',
+    loginWithSso: 'Iniciar sesión con autenticación unificada',
+    ssoErrorState:
+      'La sesión de inicio ha caducado. Vuelva a intentarlo desde esta página.',
+    ssoErrorHostMismatch:
+      'La dirección de este sitio no coincide con la dirección de retorno registrada. Abra LangBot con la dirección registrada e inténtelo de nuevo.',
+    ssoErrorUsername:
+      'La plataforma de identidad devolvió un nombre de cuenta que este sistema no puede usar.',
+    ssoErrorUsertype:
+      'Este tipo de cuenta no puede iniciar sesión. Utilice una cuenta de profesor.',
+    ssoErrorTicket:
+      'El inicio de sesión de la plataforma de identidad ha caducado o ya se ha utilizado. Inténtelo de nuevo.',
+    ssoErrorUnreachable:
+      'No se puede contactar con la plataforma de identidad. Inténtelo más tarde.',
+    ssoErrorTimeout:
+      'La plataforma de identidad no respondió a tiempo. Inténtelo de nuevo.',
+    ssoErrorTls:
+      'No se pudo verificar el certificado TLS de la plataforma de identidad.',
+    ssoErrorResponse:
+      'La plataforma de identidad devolvió una respuesta inesperada. Inténtelo más tarde.',
+    ssoErrorDisabled:
+      'El inicio de sesión con autenticación unificada no está disponible en esta instancia. Contacte con el administrador.',
+    ssoErrorAccountDisabled:
+      'Esta cuenta está deshabilitada. Contacte con el administrador.',
+    ssoErrorRateLimited:
+      'Demasiados intentos de inicio de sesión. Espere un minuto e inténtelo de nuevo.',
+    ssoErrorUnavailable:
+      'El inicio de sesión con autenticación unificada no está disponible temporalmente. Inténtelo más tarde.',
+    ssoErrorSession:
+      'No se pudo completar el inicio de sesión. Vuelva a intentarlo desde esta página.',
+    ssoErrorUnknown: 'El inicio de sesión falló. Inténtelo de nuevo.',
     passkeyLoginSuccess: 'Passkey verificada con éxito, iniciando sesión...',
     passkeyLoginFailed: 'Error al iniciar sesión con Passkey',
     passkeyNotSupported:

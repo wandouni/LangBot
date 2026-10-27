@@ -62,6 +62,33 @@ const TERMINAL_INVITATION_ERROR_CODES = new Set([
   'invitation_email_mismatch',
 ]);
 
+/**
+ * The CAS callback reports failures as `?error=sso_*` redirects. Keep the
+ * mapping explicit so an unknown value never renders a localization key.
+ */
+const SSO_ERROR_KEYS: Record<string, string> = {
+  sso_state: 'common.ssoErrorState',
+  sso_host_mismatch: 'common.ssoErrorHostMismatch',
+  sso_username: 'common.ssoErrorUsername',
+  sso_usertype_forbidden: 'common.ssoErrorUsertype',
+  sso_ticket_invalid: 'common.ssoErrorTicket',
+  sso_unreachable: 'common.ssoErrorUnreachable',
+  sso_timeout: 'common.ssoErrorTimeout',
+  sso_tls: 'common.ssoErrorTls',
+  sso_invalid_response: 'common.ssoErrorResponse',
+  sso_disabled: 'common.ssoErrorDisabled',
+  sso_account_disabled: 'common.ssoErrorAccountDisabled',
+  sso_rate_limited: 'common.ssoErrorRateLimited',
+  sso_unavailable: 'common.ssoErrorUnavailable',
+};
+
+/**
+ * Always a relative path. The CAS state cookie is written for the browser's
+ * current host; an absolute URL derived from server config could point at a
+ * different host (localhost vs 127.0.0.1) and silently lose the cookie.
+ */
+const SSO_LOGIN_PATH = '/api/v1/user/sso/cas/login';
+
 export default function Login() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -81,7 +108,12 @@ export default function Login() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [showSsoLogin, setShowSsoLogin] = useState(false);
+  const [ssoLabel, setSsoLabel] = useState('');
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [ssoError, setSsoError] = useState<string | null>(null);
   const autoSpaceLoginStarted = useRef(false);
+  const ssoExchangeStarted = useRef(false);
 
   const form = useForm<z.infer<ReturnType<typeof formSchema>>>({
     resolver: zodResolver(formSchema(t)),
@@ -110,7 +142,12 @@ export default function Login() {
       setShowPasskeyLogin(
         res.passkey_login_enabled === true || res.passkey_supported === true,
       );
+      setShowSsoLogin(res.cas_login_enabled === true);
+      setSsoLabel(res.cas_login_label || '');
       setLoading(false);
+
+      // A CAS callback lands here with `?sso=1` (success) or `?error=sso_*`.
+      await handleSsoReturn();
 
       // Also check if already logged in
       checkIfAlreadyLoggedIn();
@@ -148,6 +185,39 @@ export default function Login() {
         }
       })
       .catch(() => {});
+  }
+
+  /**
+   * Complete a CAS round trip: show the callback error, or redeem the
+   * one-time HttpOnly session cookie for a normal LangBot token.
+   */
+  async function handleSsoReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const errorCode = params.get('error');
+    if (errorCode) {
+      setSsoError(t(SSO_ERROR_KEYS[errorCode] || 'common.ssoErrorUnknown'));
+      return;
+    }
+    if (params.get('sso') !== '1' || ssoExchangeStarted.current) {
+      return;
+    }
+    ssoExchangeStarted.current = true;
+    setSsoLoading(true);
+    try {
+      const res = await httpClient.exchangeSsoSession();
+      if (!res?.token) {
+        throw new Error('Missing SSO session token');
+      }
+      if (await finishLogin(res.token, res.user)) {
+        toast.success(t('common.loginSuccess'));
+      }
+    } catch {
+      setSsoError(t('common.ssoErrorSession'));
+    } finally {
+      setSsoLoading(false);
+      // Drop the one-time marker so refreshing cannot replay the exchange.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }
 
   async function finishLogin(
@@ -331,7 +401,7 @@ export default function Login() {
     void handleSpaceLoginClick();
   }, [handleSpaceLoginClick, loading, showSpaceLogin]);
 
-  if (loading) {
+  if (loading || ssoLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-neutral-900">
         <LoadingSpinner />
@@ -413,6 +483,12 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {ssoError && !totpStep && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{ssoError}</span>
+            </div>
+          )}
           {/* Second-factor challenge: shown once the password has been accepted. */}
           {totpStep ? (
             <form onSubmit={handleTotpSubmit} className="space-y-4">
@@ -488,6 +564,23 @@ export default function Login() {
             </form>
           ) : (
             <>
+              {/* School CAS identity provider: the browser leaves this page
+                  and returns with `?sso=1` once the callback has a session. */}
+              {showSsoLogin && (
+                <div className="space-y-3">
+                  <Button
+                    type="button"
+                    className="w-full cursor-pointer"
+                    onClick={() => {
+                      window.location.href = SSO_LOGIN_PATH;
+                    }}
+                  >
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    {ssoLabel || t('common.loginWithSso')}
+                  </Button>
+                </div>
+              )}
+
               {/* Space and password login are per-account capabilities. */}
               {showSpaceLogin && (
                 <div className="space-y-3">
@@ -526,19 +619,20 @@ export default function Login() {
                 </div>
               )}
 
-              {/* Divider - only show if both login methods are available */}
-              {(showSpaceLogin || showPasskeyLogin) && showLocalLogin && (
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
+              {/* Divider - only show if another login method is available */}
+              {(showSsoLogin || showSpaceLogin || showPasskeyLogin) &&
+                showLocalLogin && (
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white dark:bg-card px-2 text-muted-foreground">
+                        {t('common.or')}
+                      </span>
+                    </div>
                   </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white dark:bg-card px-2 text-muted-foreground">
-                      {t('common.or')}
-                    </span>
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Password login remains available to every account with a password. */}
               {showLocalLogin && (

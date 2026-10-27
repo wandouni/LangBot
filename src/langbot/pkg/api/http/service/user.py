@@ -29,7 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ....entity.persistence import user
 from ....entity.persistence import passkey
 from . import totp as totp_service_module
-from ....entity.persistence.workspace import MembershipRole, MembershipStatus, WorkspaceMembership
+from ....entity.persistence.workspace import (
+    MembershipRole,
+    MembershipSource,
+    MembershipStatus,
+    WorkspaceMembership,
+)
 from ....utils import constants
 from ....entity.errors import account as account_errors
 from ....workspace.collaboration import normalize_email
@@ -62,6 +67,10 @@ class ControlPlaneDirectoryRequiredError(PublicRegistrationClosedError):
 
 class AccountDisabledError(ValueError):
     code = 'account_disabled'
+
+
+class SsoProvisioningDisabledError(ValueError):
+    code = 'sso_provisioning_disabled'
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -281,7 +290,7 @@ class UserService:
         )
         return account is not None
 
-    async def get_login_capabilities(self) -> dict[str, bool]:
+    async def get_login_capabilities(self) -> dict[str, typing.Any]:
         """Derive enabled public login methods in an explicit discovery scope."""
         password_count = sqlalchemy.func.count().filter(user.User.password.is_not(None), user.User.password != '')
         space_count = sqlalchemy.func.count().filter(user.User.space_account_uuid.is_not(None))
@@ -409,6 +418,77 @@ class UserService:
             source=user.AccountSource.LOCAL.value,
             projection_revision=0,
         )
+
+    async def _ensure_sso_membership(
+        self,
+        session: AsyncSession,
+        account_uuid: str,
+    ) -> WorkspaceMembership:
+        """Bind an SSO Account to the singleton Workspace at operator level.
+
+        Operator is the least privileged role that can use the chat runtime.
+        An existing disabled or removed membership is never reactivated: a
+        Workspace administrator's removal must outrank the identity provider.
+        """
+        workspace = await self.ap.workspace_service.get_singleton_workspace(session=session)
+        membership = await session.scalar(
+            sqlalchemy.select(WorkspaceMembership)
+            .where(
+                WorkspaceMembership.workspace_uuid == workspace.uuid,
+                WorkspaceMembership.account_uuid == account_uuid,
+            )
+            .with_for_update()
+        )
+        if membership is None:
+            membership = WorkspaceMembership(
+                uuid=str(uuid.uuid4()),
+                workspace_uuid=workspace.uuid,
+                account_uuid=account_uuid,
+                role=MembershipRole.OPERATOR.value,
+                status=MembershipStatus.ACTIVE.value,
+                source=MembershipSource.LOCAL.value,
+                joined_at=datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+                projection_revision=0,
+            )
+            session.add(membership)
+            await session.flush()
+            return membership
+        if membership.status != MembershipStatus.ACTIVE.value:
+            raise AccountDisabledError('The Workspace membership is not active')
+        return membership
+
+    async def establish_sso_account(
+        self,
+        account_name: str,
+        *,
+        auto_provision: bool,
+    ) -> user.User:
+        """Find or provision the local Account behind a validated CAS identity.
+
+        SSO Accounts deliberately carry no password: the CAS server is their
+        only credential source. The Account and its Workspace membership are
+        written in one transaction, so a failed provisioning rolls back both.
+        """
+        self._require_local_directory()
+        normalized = account_name.strip().casefold()
+        if not normalized:
+            raise ValueError('An SSO Account name is required')
+
+        async with self._create_user_lock:
+            async with self._session_factory()() as session:
+                async with session.begin():
+                    account = await session.scalar(
+                        sqlalchemy.select(user.User).where(user.User.normalized_email == normalized)
+                    )
+                    if account is None:
+                        if not auto_provision:
+                            raise SsoProvisioningDisabledError('SSO account provisioning is disabled')
+                        account = self._new_account(normalized, '')
+                        session.add(account)
+                        await session.flush()
+                    self._require_active_account(account)
+                    await self._ensure_sso_membership(session, account.uuid)
+                return account
 
     async def get_user_by_email(self, user_email: str) -> user.User | None:
         normalized_email = user_email.strip().casefold()

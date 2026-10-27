@@ -579,6 +579,34 @@ const viVN = {
     loginLocal: 'Đăng nhập với tài khoản cục bộ',
     loginWithPassword: 'Đăng nhập bằng mật khẩu',
     loginWithPasskey: 'Đăng nhập bằng Passkey',
+    loginWithSso: 'Đăng nhập bằng xác thực danh tính thống nhất',
+    ssoErrorState:
+      'Phiên đăng nhập đã hết hạn. Vui lòng bắt đầu lại từ trang này.',
+    ssoErrorHostMismatch:
+      'Địa chỉ trang này không khớp với địa chỉ gọi lại đã đăng ký. Hãy mở LangBot bằng địa chỉ đã đăng ký và thử lại.',
+    ssoErrorUsername:
+      'Nền tảng xác thực trả về tên tài khoản mà hệ thống này không thể sử dụng.',
+    ssoErrorUsertype:
+      'Loại tài khoản này không được phép đăng nhập. Vui lòng dùng tài khoản giáo viên.',
+    ssoErrorTicket:
+      'Phiên đăng nhập trên nền tảng xác thực đã hết hạn hoặc đã được dùng. Vui lòng đăng nhập lại.',
+    ssoErrorUnreachable:
+      'Không thể kết nối tới nền tảng xác thực. Vui lòng thử lại sau.',
+    ssoErrorTimeout: 'Nền tảng xác thực không phản hồi kịp. Vui lòng thử lại.',
+    ssoErrorTls: 'Không thể xác minh chứng chỉ TLS của nền tảng xác thực.',
+    ssoErrorResponse:
+      'Nền tảng xác thực trả về phản hồi không mong đợi. Vui lòng thử lại sau.',
+    ssoErrorDisabled:
+      'Đăng nhập bằng xác thực danh tính thống nhất không khả dụng trên phiên bản này. Vui lòng liên hệ quản trị viên.',
+    ssoErrorAccountDisabled:
+      'Tài khoản này đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.',
+    ssoErrorRateLimited:
+      'Quá nhiều lần thử đăng nhập. Vui lòng đợi một phút rồi thử lại.',
+    ssoErrorUnavailable:
+      'Đăng nhập bằng xác thực danh tính thống nhất tạm thời không khả dụng. Vui lòng thử lại sau.',
+    ssoErrorSession:
+      'Không thể hoàn tất đăng nhập. Vui lòng bắt đầu lại từ trang này.',
+    ssoErrorUnknown: 'Đăng nhập thất bại. Vui lòng thử lại.',
     passkeyLoginSuccess: 'Xác thực Passkey thành công, đang đăng nhập...',
     passkeyLoginFailed: 'Đăng nhập bằng Passkey thất bại',
     passkeyNotSupported: 'Trình duyệt hoặc thiết bị này không hỗ trợ Passkey',

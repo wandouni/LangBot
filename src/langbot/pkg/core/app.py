@@ -24,6 +24,7 @@ from ..utils import version as version_mgr, proxy as proxy_mgr, httpclient
 from ..persistence import mgr as persistencemgr
 from ..api.http.controller import main as http_controller
 from ..api.http.service import user as user_service
+from ..api.http.service import sso as sso_service
 from ..api.http.service import space as space_service
 from ..api.http.service import totp as totp_service
 from ..api.http.service import model as model_service
@@ -170,6 +171,7 @@ class Application:
     # ========= HTTP Services =========
 
     user_service: user_service.UserService = None
+    sso_service: sso_service.SsoService = None
     totp_service: totp_service.TotpService = None
 
     space_service: space_service.SpaceService = None

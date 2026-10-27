@@ -15,6 +15,41 @@ api:
     # login session and without a database record. Leave empty to disable.
     # Keep this value secret; only enable it on trusted/internal deployments.
     global_api_key: ''
+sso:
+    cas:
+        # CAS 2.0 single sign-on for the local WebUI. Disabled by default.
+        # Enable with SSO__CAS__ENABLED=true after every value below is set.
+        enabled: false
+        # CAS server root, including any context path. Example:
+        # https://sso.lnc.edu.cn/lyuapServer
+        base_url: ''
+        # Public browser origin registered with the CAS server as the callback
+        # host. Leave empty to fall back to api.webui_url, then
+        # api.webhook_prefix. The callback URL is
+        # {service_base_url}{service_path}; it must match the value registered
+        # with the CAS server character for character and carries no query.
+        service_base_url: ''
+        service_path: '/api/v1/user/sso/cas/callback'
+        # HMAC secret for the one-time `cas_state` cookie. Empty falls back to
+        # system.jwt.secret. Use at least 16 characters; 32+ is recommended.
+        state_secret: ''
+        state_ttl_seconds: 300
+        # auto: Secure when service_base_url uses https.
+        cookie_secure: auto
+        # CAS `usertype` values allowed to sign in. Comma separated; `*` allows
+        # any value. A missing usertype is always rejected.
+        allowed_user_types: 'teacher'
+        # Create a passwordless local Account on first sign-in. When false,
+        # only Accounts that already exist locally may sign in.
+        auto_provision: true
+        timeout_seconds: 10
+        rate_limit_per_minute: 20
+        # Optional CA bundle path for the CAS TLS connection.
+        ca_cert_path: ''
+        # Test-only escape hatch; never enable in production.
+        insecure_skip_verify: false
+        # Optional custom label for the login page button (empty uses i18n).
+        button_label: ''
 workspace:
     invitations:
         # Public WebUI origin used to build invitation links. Leave empty to

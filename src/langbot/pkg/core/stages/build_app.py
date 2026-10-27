@@ -17,6 +17,7 @@ from ...platform.webhook_pusher import WebhookPusher
 from ...persistence import mgr as persistencemgr
 from ...api.http.controller import main as http_controller
 from ...api.http.service import user as user_service
+from ...api.http.service import sso as sso_service
 from ...api.http.service import space as space_service
 from ...api.http.service import totp as totp_service
 from ...api.http.service import model as model_service
@@ -228,6 +229,8 @@ class BuildAppStage(stage.BootingStage):
 
         user_service_inst = user_service.UserService(ap)
         ap.user_service = user_service_inst
+
+        ap.sso_service = sso_service.SsoService(ap)
 
         ap.totp_service = totp_service.TotpService(ap)
 

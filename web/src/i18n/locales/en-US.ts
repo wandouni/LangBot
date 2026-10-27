@@ -583,6 +583,35 @@ const enUS = {
     loginLocal: 'Login with local account',
     loginWithPassword: 'Login with password',
     loginWithPasskey: 'Sign in with Passkey',
+    loginWithSso: 'Sign in with Unified Identity Authentication',
+    ssoErrorState:
+      'The sign-in session has expired. Please start again from this page.',
+    ssoErrorHostMismatch:
+      'This site address does not match the registered sign-in callback address. Open LangBot with the registered address and try again.',
+    ssoErrorUsername:
+      'The identity platform returned an account name this system cannot use.',
+    ssoErrorUsertype:
+      'This account type is not allowed to sign in. Please use a teacher account.',
+    ssoErrorTicket:
+      'The identity platform sign-in has expired or was already used. Please try again.',
+    ssoErrorUnreachable:
+      'Cannot reach the identity platform. Please try again later.',
+    ssoErrorTimeout:
+      'The identity platform did not respond in time. Please try again.',
+    ssoErrorTls: 'The identity platform TLS certificate could not be verified.',
+    ssoErrorResponse:
+      'The identity platform returned an unexpected response. Please try again later.',
+    ssoErrorDisabled:
+      'Unified identity sign-in is not available on this instance. Please contact the administrator.',
+    ssoErrorAccountDisabled:
+      'This account has been disabled. Please contact the administrator.',
+    ssoErrorRateLimited:
+      'Too many sign-in attempts. Please wait a minute and try again.',
+    ssoErrorUnavailable:
+      'Unified identity sign-in is temporarily unavailable. Please try again later.',
+    ssoErrorSession:
+      'Sign-in could not be completed. Please start again from this page.',
+    ssoErrorUnknown: 'Sign-in failed. Please try again.',
     passkeyLoginSuccess: 'Passkey verified successfully, signing in...',
     passkeyLoginFailed: 'Failed to sign in with Passkey',
     passkeyNotSupported: 'Passkey is not supported on this browser or device',

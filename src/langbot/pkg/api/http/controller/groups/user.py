@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import hmac
 import time
+import typing
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
@@ -538,7 +539,41 @@ class UserRouterGroup(group.RouterGroup):
             passkey_supported = self._passkey_supported()
             capabilities['passkey_login_enabled'] = passkey_supported
             capabilities['passkey_supported'] = passkey_supported
+            # CAS is an OSS/single-Workspace login method. The SSO service
+            # refuses to provision Accounts under a control-plane directory.
+            sso_service = getattr(self.ap, 'sso_service', None)
+            cas_login_enabled = bool(not cloud_mode and sso_service is not None and sso_service.login_enabled())
+            capabilities['cas_login_enabled'] = cas_login_enabled
+            capabilities['cas_login_label'] = sso_service.login_label() if cas_login_enabled else ''
             return self.success(data={'initialized': True, **capabilities})
+
+        # ---- CAS 2.0 single sign-on ----
+        #
+        # All three endpoints are unauthenticated by definition. Failures are
+        # browser redirects with a stable `sso_*` code; the login page owns the
+        # localized text. The exchange endpoint hands the web UI a normal
+        # LangBot token from a short-lived HttpOnly cookie, never from a URL.
+
+        @self.route('/sso/cas/login', methods=['GET'], auth_type=group.AuthType.NONE)
+        async def _() -> typing.Any:
+            sso_service = getattr(self.ap, 'sso_service', None)
+            if sso_service is None:
+                return self.http_status(503, 'sso_unavailable', 'Single sign-on is unavailable')
+            return await sso_service.handle_login()
+
+        @self.route('/sso/cas/callback', methods=['GET'], auth_type=group.AuthType.NONE)
+        async def _() -> typing.Any:
+            sso_service = getattr(self.ap, 'sso_service', None)
+            if sso_service is None:
+                return self.http_status(503, 'sso_unavailable', 'Single sign-on is unavailable')
+            return await sso_service.handle_callback()
+
+        @self.route('/sso/session', methods=['POST'], auth_type=group.AuthType.NONE)
+        async def _() -> typing.Any:
+            sso_service = getattr(self.ap, 'sso_service', None)
+            if sso_service is None:
+                return self.http_status(503, 'sso_unavailable', 'Single sign-on is unavailable')
+            return await sso_service.exchange_session()
 
         @self.route('/set-password', methods=['POST'], auth_type=group.AuthType.ACCOUNT_TOKEN)
         async def _(account) -> str:

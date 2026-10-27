@@ -582,6 +582,35 @@ const jaJP = {
     loginLocal: 'ローカルアカウントでログイン',
     loginWithPassword: 'パスワードでログイン',
     loginWithPasskey: 'パスキーでログイン',
+    loginWithSso: '統一認証でログイン',
+    ssoErrorState:
+      'ログインセッションの有効期限が切れました。このページから再度お試しください。',
+    ssoErrorHostMismatch:
+      'このサイトのアドレスが登録済みのコールバックアドレスと一致しません。登録済みのアドレスで LangBot を開いて再度お試しください。',
+    ssoErrorUsername:
+      '認証基盤から返されたアカウント名は、このシステムでは使用できません。',
+    ssoErrorUsertype:
+      'この種類のアカウントはログインできません。教職員アカウントを使用してください。',
+    ssoErrorTicket:
+      '認証基盤のログイン情報が期限切れか、すでに使用されています。再度ログインしてください。',
+    ssoErrorUnreachable:
+      '統一認証基盤に接続できません。しばらくしてから再度お試しください。',
+    ssoErrorTimeout:
+      '統一認証基盤が時間内に応答しませんでした。再度お試しください。',
+    ssoErrorTls: '統一認証基盤の TLS 証明書を検証できませんでした。',
+    ssoErrorResponse:
+      '統一認証基盤から予期しない応答が返されました。しばらくしてから再度お試しください。',
+    ssoErrorDisabled:
+      'このインスタンスでは統一認証ログインが有効になっていません。管理者にご連絡ください。',
+    ssoErrorAccountDisabled:
+      'このアカウントは無効化されています。管理者にご連絡ください。',
+    ssoErrorRateLimited:
+      'ログイン試行が多すぎます。1 分ほど待ってから再度お試しください。',
+    ssoErrorUnavailable:
+      '統一認証ログインは一時的に利用できません。しばらくしてから再度お試しください。',
+    ssoErrorSession:
+      'ログインを完了できませんでした。このページから再度お試しください。',
+    ssoErrorUnknown: 'ログインに失敗しました。再度お試しください。',
     passkeyLoginSuccess: 'パスキーの認証に成功しました。ログイン中...',
     passkeyLoginFailed: 'パスキーでのログインに失敗しました',
     passkeyNotSupported:
