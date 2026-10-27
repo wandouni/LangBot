@@ -11,14 +11,16 @@ upgrade cannot change the analytics data model.
 ## Install
 
 Package the directory contents (the directory itself must be the archive root)
-and install the ZIP from **Plugins → Install plugin** in the WebUI:
+and install the `.lbpkg` from **Add extension → Upload extension** in the WebUI:
 
 ```bash
 cd plugins/qa-analytics
-zip -r ../qa-analytics-0.1.0.zip .
+zip -r ../qa-analytics-0.1.0.lbpkg .
 ```
 
-Then enable the plugin. The page appears under **Plugin pages** in the sidebar.
+Choose **Manual add**, upload the `.lbpkg`, confirm the install, then enable the
+plugin. The page appears under **Plugin pages** in the sidebar. A `.zip` upload
+is treated as a Skill by the WebUI, so plugin packages must use `.lbpkg`.
 
 ## Configuration
 
