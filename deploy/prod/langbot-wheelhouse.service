@@ -1,0 +1,19 @@
+[Unit]
+Description=LangBot offline PEP 503 wheel index
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/langbot/wheelhouse
+ExecStart=/usr/bin/python3 -m http.server 8081 --bind 0.0.0.0 --directory /opt/langbot/wheelhouse
+Restart=on-failure
+RestartSec=3
+User=nobody
+Group=nogroup
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

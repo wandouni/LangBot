@@ -1,0 +1,8 @@
+# Union of Python requirements for every plugin that will be installed on the
+# air-gapped host. make-wheelhouse.sh downloads exactly these packages.
+#
+# Add one line per plugin dependency before building the wheelhouse. Pinned
+# versions are recommended so the same wheelhouse can be rebuilt reliably.
+#
+# Example: the SQLBot query plugin (vocational-data-query) needs httpx.
+httpx>=0.28

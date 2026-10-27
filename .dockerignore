@@ -12,3 +12,12 @@ __pycache__
 web/.next
 web/node_modules
 web/.env
+web/dist
+# Local runtime data, deployment artifacts and secrets must never enter the image.
+/data
+/dist
+/deploy
+**/.env
+**/.env.*
+# Local-only QA data kept out of git via .git/info/exclude.
+docs/测试问答

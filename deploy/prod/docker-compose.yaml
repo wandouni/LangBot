@@ -1,0 +1,97 @@
+# Production deployment for LangBot on a single air-gapped host.
+#
+#   cd /opt/langbot
+#   sudo docker compose --env-file .env up -d
+#
+# The image is built locally and transferred with build-image.sh/ship-image.sh;
+# this host never pulls from a registry. Box is intentionally not deployed.
+name: langbot
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  langbot_plugin_runtime:
+    image: ${LANGBOT_IMAGE:?LANGBOT_IMAGE must be set in .env}
+    container_name: langbot_plugin_runtime
+    command: ["uv", "run", "--no-sync", "-m", "langbot_plugin.cli.__init__", "rt"]
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # Shared secret for the control WebSocket. Set the same value on both
+      # services; leave empty only on a fully trusted network.
+      LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN: ${LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN:-}
+      # Offline plugin dependency source (PEP 503 index served by the host).
+      LANGBOT_PLUGIN_PYPI_INDEX_URL: ${LANGBOT_PLUGIN_PYPI_INDEX_URL:-}
+      LANGBOT_PLUGIN_PYPI_TRUSTED_HOST: ${LANGBOT_PLUGIN_PYPI_TRUSTED_HOST:-}
+      LANGBOT_BLOCKING_EXECUTOR_MAX_WORKERS: ${LANGBOT_BLOCKING_EXECUTOR_MAX_WORKERS:-8}
+      LANGBOT_BLOCKING_EXECUTOR_MAX_PENDING: ${LANGBOT_BLOCKING_EXECUTOR_MAX_PENDING:-128}
+      LANGBOT_BLOCKING_EXECUTOR_MAX_INFLIGHT_PER_SCOPE: ${LANGBOT_BLOCKING_EXECUTOR_MAX_INFLIGHT_PER_SCOPE:-4}
+    volumes:
+      # Plugin packages (legacy bridge used by OSS runtimes).
+      - ${LANGBOT_DATA_DIR:-./data}/plugins:/app/data/plugins
+      # Per-plugin dependency environments. Without this mount every container
+      # recreation reinstalls plugin dependencies, which is impossible offline.
+      - ${LANGBOT_DATA_DIR:-./data}/plugin-runtime:/app/data/plugin-runtime
+    ports:
+      # Plugin debug WebSocket only. Keep it on loopback; core reaches the
+      # runtime over the compose network at ws://langbot_plugin_runtime:5400.
+      - "127.0.0.1:5401:5401"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5400/healthz', timeout=3).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    networks:
+      - langbot_network
+
+  langbot:
+    image: ${LANGBOT_IMAGE:?LANGBOT_IMAGE must be set in .env}
+    container_name: langbot
+    depends_on:
+      langbot_plugin_runtime:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN: ${LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN:-}
+      # Public origin used by platform webhooks and the embed widget.
+      API__WEBHOOK_PREFIX: ${LANGBOT_WEBHOOK_PREFIX:-http://192.168.31.66:5300}
+      # Optional global service/MCP API key. Leave empty to disable.
+      API__GLOBAL_API_KEY: ${LANGBOT_GLOBAL_API_KEY:-}
+      # This deployment does not run the Box sandbox runtime.
+      BOX__ENABLED: "false"
+      # Air-gapped hardening: no Space telemetry, model gateway or marketplace.
+      SPACE__DISABLE_TELEMETRY: "true"
+      SPACE__DISABLE_MODELS_SERVICE: "true"
+      SPACE__EXECUTION_TRACE: "off"
+      PLUGIN__ENABLE_MARKETPLACE: "false"
+      SYSTEM__BLOCKING_EXECUTOR__MAX_WORKERS: ${LANGBOT_BLOCKING_EXECUTOR_MAX_WORKERS:-8}
+      SYSTEM__BLOCKING_EXECUTOR__MAX_PENDING: ${LANGBOT_BLOCKING_EXECUTOR_MAX_PENDING:-128}
+      SYSTEM__BLOCKING_EXECUTOR__MAX_INFLIGHT_PER_SCOPE: ${LANGBOT_BLOCKING_EXECUTOR_MAX_INFLIGHT_PER_SCOPE:-4}
+    volumes:
+      # config.yaml, SQLite, Chroma, uploads and logs all live here.
+      - ${LANGBOT_DATA_DIR:-./data}:/app/data
+    ports:
+      - "${LANGBOT_HTTP_PORT:-5300}:5300"
+      # Platform reverse-connection range kept for adapters that need it.
+      - "2280-2285:2280-2285"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5300/healthz', timeout=3).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # First start runs Alembic migrations and can be slow on cold storage.
+      start_period: 120s
+    logging: *default-logging
+    networks:
+      - langbot_network
+
+networks:
+  langbot_network:
+    driver: bridge
