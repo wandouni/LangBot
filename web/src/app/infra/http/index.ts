@@ -424,6 +424,21 @@ export const clearUserInfo = (): void => {
   }
 };
 
+/**
+ * Drop every local session artefact, including the SqlBot mount.
+ *
+ * Logout entry points (application center, sidebar, and the SqlBot handoff at
+ * `/login?logout=1`) all funnel through this helper so their cleanup cannot
+ * drift apart.
+ */
+export const clearLocalSession = (): void => {
+  clearUserInfo();
+  clearSqlbotSession();
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('token');
+  localStorage.removeItem('userEmail');
+};
+
 export {
   clearActiveWorkspaceUuid,
   clearPendingInvitationToken,

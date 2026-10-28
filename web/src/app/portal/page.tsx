@@ -15,6 +15,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { LanguageSelector } from '@/components/ui/language-selector';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import {
+  clearLocalSession,
   clearSqlbotSession,
   httpClient,
   initializeSystemInfo,
@@ -42,10 +43,7 @@ export default function PortalPage() {
   const [sqlbotError, setSqlbotError] = useState<string | null>(null);
 
   const leaveToLogin = useCallback(() => {
-    clearSqlbotSession();
-    localStorage.removeItem('token');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('authPrincipalType');
+    clearLocalSession();
     window.location.href = '/login';
   }, []);
 
