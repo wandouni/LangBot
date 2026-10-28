@@ -172,3 +172,35 @@ test('portal sign out clears LangBot and SqlBot local state', async ({
     })),
   ).toEqual({ token: null, sqlbot: null });
 });
+
+test('SqlBot handoff logout clears both sessions and the query parameter', async ({
+  page,
+}) => {
+  await installPortalMocks(page);
+  await page.route('**/api/v1/user/check-token', (route) =>
+    route.fulfill({
+      json: { code: 0, message: 'ok', data: { token: '' } },
+    }),
+  );
+
+  await page.goto('/login');
+  await page.evaluate(() => {
+    localStorage.setItem('token', 'langbot-token');
+    localStorage.setItem('userEmail', 'admin@example.com');
+    localStorage.setItem('sqlbot_portal_session', '1');
+    localStorage.setItem('sqlbot_user.token', 'sqlbot-token');
+  });
+
+  await page.goto('/login?logout=1');
+
+  await expect(page).toHaveURL(/\/login$/);
+  expect(
+    await page.evaluate(() => ({
+      token: localStorage.getItem('token'),
+      userEmail: localStorage.getItem('userEmail'),
+      sqlbotKeys: Object.keys(localStorage).filter((key) =>
+        key.startsWith('sqlbot_'),
+      ),
+    })),
+  ).toEqual({ token: null, userEmail: null, sqlbotKeys: [] });
+});

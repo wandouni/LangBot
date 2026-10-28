@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   beginAuthenticatedSession,
   bootstrapWorkspaceSession,
+  clearLocalSession,
   clearPendingInvitationToken,
   getPendingInvitationToken,
   httpClient,
@@ -36,12 +37,10 @@ import {
   AlertCircle,
   RefreshCw,
   Layers,
-  Fingerprint,
   ShieldCheck,
   KeyRound,
   ArrowLeft,
 } from 'lucide-react';
-import { startAuthentication } from '@simplewebauthn/browser';
 import langbotIcon from '@/app/assets/langbot-logo.webp';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -96,8 +95,9 @@ export default function Login() {
   const [spaceLoading, setSpaceLoading] = useState(false);
   const [showLocalLogin, setShowLocalLogin] = useState(false);
   const [showSpaceLogin, setShowSpaceLogin] = useState(false);
-  const [showPasskeyLogin, setShowPasskeyLogin] = useState(false);
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  // Password login is collapsed behind a link when SSO is available so the
+  // unified identity button stays the primary action.
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   // Second-factor step: primary credentials passed, awaiting a TOTP or recovery code.
   const [totpStep, setTotpStep] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
@@ -125,6 +125,16 @@ export default function Login() {
   });
 
   useEffect(() => {
+    // SqlBot hands off here after logging out of the application center so a
+    // single cleanup path drops both apps' browser state, then the parameter
+    // is removed to keep refresh and history clean.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('logout') === '1') {
+      clearLocalSession();
+      params.delete('logout');
+      const query = params.toString();
+      window.history.replaceState({}, '', `/login${query ? `?${query}` : ''}`);
+    }
     checkAccountInfo();
   }, []);
 
@@ -138,11 +148,6 @@ export default function Login() {
       }
       setShowLocalLogin(res.password_login_enabled !== false);
       setShowSpaceLogin(res.space_login_enabled !== false);
-      // Passkeys are OSS-only: the core reports explicit false on cloud, so an
-      // absent flag must not be read as "enabled".
-      setShowPasskeyLogin(
-        res.passkey_login_enabled === true || res.passkey_supported === true,
-      );
       setShowSsoLogin(res.cas_login_enabled === true);
       setSsoLabel(res.cas_login_label || '');
       setLoading(false);
@@ -282,33 +287,6 @@ export default function Login() {
 
   function onSubmit(values: z.infer<ReturnType<typeof formSchema>>) {
     handleLogin(values.email, values.password);
-  }
-
-  async function handlePasskeyLogin() {
-    setPasskeyLoading(true);
-    try {
-      const { options, challenge_token } =
-        await httpClient.getPasskeyAuthOptions(undefined);
-      const authResp = await startAuthentication({ optionsJSON: options });
-      const res = await httpClient.verifyPasskeyAuth(challenge_token, authResp);
-      // A rejected assertion answers with an error payload and no session, so a
-      // missing token means the login failed rather than that the user cancelled.
-      if (!res?.token) {
-        toast.error(t('common.passkeyLoginFailed'));
-        return;
-      }
-      if (await finishLogin(res.token, res.user)) {
-        toast.success(t('common.passkeyLoginSuccess'));
-      }
-    } catch (error: any) {
-      if (error?.name === 'NotAllowedError') {
-        // User cancelled the biometric prompt
-      } else {
-        toast.error(error?.message || t('common.passkeyLoginFailed'));
-      }
-    } finally {
-      setPasskeyLoading(false);
-    }
   }
 
   function handleLogin(username: string, password: string) {
@@ -580,12 +558,12 @@ export default function Login() {
                 <div className="space-y-3">
                   <Button
                     type="button"
-                    className="w-full cursor-pointer"
+                    className="min-h-11 h-auto w-full cursor-pointer whitespace-normal px-4 py-2 text-sm font-semibold leading-snug shadow-sm"
                     onClick={() => {
                       window.location.href = SSO_LOGIN_PATH;
                     }}
                   >
-                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    <ShieldCheck className="mr-2 h-5 w-5" />
                     {ssoLabel || t('common.loginWithSso')}
                   </Button>
                 </div>
@@ -610,109 +588,102 @@ export default function Login() {
                 </div>
               )}
 
-              {showPasskeyLogin && (
-                <div className="space-y-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full cursor-pointer"
-                    onClick={handlePasskeyLogin}
-                    disabled={passkeyLoading}
-                  >
-                    {passkeyLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Fingerprint className="mr-2 h-4 w-4" />
-                    )}
-                    {t('common.loginWithPasskey')}
-                  </Button>
+              {/* Divider - only show if another login method is available */}
+              {(showSsoLogin || showSpaceLogin) && showLocalLogin && (
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white dark:bg-card px-2 text-muted-foreground">
+                      {t('common.or')}
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* Divider - only show if another login method is available */}
-              {(showSsoLogin || showSpaceLogin || showPasskeyLogin) &&
-                showLocalLogin && (
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white dark:bg-card px-2 text-muted-foreground">
-                        {t('common.or')}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-              {/* Password login remains available to every account with a password. */}
-              {showLocalLogin && (
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-6"
+              {/* Password login remains available to every account with a password,
+                  but stays collapsed while SSO is the primary entry point. */}
+              {showLocalLogin &&
+                (showSsoLogin && !showPasswordForm ? (
+                  <button
+                    type="button"
+                    className="mx-auto flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => setShowPasswordForm(true)}
                   >
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('common.email')}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                              <Input
-                                placeholder={t('common.enterEmail')}
-                                className="pl-10"
-                                {...field}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex justify-between">
-                            <FormLabel>{t('common.password')}</FormLabel>
-                            <Link
-                              to="/reset-password"
-                              className="text-sm text-blue-500"
-                            >
-                              {t('common.forgotPassword')}
-                            </Link>
-                          </div>
-
-                          <FormControl>
-                            <div className="relative">
-                              <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                              <Input
-                                type="password"
-                                placeholder={t('common.enterPassword')}
-                                className="pl-10"
-                                {...field}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button
-                      type="submit"
-                      variant={showSpaceLogin ? 'outline' : 'default'}
-                      className="w-full cursor-pointer"
+                    <KeyRound className="h-4 w-4" />
+                    {t('common.loginWithPassword')}
+                  </button>
+                ) : (
+                  <Form {...form}>
+                    <form
+                      onSubmit={form.handleSubmit(onSubmit)}
+                      className="space-y-6"
                     >
-                      {t('common.loginWithPassword')}
-                    </Button>
-                  </form>
-                </Form>
-              )}
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('common.email')}</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Input
+                                  placeholder={t('common.enterEmail')}
+                                  className="pl-10"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <div className="flex justify-between">
+                              <FormLabel>{t('common.password')}</FormLabel>
+                              <Link
+                                to="/reset-password"
+                                className="text-sm text-blue-500"
+                              >
+                                {t('common.forgotPassword')}
+                              </Link>
+                            </div>
+
+                            <FormControl>
+                              <div className="relative">
+                                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Input
+                                  type="password"
+                                  placeholder={t('common.enterPassword')}
+                                  className="pl-10"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <Button
+                        type="submit"
+                        variant={
+                          showSsoLogin || showSpaceLogin ? 'outline' : 'default'
+                        }
+                        className="w-full cursor-pointer"
+                      >
+                        {t('common.loginWithPassword')}
+                      </Button>
+                    </form>
+                  </Form>
+                ))}
 
               <p className="text-xs text-center text-muted-foreground">
                 {t('common.agreementNotice')}{' '}
