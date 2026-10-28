@@ -26,8 +26,8 @@ SQLBOT_SOURCE_DIR=/path/to/SQLBot ./deploy/prod/build-image.sh   # 额外构建 
 ./deploy/prod/ship-image.sh                  # 传输 .last-*-image 记录的全部镜像
 ```
 
-离线主机需要预先加载 `nginx:1.27-alpine` 才能构建网关；若无法导入，可改为由
-LangBot 内置反代，见计划中的回退方案。
+网关镜像在有外网的构建机上生成，离线主机只执行 `docker load`，不需要基础镜像，
+也不需要在服务器上安装 nginx。
 
 ## 首次切换
 
