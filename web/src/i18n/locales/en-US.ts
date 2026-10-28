@@ -2301,8 +2301,16 @@ const enUS = {
       enableAllMCPServers: 'Enable All MCP Servers',
       enableAllSkills: 'Enable All Skills',
       allPluginsEnabled: 'All plugins enabled',
-      allMCPServersEnabled: 'All MCP servers enabled',
-      allSkillsEnabled: 'All skills enabled',
+      autoEnabledPluginsHint:
+        '“Enable All Plugins” is on. These {{count}} enabled plugins will run in this pipeline:',
+      autoEnabledBadge: 'Auto-enabled',
+      noEnabledPlugins: 'No enabled pipeline plugins.',
+      autoEnabledMCPServersHint:
+        '“Enable All MCP Servers” is on. These {{count}} enabled MCP servers will be available in this pipeline (disabled servers are skipped):',
+      noEnabledMCPServers: 'No enabled MCP servers.',
+      autoEnabledSkillsHint:
+        '“Enable All Skills” is on. These {{count}} skills will be available in this pipeline:',
+      noEnabledSkills: 'No skills available.',
       skillsTitle: 'Skills',
       noSkillsSelected: 'No skills selected',
       addSkill: 'Add Skill',

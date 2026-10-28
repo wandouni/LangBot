@@ -2249,8 +2249,16 @@ const thTH = {
       enableAllMCPServers: 'เปิดใช้งานเซิร์ฟเวอร์ MCP ทั้งหมด',
       enableAllSkills: 'เปิดใช้สกิลทั้งหมด',
       allPluginsEnabled: 'เปิดใช้งานปลั๊กอินทั้งหมดแล้ว',
-      allMCPServersEnabled: 'เปิดใช้งานเซิร์ฟเวอร์ MCP ทั้งหมดแล้ว',
-      allSkillsEnabled: 'เปิดใช้สกิลทั้งหมดแล้ว',
+      autoEnabledPluginsHint:
+        'เปิด «เปิดใช้งานปลั๊กอินทั้งหมด» อยู่ ปลั๊กอินที่เปิดใช้งาน {{count}} รายการต่อไปนี้จะทำงานในไปป์ไลน์นี้โดยอัตโนมัติ:',
+      autoEnabledBadge: 'เปิดใช้งานอัตโนมัติ',
+      noEnabledPlugins: 'ไม่มีปลั๊กอินไปป์ไลน์ที่เปิดใช้งาน',
+      autoEnabledMCPServersHint:
+        'เปิด «เปิดใช้งานเซิร์ฟเวอร์ MCP ทั้งหมด» อยู่ เซิร์ฟเวอร์ MCP ที่เปิดใช้งานแล้ว {{count}} รายการต่อไปนี้จะพร้อมใช้ในไปป์ไลน์นี้ (เซิร์ฟเวอร์ที่ปิดใช้งานจะถูกข้าม):',
+      noEnabledMCPServers: 'ไม่มีเซิร์ฟเวอร์ MCP ที่เปิดใช้งาน',
+      autoEnabledSkillsHint:
+        'เปิด «เปิดใช้งานสกิลทั้งหมด» อยู่ สกิล {{count}} รายการต่อไปนี้จะพร้อมใช้ในไปป์ไลน์นี้:',
+      noEnabledSkills: 'ไม่มีสกิลที่ใช้งานได้',
       skillsTitle: 'สกิล',
       noSkillsSelected: 'ยังไม่ได้เลือกสกิล',
       addSkill: 'เพิ่มสกิล',

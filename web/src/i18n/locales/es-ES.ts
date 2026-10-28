@@ -2336,8 +2336,16 @@ const esES = {
       enableAllMCPServers: 'Activar todos los servidores MCP',
       enableAllSkills: 'Activar todas las skills',
       allPluginsEnabled: 'Todos los plugins activados',
-      allMCPServersEnabled: 'Todos los servidores MCP activados',
-      allSkillsEnabled: 'Todas las skills están activadas',
+      autoEnabledPluginsHint:
+        '«Activar todos los plugins» está activado. Estos {{count}} plugins habilitados se ejecutarán automáticamente en esta pipeline:',
+      autoEnabledBadge: 'Activado automáticamente',
+      noEnabledPlugins: 'No hay plugins de pipeline habilitados.',
+      autoEnabledMCPServersHint:
+        '«Activar todos los servidores MCP» está activado. Estos {{count}} servidores MCP habilitados estarán disponibles en esta pipeline (los deshabilitados se omiten):',
+      noEnabledMCPServers: 'No hay servidores MCP habilitados.',
+      autoEnabledSkillsHint:
+        '«Activar todas las skills» está activado. Estas {{count}} skills estarán disponibles en esta pipeline:',
+      noEnabledSkills: 'No hay skills disponibles.',
       skillsTitle: 'Skills',
       noSkillsSelected: 'No hay skills seleccionadas',
       addSkill: 'Añadir skill',

@@ -2154,8 +2154,16 @@ const zhHant = {
       enableAllMCPServers: '啟用所有 MCP 伺服器',
       enableAllSkills: '啟用全部技能',
       allPluginsEnabled: '已啟用所有插件',
-      allMCPServersEnabled: '已啟用所有 MCP 伺服器',
-      allSkillsEnabled: '已啟用全部技能',
+      autoEnabledPluginsHint:
+        '「啟用所有插件」已開啟，以下 {{count}} 個已啟用的插件會自動參與此流水線：',
+      autoEnabledBadge: '自動啟用',
+      noEnabledPlugins: '目前沒有已啟用的管道插件。',
+      autoEnabledMCPServersHint:
+        '「啟用所有 MCP 伺服器」已開啟，以下 {{count}} 個已啟用的 MCP 伺服器會自動參與此流水線（已停用的不會生效）：',
+      noEnabledMCPServers: '目前沒有已啟用的 MCP 伺服器。',
+      autoEnabledSkillsHint:
+        '「啟用所有技能」已開啟，以下 {{count}} 個技能會自動參與此流水線：',
+      noEnabledSkills: '目前沒有可用的技能。',
       skillsTitle: '技能',
       noSkillsSelected: '未選擇技能',
       addSkill: '新增技能',

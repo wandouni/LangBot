@@ -2325,8 +2325,16 @@ const ruRU = {
       enableAllMCPServers: 'Включить все MCP-серверы',
       enableAllSkills: 'Включить все навыки',
       allPluginsEnabled: 'Все плагины включены',
-      allMCPServersEnabled: 'Все MCP-серверы включены',
-      allSkillsEnabled: 'Все навыки включены',
+      autoEnabledPluginsHint:
+        '«Включить все плагины» включено. Следующие {{count}} включённых плагинов будут автоматически выполняться в этом пайплайне:',
+      autoEnabledBadge: 'Включён автоматически',
+      noEnabledPlugins: 'Нет включённых плагинов пайплайна.',
+      autoEnabledMCPServersHint:
+        '«Включить все MCP-серверы» включено. Следующие {{count}} включённых MCP-серверов будут доступны в этом пайплайне (отключённые пропускаются):',
+      noEnabledMCPServers: 'Нет включённых MCP-серверов.',
+      autoEnabledSkillsHint:
+        '«Включить все навыки» включено. Следующие {{count}} навыков будут доступны в этом пайплайне:',
+      noEnabledSkills: 'Нет доступных навыков.',
       skillsTitle: 'Навыки',
       noSkillsSelected: 'Навыки не выбраны',
       addSkill: 'Добавить навык',

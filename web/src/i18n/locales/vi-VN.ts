@@ -2286,8 +2286,16 @@ const viVN = {
       enableAllMCPServers: 'Bật tất cả máy chủ MCP',
       enableAllSkills: 'Bật tất cả kỹ năng',
       allPluginsEnabled: 'Đã bật tất cả plugin',
-      allMCPServersEnabled: 'Đã bật tất cả máy chủ MCP',
-      allSkillsEnabled: 'Tất cả kỹ năng đã được bật',
+      autoEnabledPluginsHint:
+        '«Bật tất cả Plugin» đang bật. {{count}} plugin đã bật sau đây sẽ tự động chạy trong pipeline này:',
+      autoEnabledBadge: 'Tự động bật',
+      noEnabledPlugins: 'Không có plugin pipeline nào được bật.',
+      autoEnabledMCPServersHint:
+        '«Bật tất cả máy chủ MCP» đang bật. {{count}} máy chủ MCP đang bật sau đây sẽ khả dụng trong pipeline này (máy chủ đã tắt sẽ bị bỏ qua):',
+      noEnabledMCPServers: 'Không có máy chủ MCP nào được bật.',
+      autoEnabledSkillsHint:
+        '«Bật tất cả kỹ năng» đang bật. {{count}} kỹ năng sau đây sẽ khả dụng trong pipeline này:',
+      noEnabledSkills: 'Không có kỹ năng nào khả dụng.',
       skillsTitle: 'Kỹ năng',
       noSkillsSelected: 'Chưa chọn kỹ năng',
       addSkill: 'Thêm kỹ năng',

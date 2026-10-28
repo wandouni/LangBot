@@ -2312,8 +2312,16 @@ const jaJP = {
       enableAllMCPServers: 'すべてのMCPサーバーを有効にする',
       enableAllSkills: 'すべてのスキルを有効化',
       allPluginsEnabled: 'すべてのプラグインが有効になっています',
-      allMCPServersEnabled: 'すべてのMCPサーバーが有効になっています',
-      allSkillsEnabled: 'すべてのスキルが有効です',
+      autoEnabledPluginsHint:
+        '「すべてのプラグインを有効にする」がオンです。次の {{count}} 個の有効なプラグインがこのパイプラインで自動的に実行されます：',
+      autoEnabledBadge: '自動有効',
+      noEnabledPlugins: '有効なパイプラインプラグインはありません。',
+      autoEnabledMCPServersHint:
+        '「すべてのMCPサーバーを有効にする」がオンです。次の {{count}} 個の有効なMCPサーバーがこのパイプラインで利用できます（無効なサーバーは除外されます）：',
+      noEnabledMCPServers: '有効なMCPサーバーはありません。',
+      autoEnabledSkillsHint:
+        '「すべてのスキルを有効にする」がオンです。次の {{count}} 個のスキルがこのパイプラインで利用できます：',
+      noEnabledSkills: '利用可能なスキルはありません。',
       skillsTitle: 'スキル',
       noSkillsSelected: 'スキルが選択されていません',
       addSkill: 'スキルを追加',

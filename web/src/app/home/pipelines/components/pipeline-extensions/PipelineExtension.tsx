@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backendClient } from '@/app/infra/http';
 import { Button } from '@/components/ui/button';
@@ -73,6 +73,115 @@ function InfoTooltip({ label }: { label: string }) {
   );
 }
 
+function PluginCard({
+  plugin,
+  trailing,
+}: {
+  plugin: Plugin;
+  trailing: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const metadata = plugin.manifest.manifest.metadata;
+  const componentKindCount: Record<string, number> = {};
+  for (const component of plugin.components) {
+    const kind = component.manifest.manifest.kind;
+    componentKindCount[kind] = (componentKindCount[kind] ?? 0) + 1;
+  }
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border p-3">
+      <div className="flex-1 flex items-center gap-3">
+        <PluginThumbnail author={metadata.author || ''} name={metadata.name} />
+        <div className="flex-1">
+          <div className="font-medium">{metadata.name}</div>
+          <div className="text-sm text-muted-foreground">
+            {metadata.author} • v{metadata.version}
+          </div>
+          <div className="flex gap-1 mt-1">
+            <PluginComponentList
+              components={componentKindCount}
+              showComponentName={true}
+              showTitle={false}
+              useBadge={true}
+              t={t}
+            />
+          </div>
+        </div>
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+function MCPServerCard({
+  server,
+  trailing,
+  className,
+}: {
+  server: MCPServer;
+  trailing: ReactNode;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className={`flex items-center justify-between rounded-lg border p-3${className ? ` ${className}` : ''}`}
+    >
+      <div className="flex-1 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg border bg-muted flex items-center justify-center flex-shrink-0">
+          <Server className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="flex-1">
+          <div className="font-medium">{server.name}</div>
+          <div className="text-sm text-muted-foreground">{server.mode}</div>
+          {server.runtime_info &&
+            server.runtime_info.status === 'connected' && (
+              <Badge variant="outline" className="flex items-center gap-1 mt-1">
+                <Wrench className="h-3 w-3 text-black dark:text-white" />
+                <span className="text-xs text-black dark:text-white">
+                  {t('pipelines.extensions.toolCount', {
+                    count: server.runtime_info.tool_count || 0,
+                  })}
+                </span>
+              </Badge>
+            )}
+        </div>
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+function SkillCard({
+  skill,
+  trailing,
+  className,
+}: {
+  skill: Skill;
+  trailing: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between rounded-lg border p-3${className ? ` ${className}` : ''}`}
+    >
+      <div className="flex-1 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg border bg-muted flex items-center justify-center flex-shrink-0">
+          <Sparkles className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="flex-1">
+          <div className="font-medium">{skill.display_name || skill.name}</div>
+          <div className="text-sm text-muted-foreground">
+            {skill.description}
+          </div>
+        </div>
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
 export default function PipelineExtension({
   pipelineId,
 }: {
@@ -109,6 +218,10 @@ export default function PipelineExtension({
     const name = plugin.manifest.manifest.metadata.name;
     return `${author}/${name}`;
   };
+
+  const enabledPlugins = allPlugins.filter((plugin) => plugin.enabled);
+  // Disabled MCP servers stay excluded even when "enable all" is on.
+  const enabledMCPServers = allMCPServers.filter((server) => server.enable);
 
   const loadExtensions = async () => {
     try {
@@ -376,10 +489,33 @@ export default function PipelineExtension({
         </div>
         <div className="space-y-2">
           {enableAllPlugins ? (
-            <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                {t('pipelines.extensions.allPluginsEnabled')}
+                {t('pipelines.extensions.autoEnabledPluginsHint', {
+                  count: enabledPlugins.length,
+                })}
               </p>
+              {enabledPlugins.length === 0 ? (
+                <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {t('pipelines.extensions.noEnabledPlugins')}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {enabledPlugins.map((plugin) => (
+                    <PluginCard
+                      key={getPluginId(plugin)}
+                      plugin={plugin}
+                      trailing={
+                        <Badge variant="secondary">
+                          {t('pipelines.extensions.autoEnabledBadge')}
+                        </Badge>
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : selectedPlugins.length === 0 ? (
             <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border">
@@ -389,62 +525,28 @@ export default function PipelineExtension({
             </div>
           ) : (
             <div className="space-y-2">
-              {selectedPlugins.map((plugin) => {
-                const pluginId = getPluginId(plugin);
-                const metadata = plugin.manifest.manifest.metadata;
-                return (
-                  <div
-                    key={pluginId}
-                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent"
-                  >
-                    <div className="flex-1 flex items-center gap-3">
-                      <PluginThumbnail
-                        author={metadata.author || ''}
-                        name={metadata.name}
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">{metadata.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {metadata.author} • v{metadata.version}
-                        </div>
-                        <div className="flex gap-1 mt-1">
-                          <PluginComponentList
-                            components={(() => {
-                              const componentKindCount: Record<string, number> =
-                                {};
-                              for (const component of plugin.components) {
-                                const kind = component.manifest.manifest.kind;
-                                if (componentKindCount[kind]) {
-                                  componentKindCount[kind]++;
-                                } else {
-                                  componentKindCount[kind] = 1;
-                                }
-                              }
-                              return componentKindCount;
-                            })()}
-                            showComponentName={true}
-                            showTitle={false}
-                            useBadge={true}
-                            t={t}
-                          />
-                        </div>
-                      </div>
+              {selectedPlugins.map((plugin) => (
+                <PluginCard
+                  key={getPluginId(plugin)}
+                  plugin={plugin}
+                  trailing={
+                    <div className="flex items-center gap-2">
                       {!plugin.enabled && (
                         <Badge variant="secondary">
                           {t('pipelines.extensions.disabled')}
                         </Badge>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemovePlugin(getPluginId(plugin))}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemovePlugin(pluginId)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                );
-              })}
+                  }
+                />
+              ))}
             </div>
           )}
         </div>
@@ -490,10 +592,33 @@ export default function PipelineExtension({
         </div>
         <div className="space-y-2">
           {enableAllMCPServers ? (
-            <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                {t('pipelines.extensions.allMCPServersEnabled')}
+                {t('pipelines.extensions.autoEnabledMCPServersHint', {
+                  count: enabledMCPServers.length,
+                })}
               </p>
+              {enabledMCPServers.length === 0 ? (
+                <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {t('pipelines.extensions.noEnabledMCPServers')}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {enabledMCPServers.map((server) => (
+                    <MCPServerCard
+                      key={server.uuid}
+                      server={server}
+                      trailing={
+                        <Badge variant="secondary">
+                          {t('pipelines.extensions.autoEnabledBadge')}
+                        </Badge>
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : selectedMCPServers.length === 0 ? (
             <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border">
@@ -504,48 +629,27 @@ export default function PipelineExtension({
           ) : (
             <div className="space-y-2">
               {selectedMCPServers.map((server) => (
-                <div
+                <MCPServerCard
                   key={server.uuid}
-                  className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent"
-                >
-                  <div className="flex-1 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg border bg-muted flex items-center justify-center flex-shrink-0">
-                      <Server className="h-5 w-5 text-muted-foreground" />
+                  server={server}
+                  className="hover:bg-accent"
+                  trailing={
+                    <div className="flex items-center gap-2">
+                      {!server.enable && (
+                        <Badge variant="secondary">
+                          {t('pipelines.extensions.disabled')}
+                        </Badge>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveMCPServer(server.uuid || '')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="flex-1">
-                      <div className="font-medium">{server.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {server.mode}
-                      </div>
-                      {server.runtime_info &&
-                        server.runtime_info.status === 'connected' && (
-                          <Badge
-                            variant="outline"
-                            className="flex items-center gap-1 mt-1"
-                          >
-                            <Wrench className="h-3 w-3 text-black dark:text-white" />
-                            <span className="text-xs text-black dark:text-white">
-                              {t('pipelines.extensions.toolCount', {
-                                count: server.runtime_info.tool_count || 0,
-                              })}
-                            </span>
-                          </Badge>
-                        )}
-                    </div>
-                    {!server.enable && (
-                      <Badge variant="secondary">
-                        {t('pipelines.extensions.disabled')}
-                      </Badge>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveMCPServer(server.uuid || '')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                  }
+                />
               ))}
             </div>
           )}
@@ -584,10 +688,33 @@ export default function PipelineExtension({
         </div>
         <div className="space-y-2">
           {enableAllSkills ? (
-            <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                {t('pipelines.extensions.allSkillsEnabled')}
+                {t('pipelines.extensions.autoEnabledSkillsHint', {
+                  count: allSkills.length,
+                })}
               </p>
+              {allSkills.length === 0 ? (
+                <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {t('pipelines.extensions.noEnabledSkills')}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {allSkills.map((skill) => (
+                    <SkillCard
+                      key={skill.name}
+                      skill={skill}
+                      trailing={
+                        <Badge variant="secondary">
+                          {t('pipelines.extensions.autoEnabledBadge')}
+                        </Badge>
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : selectedSkills.length === 0 ? (
             <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-border">
@@ -598,31 +725,20 @@ export default function PipelineExtension({
           ) : (
             <div className="space-y-2">
               {selectedSkills.map((skill) => (
-                <div
+                <SkillCard
                   key={skill.name}
-                  className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent"
-                >
-                  <div className="flex-1 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg border bg-muted flex items-center justify-center flex-shrink-0">
-                      <Sparkles className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {skill.display_name || skill.name}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {skill.description}
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemoveSkill(skill.name)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                  skill={skill}
+                  className="hover:bg-accent"
+                  trailing={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveSkill(skill.name)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  }
+                />
               ))}
             </div>
           )}

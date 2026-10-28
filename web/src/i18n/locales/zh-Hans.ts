@@ -2158,8 +2158,16 @@ const zhHans = {
       enableAllMCPServers: '启用所有 MCP 服务器',
       enableAllSkills: '启用所有技能',
       allPluginsEnabled: '已启用所有插件',
-      allMCPServersEnabled: '已启用所有 MCP 服务器',
-      allSkillsEnabled: '已启用所有技能',
+      autoEnabledPluginsHint:
+        '「启用所有插件」已开启，以下 {{count}} 个已启用的插件会自动参与该流水线：',
+      autoEnabledBadge: '自动启用',
+      noEnabledPlugins: '当前没有已启用的管道插件。',
+      autoEnabledMCPServersHint:
+        '「启用所有 MCP 服务器」已开启，以下 {{count}} 个已启用的 MCP 服务器会自动参与该流水线（已停用的不会生效）：',
+      noEnabledMCPServers: '当前没有已启用的 MCP 服务器。',
+      autoEnabledSkillsHint:
+        '「启用所有技能」已开启，以下 {{count}} 个技能会自动参与该流水线：',
+      noEnabledSkills: '当前没有可用的技能。',
       skillsTitle: '技能',
       noSkillsSelected: '未选择任何技能',
       addSkill: '添加技能',
