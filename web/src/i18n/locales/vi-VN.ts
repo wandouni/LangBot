@@ -2070,6 +2070,15 @@ const viVN = {
   mcp: {
     title: 'MCP',
     createServer: 'Thêm máy chủ MCP',
+    importHint:
+      'Dán cấu hình MCP được xuất từ SQLBot hoặc dịch vụ khác. Chỉ nhập máy chủ từ xa (URL); máy chủ lệnh cục bộ sẽ bị từ chối.',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: 'Nội dung đã dán không phải JSON hợp lệ.',
+    importFailed: 'Nhập cấu hình MCP thất bại.',
+    importSuccess: 'Đã nhập {{num}} máy chủ MCP',
+    importPartialFailed: 'Một số máy chủ chưa được nhập',
+    importButton: 'Nhập',
     addMCPServer: 'Thêm máy chủ MCP',
     editServer: 'Chỉnh sửa máy chủ MCP',
     deleteServer: 'Xóa máy chủ MCP',
@@ -3718,6 +3727,8 @@ const viVN = {
     uploadHint: 'Hỗ trợ tệp .zip (kỹ năng) và .lbpkg (plugin)',
     orContinueWith: 'hoặc chọn một thao tác bên dưới',
     addMCPServerHint: 'Kết nối tiện ích máy chủ công cụ MCP',
+    importMCPConfig: 'Nhập cấu hình MCP',
+    importMCPConfigHint: 'Dán JSON cấu hình MCP',
     installFromGithub: 'Cài đặt từ GitHub',
     installFromGithubHint: 'Gói plugin hoặc kỹ năng (SKILL.md)',
     githubUrlHelp: 'Dán URL GitHub',

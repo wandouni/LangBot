@@ -2035,6 +2035,15 @@ const thTH = {
   mcp: {
     title: 'MCP',
     createServer: 'เพิ่มเซิร์ฟเวอร์ MCP',
+    importHint:
+      'วางการกำหนดค่า MCP ที่ส่งออกจาก SQLBot หรือบริการอื่น นำเข้าเฉพาะเซิร์ฟเวอร์ระยะไกล (URL) เท่านั้น เซิร์ฟเวอร์คำสั่งภายในเครื่องจะถูกปฏิเสธ',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: 'เนื้อหาที่วางไม่ใช่ JSON ที่ถูกต้อง',
+    importFailed: 'นำเข้าการกำหนดค่า MCP ไม่สำเร็จ',
+    importSuccess: 'นำเข้าเซิร์ฟเวอร์ MCP {{num}} รายการแล้ว',
+    importPartialFailed: 'เซิร์ฟเวอร์บางรายการไม่ได้ถูกนำเข้า',
+    importButton: 'นำเข้า',
     addMCPServer: 'เพิ่มเซิร์ฟเวอร์ MCP',
     editServer: 'แก้ไขเซิร์ฟเวอร์ MCP',
     deleteServer: 'ลบเซิร์ฟเวอร์ MCP',
@@ -3667,6 +3676,8 @@ const thTH = {
     uploadHint: 'รองรับไฟล์ .zip (สกิล) และ .lbpkg (ปลั๊กอิน)',
     orContinueWith: 'หรือเลือกการทำงานด้านล่าง',
     addMCPServerHint: 'เชื่อมต่อส่วนขยายเซิร์ฟเวอร์เครื่องมือ MCP',
+    importMCPConfig: 'นำเข้าการกำหนดค่า MCP',
+    importMCPConfigHint: 'วาง JSON การกำหนดค่า MCP',
     installFromGithub: 'ติดตั้งจาก GitHub',
     installFromGithubHint: 'แพ็กเกจปลั๊กอินหรือสกิล (SKILL.md)',
     githubUrlHelp: 'วาง URL GitHub',

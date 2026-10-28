@@ -1947,6 +1947,15 @@ const zhHant = {
   mcp: {
     title: 'MCP',
     createServer: '新增MCP伺服器',
+    importHint:
+      '貼上從 SQLBot 或其他服務匯出的 MCP 設定。僅匯入遠端（URL）伺服器，本機命令列伺服器會被拒絕。',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: '貼上的內容不是有效的 JSON。',
+    importFailed: '匯入 MCP 設定失敗。',
+    importSuccess: '已匯入 {{num}} 個 MCP 伺服器',
+    importPartialFailed: '部分伺服器未匯入',
+    importButton: '匯入',
     addMCPServer: '新增 MCP 伺服器',
     editServer: '編輯MCP伺服器',
     deleteServer: '刪除MCP伺服器',
@@ -3519,6 +3528,8 @@ const zhHant = {
     uploadHint: '支援 .zip（技能）和 .lbpkg（插件）檔案',
     orContinueWith: '或選擇以下操作',
     addMCPServerHint: '連接一個 MCP 工具伺服器擴充',
+    importMCPConfig: '匯入 MCP 設定',
+    importMCPConfigHint: '貼上 MCP 設定 JSON',
     installFromGithub: '從 GitHub 安裝',
     installFromGithubHint: '插件包或技能（SKILL.md）',
     githubUrlHelp: '貼上 GitHub 地址',

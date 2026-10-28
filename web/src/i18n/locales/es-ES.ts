@@ -2114,6 +2114,15 @@ const esES = {
   mcp: {
     title: 'MCP',
     createServer: 'Añadir servidor MCP',
+    importHint:
+      'Pega una configuración MCP exportada desde SQLBot u otro servicio. Solo se importan servidores remotos (URL); los servidores de comandos locales se rechazan.',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: 'El contenido pegado no es un JSON válido.',
+    importFailed: 'No se pudo importar la configuración MCP.',
+    importSuccess: 'Se importaron {{num}} servidores MCP',
+    importPartialFailed: 'Algunos servidores no se importaron',
+    importButton: 'Importar',
     addMCPServer: 'Añadir servidor MCP',
     editServer: 'Editar servidor MCP',
     deleteServer: 'Eliminar servidor MCP',
@@ -3806,6 +3815,8 @@ const esES = {
     uploadHint: 'Admite archivos .zip (skills) y .lbpkg (plugins)',
     orContinueWith: 'o elige una acción abajo',
     addMCPServerHint: 'Conectar una extensión de servidor de herramientas MCP',
+    importMCPConfig: 'Importar configuración MCP',
+    importMCPConfigHint: 'Pega un JSON de configuración MCP',
     installFromGithub: 'Instalar desde GitHub',
     installFromGithubHint: 'Paquete de plugin o skill (SKILL.md)',
     githubUrlHelp: 'Pega una URL de GitHub',

@@ -2108,6 +2108,15 @@ const ruRU = {
   mcp: {
     title: 'MCP',
     createServer: 'Добавить MCP-сервер',
+    importHint:
+      'Вставьте конфигурацию MCP, экспортированную из SQLBot или другого сервиса. Импортируются только удалённые серверы (URL); локальные командные серверы отклоняются.',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: 'Вставленное содержимое не является допустимым JSON.',
+    importFailed: 'Не удалось импортировать конфигурацию MCP.',
+    importSuccess: 'Импортировано серверов MCP: {{num}}',
+    importPartialFailed: 'Некоторые серверы не были импортированы',
+    importButton: 'Импортировать',
     addMCPServer: 'Добавить MCP-сервер',
     editServer: 'Редактировать MCP-сервер',
     deleteServer: 'Удалить MCP-сервер',
@@ -3764,6 +3773,8 @@ const ruRU = {
     uploadHint: 'Поддерживаются файлы .zip (навыки) и .lbpkg (плагины)',
     orContinueWith: 'или выберите действие ниже',
     addMCPServerHint: 'Подключить расширение сервера инструментов MCP',
+    importMCPConfig: 'Импорт конфигурации MCP',
+    importMCPConfigHint: 'Вставьте JSON конфигурации MCP',
     installFromGithub: 'Установить из GitHub',
     installFromGithubHint: 'Пакет плагина или навык (SKILL.md)',
     githubUrlHelp: 'Вставьте URL GitHub',

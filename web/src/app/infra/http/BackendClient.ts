@@ -63,6 +63,7 @@ import {
   BoxSessionInfo,
   ApiRespMCPServers,
   ApiRespMCPServer,
+  ApiRespMCPImport,
   ApiRespMCPResources,
   ApiRespMCPResourceContents,
   MCPServer,
@@ -1376,6 +1377,10 @@ export class BackendClient extends BaseHttpClient {
 
   public createMCPServer(server: MCPServer): Promise<AsyncTaskCreatedResp> {
     return this.post('/api/v1/mcp/servers', server);
+  }
+
+  public importMCPServers(config: object): Promise<ApiRespMCPImport> {
+    return this.post('/api/v1/mcp/import', config);
   }
 
   public updateMCPServer(

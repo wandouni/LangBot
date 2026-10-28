@@ -769,6 +769,16 @@ export interface ApiRespMCPServer {
   server: MCPServer;
 }
 
+export interface MCPImportError {
+  name: string;
+  message: string;
+}
+
+export interface ApiRespMCPImport {
+  servers: { name: string; uuid: string }[];
+  errors: MCPImportError[];
+}
+
 export interface MCPServerExtraArgsSSE {
   url: string;
   headers: Record<string, string>;

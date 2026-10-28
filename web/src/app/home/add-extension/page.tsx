@@ -24,8 +24,10 @@ import {
   Loader2,
   CircleHelp,
   Package,
+  ClipboardPaste,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Tooltip,
   TooltipContent,
@@ -39,7 +41,7 @@ import { extractI18nObject } from '@/i18n/I18nProvider';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { PluginV4 } from '@/app/infra/entities/plugin';
-import type { Skill } from '@/app/infra/entities/api';
+import type { MCPImportError, Skill } from '@/app/infra/entities/api';
 import { useSidebarData } from '@/app/home/components/home-sidebar/SidebarDataContext';
 import { usePluginInstallTasks } from '@/app/home/plugins/components/plugin-install-task';
 import MCPForm from '@/app/home/mcp/components/mcp-form/MCPForm';
@@ -52,7 +54,7 @@ import PluginLocalPreviewPanel from '@/app/home/plugins/components/PluginLocalPr
 import { useWorkspaceQuotaStatus } from '@/app/home/components/workspace-quota/useWorkspaceQuotaStatus';
 import { WorkspaceQuotaTooltip } from '@/app/home/components/workspace-quota/WorkspaceQuotaTooltip';
 
-type PopoverView = 'menu' | 'mcp' | 'github';
+type PopoverView = 'menu' | 'mcp' | 'mcp-import' | 'github';
 
 enum GithubInstallStatus {
   WAIT_INPUT = 'wait_input',
@@ -220,6 +222,12 @@ function AddExtensionContent() {
   const mcpFormRef = useRef<MCPFormHandle>(null);
   const [mcpTesting, setMcpTesting] = useState(false);
   const [mcpDraft, setMcpDraft] = useState<MCPFormDraft | undefined>();
+
+  // Paste-to-import MCP config state
+  const [mcpImportText, setMcpImportText] = useState('');
+  const [mcpImporting, setMcpImporting] = useState(false);
+  const [mcpImportErrors, setMcpImportErrors] = useState<MCPImportError[]>([]);
+  const [mcpImportError, setMcpImportError] = useState<string | null>(null);
 
   // GitHub install state
   const [githubURL, setGithubURL] = useState('');
@@ -486,6 +494,57 @@ function AddExtensionContent() {
     setPopoverOpen(false);
   }
 
+  function openMCPImportView() {
+    setMcpImportText('');
+    setMcpImportErrors([]);
+    setMcpImportError(null);
+    setPopoverView('mcp-import');
+  }
+
+  async function handleMCPImport() {
+    setMcpImportError(null);
+    setMcpImportErrors([]);
+
+    let config: unknown;
+    try {
+      config = JSON.parse(mcpImportText);
+    } catch {
+      setMcpImportError(t('mcp.importInvalidJson'));
+      return;
+    }
+    if (typeof config !== 'object' || config === null) {
+      setMcpImportError(t('mcp.importInvalidJson'));
+      return;
+    }
+
+    setMcpImporting(true);
+    try {
+      const result = await httpClient.importMCPServers(config);
+      const createdCount = result.servers?.length ?? 0;
+      if (createdCount > 0) {
+        toast.success(t('mcp.importSuccess', { num: createdCount }));
+        void refreshMCPServers();
+      }
+      if (result.errors?.length) {
+        setMcpImportErrors(result.errors);
+        return;
+      }
+      setMcpImportText('');
+      setPopoverView('menu');
+      setPopoverOpen(false);
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err && 'msg' in err
+            ? String((err as { msg?: string }).msg || '')
+            : String(err);
+      setMcpImportError(errorMessage || t('mcp.importFailed'));
+    } finally {
+      setMcpImporting(false);
+    }
+  }
+
   async function checkExtensionsLimit(): Promise<boolean> {
     const maxExtensions = systemInfo.limitation?.max_extensions ?? -1;
     if (maxExtensions < 0) return true;
@@ -724,6 +783,8 @@ function AddExtensionContent() {
     switch (popoverView) {
       case 'mcp':
         return 'w-[calc(100vw-2rem)] sm:w-[560px]';
+      case 'mcp-import':
+        return 'w-[calc(100vw-2rem)] sm:w-[560px]';
       case 'github':
         return 'w-[calc(100vw-2rem)] sm:w-[560px]';
       default:
@@ -837,6 +898,26 @@ function AddExtensionContent() {
                   type="button"
                   disabled={extensionsReached}
                   className="group flex w-full items-center gap-3 rounded-md bg-muted/30 p-3 text-left transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={openMCPImportView}
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground transition-colors group-hover:text-foreground">
+                    <ClipboardPaste className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-0.5">
+                    <span className="block text-sm font-medium leading-none">
+                      {t('addExtension.importMCPConfig')}
+                    </span>
+                    <span className="block text-xs leading-relaxed text-muted-foreground">
+                      {t('addExtension.importMCPConfigHint')}
+                    </span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </button>
+
+                <button
+                  type="button"
+                  disabled={extensionsReached}
+                  className="group flex w-full items-center gap-3 rounded-md bg-muted/30 p-3 text-left transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={() => setPopoverView('github')}
                 >
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground transition-colors group-hover:text-foreground">
@@ -931,6 +1012,81 @@ function AddExtensionContent() {
                   }}
                 >
                   {t('common.submit')}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ===== MCP Import View ===== */}
+          {popoverView === 'mcp-import' && (
+            <div className="flex max-h-[min(720px,80vh)] flex-col">
+              <div className="flex items-center gap-2 px-4 pb-1 pt-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setPopoverView('menu')}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <h4 className="text-sm font-medium leading-none">
+                  {t('addExtension.importMCPConfig')}
+                </h4>
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t('mcp.importHint')}
+                </p>
+                <Textarea
+                  value={mcpImportText}
+                  onChange={(e) => setMcpImportText(e.target.value)}
+                  placeholder={t('mcp.importPlaceholder')}
+                  className="min-h-[220px] font-mono text-xs"
+                  spellCheck={false}
+                />
+                {mcpImportError && (
+                  <p className="break-all text-xs text-destructive">
+                    {mcpImportError}
+                  </p>
+                )}
+                {mcpImportErrors.length > 0 && (
+                  <div className="space-y-1 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                    <p className="font-medium">
+                      {t('mcp.importPartialFailed')}
+                    </p>
+                    {mcpImportErrors.map((item, index) => (
+                      <p key={`${item.name}-${index}`} className="break-all">
+                        <span className="font-medium">{item.name}</span>
+                        {': '}
+                        {item.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 bg-popover px-4 pb-4 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPopoverView('menu')}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleMCPImport}
+                  disabled={
+                    extensionsReached || !mcpImportText.trim() || mcpImporting
+                  }
+                >
+                  {mcpImporting && (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  )}
+                  {t('mcp.importButton')}
                 </Button>
               </div>
             </div>

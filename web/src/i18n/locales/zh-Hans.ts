@@ -1951,6 +1951,15 @@ const zhHans = {
   mcp: {
     title: 'MCP',
     createServer: '添加 MCP 服务器',
+    importHint:
+      '粘贴从 SQLBot 或其他服务导出的 MCP 配置。仅导入远程（URL）服务器，本地命令行服务器会被拒绝。',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: '粘贴的内容不是有效的 JSON。',
+    importFailed: '导入 MCP 配置失败。',
+    importSuccess: '已导入 {{num}} 个 MCP 服务器',
+    importPartialFailed: '部分服务器未导入',
+    importButton: '导入',
     addMCPServer: '添加 MCP 服务器',
     editServer: '修改 MCP 服务器',
     deleteServer: '删除 MCP 服务器',
@@ -3519,6 +3528,8 @@ const zhHans = {
     uploadHint: '支持 .zip（技能）和 .lbpkg（插件）文件',
     orContinueWith: '或选择以下操作',
     addMCPServerHint: '连接一个 MCP 工具服务器扩展',
+    importMCPConfig: '导入 MCP 配置',
+    importMCPConfigHint: '粘贴 MCP 配置 JSON',
     installFromGithub: '从 GitHub 安装',
     installFromGithubHint: '插件包或技能（SKILL.md）',
     githubUrlHelp: '粘贴 GitHub 地址',

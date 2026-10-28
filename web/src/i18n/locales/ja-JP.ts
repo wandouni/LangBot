@@ -2097,6 +2097,15 @@ const jaJP = {
   mcp: {
     title: 'MCP',
     createServer: 'MCPサーバーを追加',
+    importHint:
+      'SQLBot などからエクスポートした MCP 設定を貼り付けてください。リモート（URL）サーバーのみインポートされ、ローカルコマンドサーバーは拒否されます。',
+    importPlaceholder:
+      '{"mcpServers": {"sqlbot": {"type": "sse", "url": "https://sqlbot.example.com/mcp", "headers": {"Authorization": "Bearer ..."}}}}',
+    importInvalidJson: '貼り付けた内容は有効な JSON ではありません。',
+    importFailed: 'MCP 設定のインポートに失敗しました。',
+    importSuccess: '{{num}} 個の MCP サーバーをインポートしました',
+    importPartialFailed: '一部のサーバーはインポートされませんでした',
+    importButton: 'インポート',
     addMCPServer: 'MCPサーバーを追加',
     editServer: 'MCPサーバーを編集',
     deleteServer: 'MCPサーバーを削除',
@@ -3759,6 +3768,8 @@ const jaJP = {
     uploadHint: '.zip（スキル）と.lbpkg（プラグイン）ファイルに対応',
     orContinueWith: 'または以下の操作を選択',
     addMCPServerHint: 'MCPツールサーバー拡張を接続',
+    importMCPConfig: 'MCP 設定をインポート',
+    importMCPConfigHint: 'MCP 設定の JSON を貼り付け',
     installFromGithub: 'GitHubからプラグインをインストール',
     installFromGithubHint: 'GitHub Releaseからプラグイン拡張をインストール',
     githubUrlHelp: 'GitHub URL を貼り付けてください',
