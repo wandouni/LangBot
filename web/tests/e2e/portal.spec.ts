@@ -56,7 +56,9 @@ async function installPortalMocks(
       },
     }),
   );
-  await page.route(/\/sqlbot(\/|$)/, (route) =>
+  // Only the document navigation to /sqlbot/; a broader pattern would also
+  // swallow the API calls whose path contains "sqlbot".
+  await page.route(/\/sqlbot\/$/, (route) =>
     route.fulfill({
       contentType: 'text/html',
       body: '<!doctype html><title>SqlBot</title><p>SqlBot shell</p>',
@@ -108,9 +110,7 @@ test('SqlBot card requests a ticket and hands off to the subpath', async ({
   await login(page);
 
   page.on('request', (request) => {
-    if (
-      new URL(request.url()).pathname === '/api/v1/user/sqlbot/sso-ticket'
-    ) {
+    if (new URL(request.url()).pathname === '/api/v1/user/sqlbot/sso-ticket') {
       ticketRequests += 1;
     }
   });
@@ -151,6 +151,13 @@ test('portal sign out clears LangBot and SqlBot local state', async ({
   await page.evaluate(() => {
     localStorage.setItem('sqlbot_token', 'stale-token');
   });
+  // The login page auto-resumes on check-token; keep it signed out after the
+  // portal drops the token.
+  await page.route('**/api/v1/user/check-token', (route) =>
+    route.fulfill({
+      json: { code: 0, message: 'ok', data: { token: '' } },
+    }),
+  );
 
   await page.getByRole('button', { name: 'Sign out' }).click();
 

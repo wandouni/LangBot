@@ -138,17 +138,12 @@ class SqlbotSsoService:
 
         public_origin = str(portal.get('public_origin') or '').strip()
         parsed_origin = urlsplit(public_origin)
-        cookie_secure = (
-            parsed_origin.scheme == 'https' if parsed_origin.scheme in {'http', 'https'} else False
-        )
+        cookie_secure = parsed_origin.scheme == 'https' if parsed_origin.scheme in {'http', 'https'} else False
 
         portal_enabled = _as_bool(portal.get('enabled'), False)
         sqlbot_enabled = _as_bool(portal.get('sqlbot_enabled'), False)
         handoff_enabled = bool(
-            _as_bool(sso.get('enabled'), False)
-            and base_valid
-            and path_valid
-            and len(shared_secret) >= 16
+            _as_bool(sso.get('enabled'), False) and base_valid and path_valid and len(shared_secret) >= 16
         )
 
         return SqlbotSsoSettings(
@@ -291,6 +286,11 @@ class SqlbotSsoService:
             payload = response.json()
         except ValueError as exc:
             raise SqlbotSsoError(ERROR_INVALID_RESPONSE, 502, 'SqlBot returned an invalid response') from exc
+        # SqlBot wraps plain JSON bodies in its global response envelope
+        # (``{"code": 0, "data": {...}, "msg": null}``); accept both shapes so
+        # the handoff does not depend on whether the envelope is applied.
+        if isinstance(payload, dict) and payload.get('code') in (0, '0') and isinstance(payload.get('data'), dict):
+            payload = payload['data']
         ticket = payload.get('ticket') if isinstance(payload, dict) else None
         if not isinstance(ticket, str) or not 16 <= len(ticket) <= 512 or any(c.isspace() for c in ticket):
             raise SqlbotSsoError(ERROR_INVALID_RESPONSE, 502, 'SqlBot returned an invalid ticket')

@@ -171,6 +171,40 @@ async def test_issue_ticket_returns_redirect_and_binding(monkeypatch) -> None:
     assert headers['X-LangBot-SSO-Signature'] == expected
 
 
+async def test_wrapped_ticket_response_is_accepted(monkeypatch) -> None:
+    """SqlBot's global response envelope must not break the handoff."""
+
+    _install_client(
+        monkeypatch,
+        _FakeResponse(
+            payload={
+                'code': 0,
+                'data': {'ticket': 'ticket-value-1234567890', 'expires_in': 45},
+                'msg': None,
+            }
+        ),
+    )
+    service = _service()
+
+    grant = await service.issue_ticket(account='zhangsan', account_uuid='uuid-1')
+
+    assert grant.redirect_url == '/sqlbot/#/login?sso_ticket=ticket-value-1234567890'
+    assert grant.expires_in == 45
+
+
+async def test_wrapped_error_payload_is_rejected(monkeypatch) -> None:
+    _install_client(
+        monkeypatch,
+        _FakeResponse(payload={'code': 403, 'data': None, 'msg': 'account_rejected'}),
+    )
+    service = _service()
+
+    with pytest.raises(SqlbotSsoError) as error:
+        await service.issue_ticket(account='zhangsan', account_uuid='uuid-1')
+
+    assert error.value.code == ERROR_INVALID_RESPONSE
+
+
 async def test_https_public_origin_sets_secure_cookie() -> None:
     config = _config()
     config['system']['portal']['public_origin'] = 'https://langbot.example.com'

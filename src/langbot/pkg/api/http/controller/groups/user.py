@@ -594,7 +594,7 @@ class UserRouterGroup(group.RouterGroup):
             except sqlbot_sso_module.SqlbotSsoError as exc:
                 return self.http_status(exc.status_code, exc.code, exc.message)
 
-            response = quart.make_response(
+            response = await quart.make_response(
                 self.success(
                     data={
                         'redirect_url': grant.redirect_url,
