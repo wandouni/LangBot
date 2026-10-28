@@ -195,7 +195,7 @@ export default function ExtensionCardComponent({
       <div className="text-[0.8rem] text-muted-foreground line-clamp-2 w-full">
         {cardVO.description ||
           (cardVO.tools !== undefined && cardVO.tools > 0
-            ? t('mcp.toolCount', { count: cardVO.tools })
+            ? t('mcp.toolCount', { num: cardVO.tools })
             : t('mcp.noToolsFound'))}
       </div>
     </>

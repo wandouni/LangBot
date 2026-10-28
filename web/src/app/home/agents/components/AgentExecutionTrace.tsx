@@ -41,7 +41,7 @@ export default function AgentExecutionTrace({
       {ended && toolCount > 0 && (
         <p className="text-xs text-muted-foreground">
           {t('agents.debugToolCount', {
-            count: toolCount,
+            num: toolCount,
           })}
         </p>
       )}

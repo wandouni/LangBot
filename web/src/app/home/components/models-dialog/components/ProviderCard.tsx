@@ -192,7 +192,7 @@ export default function ProviderCard({
                     {provider.name}
                   </CardTitle>
                   <Badge variant="outline" className="text-xs shrink-0">
-                    {t('models.modelsCount', { count: totalModels })}
+                    {t('models.modelsCount', { num: totalModels })}
                   </Badge>
                 </div>
                 <p

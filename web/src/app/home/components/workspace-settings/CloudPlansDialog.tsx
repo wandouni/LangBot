@@ -169,7 +169,7 @@ function Benefits({
         <PlanIcon name="ri-history-line" />
         <span className="min-w-0 break-words">
           {t('cloudPlans.retention', {
-            count: plan.chat_history_retention_days,
+            num: plan.chat_history_retention_days,
           })}
         </span>
         <Help label={t('cloudPlans.retentionLabel')}>
@@ -181,7 +181,7 @@ function Benefits({
       <>
         <PlanIcon name="ri-coin-line" />
         <span className="min-w-0 break-words">
-          {t('cloudPlans.credits', { count: plan.monthly_bonus_credits })}
+          {t('cloudPlans.credits', { num: plan.monthly_bonus_credits })}
         </span>
         <Help label={t('cloudPlans.creditsLabel')}>
           {text(config?.tooltips?.monthly_credits) ||

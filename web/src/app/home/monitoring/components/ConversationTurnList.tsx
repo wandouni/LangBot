@@ -59,7 +59,7 @@ export function ConversationTurnList({
     <div className="grid min-h-0 gap-5 lg:h-full lg:grid-cols-[18rem_minmax(0,1fr)]">
       <aside className="min-h-0 lg:overflow-y-auto lg:pr-1">
         <div className="mb-3 text-sm font-medium">
-          {t('monitoring.messageList.turns', { count: turns.length })}
+          {t('monitoring.messageList.turns', { num: turns.length })}
         </div>
         <div className="max-h-72 overflow-y-auto rounded-xl border lg:max-h-none">
           {turns.map((item) => (

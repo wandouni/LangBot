@@ -203,7 +203,7 @@ export default function TokenMonitoring({
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>
             {t('monitoring.tokens.zeroTokenWarning', {
-              count: summary.zero_token_success_calls,
+              num: summary.zero_token_success_calls,
             })}
           </span>
         </div>
@@ -216,7 +216,7 @@ export default function TokenMonitoring({
           label={t('monitoring.tokens.totalTokens')}
           value={formatNumber(summary.total_tokens)}
           hint={t('monitoring.tokens.acrossCalls', {
-            count: summary.total_calls,
+            num: summary.total_calls,
           })}
           accent="#8b5cf6"
         />
@@ -249,7 +249,7 @@ export default function TokenMonitoring({
           icon={<AlertTriangle className="h-4 w-4" />}
           label={t('monitoring.tokens.errorCalls')}
           value={`${summary.error_calls}`}
-          hint={t('monitoring.tokens.ofTotal', { count: summary.total_calls })}
+          hint={t('monitoring.tokens.ofTotal', { num: summary.total_calls })}
           accent="#ef4444"
         />
       </div>

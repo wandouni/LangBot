@@ -394,7 +394,7 @@ function RuntimeStorageGroup({ process }: { process: RuntimeStorageProcess }) {
                   {!!directory.error_count && (
                     <Badge variant="outline" className="font-normal">
                       {t('storageAnalysis.scanWarnings', {
-                        count: directory.error_count,
+                        num: directory.error_count,
                       })}
                     </Badge>
                   )}

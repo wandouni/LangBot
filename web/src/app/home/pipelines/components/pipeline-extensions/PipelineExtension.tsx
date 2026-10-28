@@ -155,7 +155,7 @@ function MCPServerCard({
                 <Wrench className="h-3 w-3 text-black dark:text-white" />
                 <span className="text-xs text-black dark:text-white">
                   {t('pipelines.extensions.toolCount', {
-                    count: server.runtime_info.tool_count || 0,
+                    num: server.runtime_info.tool_count || 0,
                   })}
                 </span>
               </Badge>
@@ -506,7 +506,7 @@ export default function PipelineExtension({
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 {t('pipelines.extensions.autoEnabledPluginsHint', {
-                  count: enabledPlugins.length,
+                  num: enabledPlugins.length,
                 })}
               </p>
               {enabledPlugins.length === 0 ? (
@@ -609,7 +609,7 @@ export default function PipelineExtension({
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 {t('pipelines.extensions.autoEnabledMCPServersHint', {
-                  count: enabledMCPServers.length,
+                  num: enabledMCPServers.length,
                 })}
               </p>
               {enabledMCPServers.length === 0 ? (
@@ -705,7 +705,7 @@ export default function PipelineExtension({
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 {t('pipelines.extensions.autoEnabledSkillsHint', {
-                  count: allSkills.length,
+                  num: allSkills.length,
                 })}
               </p>
               {allSkills.length === 0 ? (
@@ -929,7 +929,7 @@ export default function PipelineExtension({
                             <Wrench className="h-3 w-3 text-black dark:text-white" />
                             <span className="text-xs text-black dark:text-white">
                               {t('pipelines.extensions.toolCount', {
-                                count: server.runtime_info.tool_count || 0,
+                                num: server.runtime_info.tool_count || 0,
                               })}
                             </span>
                           </Badge>

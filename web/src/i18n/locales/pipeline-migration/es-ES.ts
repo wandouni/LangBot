@@ -114,7 +114,7 @@ export default {
   title: 'Migración de pipelines',
   description:
     'Selecciona los pipelines que deseas migrar. Se guardará una copia de la configuración y las conversaciones empezarán de nuevo.',
-  detected: '{{count}} pipelines requieren revisión.',
+  detected: '{{num}} pipelines requieren revisión.',
   review: 'Revisar migración',
   readOnly: 'Solo los gestores del espacio pueden migrar pipelines.',
   previewError: 'Vista previa no disponible. Actualícela.',
@@ -135,7 +135,7 @@ export default {
     '¿Falta un plugin? Instala o activa su ejecutor en Extensiones y actualiza la vista previa.',
   extensions: 'Abrir Extensiones',
   results: 'Resultados por pipeline',
-  selection: '{{count}} seleccionados (máximo 50)',
+  selection: '{{num}} seleccionados (máximo 50)',
   confirm: 'Confirmo la migración de los pipelines seleccionados.',
   refresh: 'Actualizar vista previa',
   execute: 'Migrar seleccionados',

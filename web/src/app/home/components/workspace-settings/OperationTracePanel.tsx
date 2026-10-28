@@ -614,7 +614,7 @@ export default function OperationTracePanel({
                 >
                   <Badge variant="destructive">
                     {t('operationTrace.integrityFailedCount', {
-                      count: page?.integrity_failed_count ?? 0,
+                      num: page?.integrity_failed_count ?? 0,
                     })}
                   </Badge>
                 </button>
@@ -627,7 +627,7 @@ export default function OperationTracePanel({
                 >
                   <Badge variant="destructive">
                     {t('operationTrace.chainFailedCount', {
-                      count: page?.chain_failed_count ?? 0,
+                      num: page?.chain_failed_count ?? 0,
                     })}
                   </Badge>
                 </button>
@@ -635,7 +635,7 @@ export default function OperationTracePanel({
               {page?.scan_truncated && (
                 <Badge variant="outline">
                   {t('operationTrace.scanTruncated', {
-                    count: page?.scanned_count ?? 0,
+                    num: page?.scanned_count ?? 0,
                   })}
                 </Badge>
               )}
@@ -868,14 +868,14 @@ export default function OperationTracePanel({
                               changes={record.changes}
                               redactedLabel={t('operationTrace.redacted')}
                               sizeLabel={(size) =>
-                                t('operationTrace.elidedValue', { count: size })
+                                t('operationTrace.elidedValue', { num: size })
                               }
                               limit={
                                 expanded ? undefined : COLLAPSED_CHANGE_LIMIT
                               }
                               moreLabel={(hidden) =>
                                 t('operationTrace.moreChanges', {
-                                  count: hidden,
+                                  num: hidden,
                                 })
                               }
                               collapsed={!expanded}

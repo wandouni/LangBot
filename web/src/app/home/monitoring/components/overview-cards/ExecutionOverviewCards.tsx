@@ -57,7 +57,7 @@ export default function ExecutionOverviewCards({
         {!!overview?.debug && (
           <div className="text-xs text-muted-foreground">
             {t('monitoring.execution.cards.debugRuns', {
-              count: overview.debug,
+              num: overview.debug,
             })}
           </div>
         )}
@@ -145,7 +145,7 @@ export default function ExecutionOverviewCards({
             them rather than in the card's hint slot. */}
         <div className="text-xs text-muted-foreground">
           {t('monitoring.execution.cards.sample', {
-            count: overview?.duration_sample ?? 0,
+            num: overview?.duration_sample ?? 0,
           })}
         </div>
       </MetricCard>

@@ -453,7 +453,7 @@ export default function AccountSettingsPanel({
                   ? t('account.totpManagerSectionDesc')
                   : totpStatus?.enabled
                     ? t('account.totpEnabledDesc', {
-                        count: totpStatus.recovery_codes_remaining,
+                        num: totpStatus.recovery_codes_remaining,
                       })
                     : t('account.totpSectionDesc')}
               </p>
@@ -498,7 +498,7 @@ export default function AccountSettingsPanel({
                           {row.enabled
                             ? `${t('account.totpStatusEnabled')} · ${t(
                                 'account.totpCodesRemaining',
-                                { count: row.recovery_codes_remaining },
+                                { num: row.recovery_codes_remaining },
                               )}`
                             : t('account.totpStatusDisabled')}
                           {row.last_used_at && (

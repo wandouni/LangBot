@@ -728,7 +728,7 @@ function MarketPageContent({
             <Input
               placeholder={
                 total > 0
-                  ? t('market.searchPlaceholderCount', { count: total })
+                  ? t('market.searchPlaceholderCount', { num: total })
                   : t('market.searchPlaceholder')
               }
               value={searchQuery}
@@ -1015,7 +1015,7 @@ function MarketPageContent({
             {!hasMore && plugins.length > 0 && (
               <div className="text-center text-muted-foreground py-6">
                 {searchQuery
-                  ? t('market.allLoadedCount', { count: total })
+                  ? t('market.allLoadedCount', { num: total })
                   : t('market.allLoaded')}
                 {' · '}
                 <a

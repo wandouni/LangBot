@@ -227,7 +227,7 @@ export default function MigrationInstallProgress({
               {item.deps_total !== undefined && (
                 <p className="text-muted-foreground">
                   {t('plugins.installProgress.depsInfo', {
-                    count: item.deps_total,
+                    num: item.deps_total,
                   })}
                 </p>
               )}

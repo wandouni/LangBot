@@ -142,9 +142,7 @@ export default function AssistantToolResult({
         <p className="text-muted-foreground">{t('assistant.partial')}</p>
       ) : (
         <>
-          {total !== undefined && (
-            <p>{t('assistant.found', { count: total })}</p>
-          )}
+          {total !== undefined && <p>{t('assistant.found', { num: total })}</p>}
           {name && <p className="break-words">{name}</p>}
           {items && (
             <ul className="space-y-0.5 text-[11px] text-muted-foreground">

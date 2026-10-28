@@ -266,7 +266,7 @@ export default function MonitoringFilters({
               <span className="truncate">
                 {selectedPipelines.length
                   ? t('agents.apiToolsSelected', {
-                      count: selectedPipelines.length,
+                      num: selectedPipelines.length,
                     })
                   : t('monitoring.filters.allProcessors')}
               </span>

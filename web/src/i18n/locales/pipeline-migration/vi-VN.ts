@@ -105,7 +105,7 @@ export default {
   title: 'Di chuyển pipeline',
   description:
     'Chọn các pipeline cần chuyển đổi. Cấu hình cũ sẽ được sao lưu; các cuộc trò chuyện sẽ bắt đầu lại.',
-  detected: '{{count}} pipeline cần xem xét di chuyển.',
+  detected: '{{num}} pipeline cần xem xét di chuyển.',
   review: 'Xem xét di chuyển',
   readOnly:
     'Chỉ người có quyền quản lý không gian mới được di chuyển pipeline.',
@@ -126,7 +126,7 @@ export default {
     'Thiếu plugin? Cài đặt hoặc bật runner trong Tiện ích mở rộng, rồi làm mới bản xem trước.',
   extensions: 'Mở Tiện ích',
   results: 'Kết quả từng pipeline',
-  selection: 'Đã chọn {{count}} (tối đa 50)',
+  selection: 'Đã chọn {{num}} (tối đa 50)',
   confirm: 'Tôi xác nhận di chuyển các pipeline đã chọn.',
   refresh: 'Làm mới bản xem trước',
   execute: 'Di chuyển đã chọn',

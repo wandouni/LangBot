@@ -139,7 +139,7 @@ export default function AgentEventPatternPicker({
           <p className="text-sm font-medium">{t('agents.configuredEvents')}</p>
           <p className="text-xs text-muted-foreground">
             {t('agents.configuredEventsCount', {
-              count: selectedPatterns.length,
+              num: selectedPatterns.length,
             })}
           </p>
         </div>
@@ -245,7 +245,7 @@ export default function AgentEventPatternPicker({
                     </span>
                     <span className="shrink-0 text-xs text-emerald-700 dark:text-emerald-300">
                       {t('agents.eventToolsEnabledCount', {
-                        count: compatibleTools.length,
+                        num: compatibleTools.length,
                       })}
                     </span>
                     <ChevronDown

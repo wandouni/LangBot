@@ -356,7 +356,7 @@ export default function PipelineMigration({
           <AlertTriangle aria-hidden="true" />
           <AlertTitle>{t('pipelineMigration.title')}</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200">
-            <span>{t('pipelineMigration.detected', { count: attention })}</span>
+            <span>{t('pipelineMigration.detected', { num: attention })}</span>
             <Button
               variant="outline"
               size="sm"
@@ -415,7 +415,7 @@ export default function PipelineMigration({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {t('pipelineMigration.detected', { count: attention })}
+                {t('pipelineMigration.detected', { num: attention })}
               </p>
             )}
             <MigrationInstallProgress installations={installations} />

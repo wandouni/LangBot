@@ -1012,7 +1012,7 @@ function NavItems({
                       <span className="text-xs">
                         {isExpanded
                           ? t('common.less')
-                          : t('common.more', { count: hiddenCount })}
+                          : t('common.more', { num: hiddenCount })}
                       </span>
                     </button>
                   </SidebarMenuSubButton>
@@ -1024,7 +1024,7 @@ function NavItems({
                   className="flex w-full items-center justify-center rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent transition-colors"
                   onClick={() => handleListExpansionToggle(categoryId, true)}
                 >
-                  {t('common.more', { count: hiddenCount })}
+                  {t('common.more', { num: hiddenCount })}
                 </button>
               )}
             </>

@@ -107,7 +107,7 @@ export default {
   title: 'Pipeline migration',
   description:
     'Select pipelines to migrate. Original settings are backed up; conversations start fresh after migration.',
-  detected: '{{count}} pipelines need migration review.',
+  detected: '{{num}} pipelines need migration review.',
   review: 'Review migration',
   readOnly: 'Only workspace managers can migrate pipelines.',
   previewError: 'Preview unavailable. Refresh to check again.',
@@ -129,7 +129,7 @@ export default {
     'Missing a plugin? Install or enable its runner in Extensions, then refresh the preview.',
   extensions: 'Open Extensions',
   results: 'Per-pipeline results',
-  selection: '{{count}} selected (maximum 50)',
+  selection: '{{num}} selected (maximum 50)',
   confirm: 'I confirm migration of the selected pipelines.',
   refresh: 'Refresh preview',
   execute: 'Migrate selected',

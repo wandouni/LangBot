@@ -907,7 +907,7 @@ function AdapterCapabilitySummary({
               </p>
               <p className="text-xs text-muted-foreground">
                 {t('bots.adapterEventsDescription', {
-                  count: concreteEvents.length,
+                  num: concreteEvents.length,
                 })}
               </p>
             </div>
@@ -928,7 +928,7 @@ function AdapterCapabilitySummary({
             {concreteEventGroups.length > 4 && (
               <Badge variant="outline" className="rounded-md px-2 py-0.5">
                 {t('bots.adapterEventsMore', {
-                  count: concreteEventGroups.length - 4,
+                  num: concreteEventGroups.length - 4,
                 })}
               </Badge>
             )}
@@ -1747,7 +1747,7 @@ export default function EventBindingsEditor({
             {routeConflicts.length > 3 && (
               <p className="mt-1 text-xs">
                 {t('bots.routeConflictMore', {
-                  count: routeConflicts.length - 3,
+                  num: routeConflicts.length - 3,
                 })}
               </p>
             )}

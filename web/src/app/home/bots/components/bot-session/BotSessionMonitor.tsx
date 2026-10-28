@@ -740,7 +740,7 @@ const BotSessionMonitor = forwardRef<
             </button>
             <span className="text-[11px] text-muted-foreground tabular-nums">
               {t('bots.sessionMonitor.totalSessions', {
-                count: sessionTotal,
+                num: sessionTotal,
               })}
             </span>
           </div>

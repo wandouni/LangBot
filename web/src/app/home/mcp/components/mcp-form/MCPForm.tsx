@@ -235,7 +235,7 @@ function ToolsList({ tools, t }: { tools: MCPTool[]; t: TFunction }) {
                     <Braces className="size-3.5" />
                     <span>
                       {t('mcp.parameterCount', {
-                        count: parameters.length,
+                        num: parameters.length,
                       })}
                     </span>
                   </div>
@@ -441,7 +441,7 @@ function RuntimePanel({
         <div className="space-y-2">
           {content === 'all' && (
             <div className="text-sm font-medium">
-              {t('mcp.resourceCount', { count: resources.length })}
+              {t('mcp.resourceCount', { num: resources.length })}
             </div>
           )}
           <ResourcesList resources={resources} serverName={serverName} t={t} />

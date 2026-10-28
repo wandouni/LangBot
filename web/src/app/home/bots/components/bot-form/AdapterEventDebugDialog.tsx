@@ -235,7 +235,7 @@ export default function AdapterEventDebugDialog({
 
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">
-              {t('bots.adapterEventReceivedCount', { count: events.length })}
+              {t('bots.adapterEventReceivedCount', { num: events.length })}
             </p>
             <Button
               type="button"

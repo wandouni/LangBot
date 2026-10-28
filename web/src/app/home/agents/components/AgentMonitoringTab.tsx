@@ -416,7 +416,7 @@ export default function AgentMonitoringTab({
                     >
                       {t(
                         `agents.monitoring.${sendFailed ? 'sendFailed' : sentCount ? 'sendCount' : 'noSend'}`,
-                        { count: sentCount },
+                        { num: sentCount },
                       )}
                     </p>
                   </div>

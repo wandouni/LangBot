@@ -391,7 +391,7 @@ export default function ModelsPanel({
       loadProviderModels(providerUuid, true);
       loadProviders();
       toast.success(
-        t('models.addSelectedModelsSuccess', { count: models.length }),
+        t('models.addSelectedModelsSuccess', { num: models.length }),
       );
     } catch (err) {
       toast.error(t('models.createError') + (err as CustomApiError).msg);
@@ -677,7 +677,7 @@ export default function ModelsPanel({
                     ? 'models.addProviderHintSimple'
                     : 'models.addProviderHint',
                 )
-              : t('models.providerCount', { count: otherProviders.length })}
+              : t('models.providerCount', { num: otherProviders.length })}
           </span>
           {canManage && (
             <Button size="sm" variant="outline" onClick={handleCreateProvider}>

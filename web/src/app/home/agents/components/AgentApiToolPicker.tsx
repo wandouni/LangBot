@@ -260,7 +260,7 @@ export default function AgentApiToolPicker({
         )}
         <span className="shrink-0 pt-2 text-xs text-muted-foreground">
           {t('agents.apiToolsSelected', {
-            count: selectedCount,
+            num: selectedCount,
           })}
         </span>
       </div>
