@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -25,3 +26,16 @@ def test_dashboard_page_declares_a_runtime_component(monkeypatch):
 
     assert issubclass(page_class, Page)
     assert (manifest_path.parent / component.spec['path']).is_file()
+
+
+def test_dashboard_catalogs_keep_key_parity():
+    catalogs = {}
+    for path in sorted((PLUGIN_ROOT / 'components/pages/dashboard/i18n').glob('*.json')):
+        catalogs[path.name] = json.loads(path.read_text(encoding='utf-8'))
+
+    assert len(catalogs) == 8
+    expected_keys = set(catalogs['en_US.json'])
+    for name, catalog in catalogs.items():
+        assert set(catalog) == expected_keys, name
+        assert catalog['bot.label']
+        assert catalog['bots.all']

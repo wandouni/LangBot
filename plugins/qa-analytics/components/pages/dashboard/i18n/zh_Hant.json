@@ -2,6 +2,8 @@
   "title": "諮詢問答看板",
   "subtitle": "查看目前 Workspace 的知識庫諮詢問答情況",
   "rangeLabel": "時間範圍",
+  "bot.label": "機器人",
+  "bots.all": "全部機器人",
   "range.today": "今天",
   "range.7d": "近 7 天",
   "range.30d": "近 30 天",

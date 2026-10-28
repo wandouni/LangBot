@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import dataclasses
 import datetime
@@ -29,6 +30,36 @@ current_collection_context: contextvars.ContextVar[QACollectionContext | None] =
     default=None,
 )
 
+_QUERY_CONTEXT_ATTRIBUTE = '_qa_collection_context'
+
+
+def attach_collection_context(query: typing.Any, context: QACollectionContext) -> None:
+    """Attach the collection context to the Query that owns it.
+
+    Knowledge retrieval runs as a Plugin Runtime action, which executes on the
+    connector's socket task instead of the pipeline task.  ContextVars do not
+    cross that boundary, so the context travels with the Query and is rebound
+    when the retrieval action runs (see ``bind_query_collection_context``).
+    """
+
+    object.__setattr__(query, _QUERY_CONTEXT_ATTRIBUTE, context)
+
+
+@contextlib.contextmanager
+def bind_query_collection_context(query: typing.Any) -> typing.Iterator[None]:
+    """Rebind the Query's collection context inside a Runtime action task."""
+
+    context = getattr(query, _QUERY_CONTEXT_ATTRIBUTE, None) if query is not None else None
+    if context is None:
+        yield
+        return
+    token = current_collection_context.set(context)
+    try:
+        yield
+    finally:
+        current_collection_context.reset(token)
+
+
 _REWRITE_KEYS = (
     'rewritten_question',
     'rewritten_query',
@@ -41,8 +72,14 @@ _REWRITE_KEYS = (
 
 
 def _first_rewritten_value(value: typing.Any) -> str:
-    if isinstance(value, str):
-        return value.strip()
+    """Return a string stored under a known rewrite key, if any.
+
+    Retrieval metadata also contains unrelated strings (trace ids, document
+    text, counters).  Only values addressed by one of ``_REWRITE_KEYS`` are
+    rewritten questions; accepting any nested string would store a trace id
+    such as ``retrieval-...`` as the rewritten question.
+    """
+
     if isinstance(value, dict):
         for key in _REWRITE_KEYS:
             candidate = value.get(key)
@@ -52,7 +89,7 @@ def _first_rewritten_value(value: typing.Any) -> str:
             candidate = _first_rewritten_value(nested)
             if candidate:
                 return candidate
-    if isinstance(value, (list, tuple)):
+    elif isinstance(value, (list, tuple)):
         for nested in value:
             candidate = _first_rewritten_value(nested)
             if candidate:

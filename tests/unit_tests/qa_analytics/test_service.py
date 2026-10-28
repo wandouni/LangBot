@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import datetime
 import uuid
@@ -12,28 +13,35 @@ from unittest.mock import Mock
 
 import pytest
 import sqlalchemy
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from langbot.pkg.api.http.context import ExecutionContext
 from langbot.pkg.entity import persistence
 from langbot.pkg.entity.persistence.base import Base
+from langbot.pkg.entity.persistence.bot import Bot
 from langbot.pkg.entity.persistence.qa_analytics import QAAnalyticsRecord
 from langbot.pkg.qa_analytics import context as qa_context
 from langbot.pkg.qa_analytics.service import QAAnalyticsService
+from langbot.pkg.persistence.tenant_uow import _validate_scoped_statement_call
 from langbot.pkg.utils import importutil
 
 importutil.import_modules_in_pkg(persistence)
 
 WORKSPACE = '00000000-0000-0000-0000-00000000000a'
 OTHER_WORKSPACE = '00000000-0000-0000-0000-00000000000b'
+BOT_A = '00000000-0000-0000-0000-0000000000a1'
+BOT_B = '00000000-0000-0000-0000-0000000000b1'
 
 
 class _UnitOfWork:
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self, session):
+        self.session = session
 
     async def execute(self, statement):
-        return await self.connection.execute(statement)
+        # Mirror the production tenant guard so read queries cannot use SQL
+        # constructs that the real UoW would reject.
+        _validate_scoped_statement_call((statement,), {})
+        return await self.session.execute(statement)
 
 
 @pytest.fixture
@@ -44,8 +52,12 @@ async def database(tmp_path):
 
     @asynccontextmanager
     async def tenant_uow(workspace_uuid):
-        async with engine.begin() as connection:
-            yield _UnitOfWork(connection)
+        # Production tenant UoWs execute through an ORM session.  Using a Core
+        # connection here would return column-keyed rows for ``select(model)``
+        # and hide production-only row-shape bugs.
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            async with session.begin():
+                yield _UnitOfWork(session)
 
     plugin_root = Path(__file__).resolve().parents[3] / 'plugins' / 'qa-analytics'
 
@@ -86,6 +98,7 @@ async def _insert(engine, **overrides):
         'workspace_uuid': WORKSPACE,
         'query_uuid': str(uuid.uuid4()),
         'session_key': f'bot:embed:{uuid.uuid4()}',
+        'bot_uuid': BOT_A,
         'question': '问题',
         'rewritten_question': None,
         'answer': '回答',
@@ -101,6 +114,21 @@ async def _insert(engine, **overrides):
     async with engine.begin() as connection:
         await connection.execute(sqlalchemy.insert(QAAnalyticsRecord).values(**values))
     return values
+
+
+async def _insert_bot(engine, bot_uuid=BOT_A, name='Admissions', workspace_uuid=WORKSPACE):
+    async with engine.begin() as connection:
+        await connection.execute(
+            sqlalchemy.insert(Bot).values(
+                uuid=bot_uuid,
+                workspace_uuid=workspace_uuid,
+                name=name,
+                description='',
+                adapter='websocket',
+                adapter_config={},
+                enable=True,
+            )
+        )
 
 
 async def _seed(engine):
@@ -128,6 +156,7 @@ async def _seed(engine):
     third = await _insert(
         engine,
         session_key='bot:embed:session-b',
+        bot_uuid=BOT_B,
         question='学费是多少',
         rewritten_question=None,
         normalized_question='学费是多少',
@@ -198,9 +227,47 @@ class TestReadQueries:
         assert overview['high_frequency_types'] == 1
         assert overview['average_latency_ms'] == 200
         assert overview['top_questions'][0]['count'] == 2
+        # Rankings show what the visitor asked, not a plugin-provided rewrite.
+        assert overview['top_questions'][0]['question'] == '护理专业能去哪些科室'
         words = {item['word']: item['count'] for item in overview['word_cloud']}
         assert words['护理'] == 2
         assert words['学费'] == 1
+
+    @pytest.mark.asyncio
+    async def test_overview_and_tables_filter_by_bot(self, database):
+        service, engine = database
+        await _seed(engine)
+
+        overview = await service.get_overview(WORKSPACE, '7d', 0, bot_uuid=BOT_A)
+        assert overview['total_questions'] == 2
+        assert overview['independent_sessions'] == 1
+        assert overview['average_latency_ms'] == 150
+
+        questions = await service.get_questions(WORKSPACE, '7d', 0, bot_uuid=BOT_B)
+        assert questions['total'] == 1
+        assert questions['items'][0]['question'] == '学费是多少'
+
+        visits = await service.get_visits(WORKSPACE, '7d', 0, bot_uuid=BOT_B)
+        assert visits['total'] == 1
+        assert visits['items'][0]['rounds'] == 1
+
+    @pytest.mark.asyncio
+    async def test_bot_list_and_detail_are_workspace_scoped(self, database):
+        service, engine = database
+        first, _, _ = await _seed(engine)
+        await _insert_bot(engine, BOT_A, 'Admissions')
+        await _insert_bot(engine, BOT_B, 'Student services')
+        await _insert_bot(engine, 'other-bot', 'Other Workspace', OTHER_WORKSPACE)
+
+        bots = await service.get_bots(WORKSPACE)
+        assert [item['uuid'] for item in bots['items']] == [BOT_A, BOT_B]
+        assert [item['name'] for item in bots['items']] == ['Admissions', 'Student services']
+
+        other = await service.get_bots(OTHER_WORKSPACE)
+        assert [item['uuid'] for item in other['items']] == ['other-bot']
+
+        assert await service.get_question_detail(WORKSPACE, first['id'], BOT_A) is not None
+        assert await service.get_question_detail(WORKSPACE, first['id'], BOT_B) is None
 
     @pytest.mark.asyncio
     async def test_questions_filter_mask_and_pagination(self, database):
@@ -265,6 +332,16 @@ class TestReadQueries:
 
 
 class TestCollection:
+    def test_retrieval_metadata_is_not_mistaken_for_a_rewritten_question(self):
+        metadata = {
+            'trace_id': 'retrieval-4e43b3f35aee',
+            'trace_spans': [{'name': 'vector_search', 'trace_id': 'retrieval-4e43b3f35aee'}],
+        }
+
+        assert qa_context.extract_rewritten_question(metadata) == ''
+        assert qa_context.extract_rewritten_question({'rewritten_question': '护理专业就业方向'}) == ('护理专业就业方向')
+        assert qa_context.extract_rewritten_question({'nested': {'rewrittenQuery': '学费多少'}}) == '学费多少'
+
     @pytest.mark.asyncio
     async def test_embed_session_uses_widget_identity_and_visitor_ip(self, database):
         service, _ = database
@@ -331,6 +408,27 @@ class TestCollection:
         assert query.variables['_qa_analytics_recorded'] is True
 
     @pytest.mark.asyncio
+    async def test_knowledge_base_flag_survives_runtime_action_task(self, database):
+        service, _ = database
+        query = _query('学费是多少')
+        collection = service.begin_query(query)
+        assert collection is not None
+        assert not collection.knowledge_base_used
+
+        # Knowledge retrieval runs in the Plugin Runtime connector task, not
+        # the pipeline task where begin_query stored the ContextVar.
+        async def runtime_retrieval() -> None:
+            with qa_context.bind_query_collection_context(query):
+                qa_context.mark_knowledge_base_used()
+
+        await asyncio.create_task(runtime_retrieval())
+        assert collection.knowledge_base_used is True
+
+        await service.finish_query(query, collection)
+        result = await service.get_questions(WORKSPACE, '7d', 0)
+        assert result['total'] == 1
+
+    @pytest.mark.asyncio
     async def test_page_api_rejects_unknown_endpoint(self, database):
         service, _ = database
         with pytest.raises(ValueError, match='Unknown endpoint'):
@@ -352,6 +450,38 @@ class TestCollection:
             {'range': '7d', 'tz_offset_minutes': 0},
         )
         assert data['total_questions'] == 3
+
+    @pytest.mark.asyncio
+    async def test_page_api_serves_bot_list_and_applies_bot_filter(self, database):
+        service, engine = database
+        await _seed(engine)
+        await _insert_bot(engine, BOT_A, 'Admissions')
+        await _insert_bot(engine, BOT_B, 'Student services')
+        execution_context = SimpleNamespace(workspace_uuid=WORKSPACE)
+
+        bots = await service.handle_page_api(
+            execution_context,
+            '/qa-analytics/bots',
+            'POST',
+            {},
+        )
+        assert [item['uuid'] for item in bots['items']] == [BOT_A, BOT_B]
+
+        overview = await service.handle_page_api(
+            execution_context,
+            '/qa-analytics/overview',
+            'POST',
+            {'range': '7d', 'tz_offset_minutes': 0, 'bot_uuid': BOT_B},
+        )
+        assert overview['total_questions'] == 1
+
+        questions = await service.handle_page_api(
+            execution_context,
+            '/qa-analytics/questions',
+            'POST',
+            {'range': '7d', 'tz_offset_minutes': 0, 'bot_uuid': BOT_A},
+        )
+        assert questions['total'] == 2
 
     @pytest.mark.asyncio
     async def test_page_api_questions_detail_and_visits(self, database):

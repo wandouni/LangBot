@@ -33,6 +33,25 @@ function sanitizePagePreferences(value: unknown): Record<string, string> {
   return result;
 }
 
+function formatPageApiError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const candidate = error as { msg?: unknown; message?: unknown };
+    if (typeof candidate.msg === 'string' && candidate.msg) {
+      return candidate.msg;
+    }
+    if (typeof candidate.message === 'string' && candidate.message) {
+      return candidate.message;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  return String(error);
+}
+
 function readPagePreferences(storageKey: string): Record<string, string> {
   if (typeof window === 'undefined') return {};
   try {
@@ -257,7 +276,7 @@ function PluginPageIframe({
             '*',
           );
         } catch (err: unknown) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
+          const errorMsg = formatPageApiError(err);
           iframeRef.current?.contentWindow?.postMessage(
             {
               type: 'langbot:api:response',

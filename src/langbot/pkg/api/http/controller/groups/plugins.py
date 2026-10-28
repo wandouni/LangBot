@@ -9,6 +9,7 @@ import copy
 import quart
 import re
 import httpx
+import traceback
 import uuid
 import os
 import zipfile
@@ -21,6 +22,7 @@ from .....entity.persistence import plugin as persistence_plugin
 from ...authz import Permission
 from ...context import ExecutionContext, RequestContext
 from .....operation_trace import service as settings_service
+from .....persistence.tenant_uow import ScopedSessionTransactionError
 from .. import group
 from .....workspace.errors import WorkspaceNotFoundError
 from .....plugin.github import validate_github_plugin_install_info
@@ -742,7 +744,19 @@ class PluginsRouterGroup(group.RouterGroup):
                 except ValueError as exc:
                     return self.http_status(400, -1, str(exc))
                 except Exception as exc:
-                    self.ap.logger.warning(f'Q&A analytics page API failed: {type(exc).__name__}')
+                    # Avoid logging SQL parameters: they can contain question
+                    # text or visitor IPs. The validator's own message is safe
+                    # and names the rejected construct, so keep that one.
+                    if isinstance(exc, ScopedSessionTransactionError):
+                        self.ap.logger.warning(
+                            f'Q&A analytics page API failed: {type(exc).__name__}: {exc}'
+                        )
+                    else:
+                        frames = traceback.extract_tb(exc.__traceback__)
+                        location = f'{frames[-1].filename}:{frames[-1].lineno}' if frames else 'unknown'
+                        self.ap.logger.warning(
+                            f'Q&A analytics page API failed: {type(exc).__name__} at {location}'
+                        )
                     return self.http_status(500, -1, 'analytics query failed')
                 return self.success(data=data)
 

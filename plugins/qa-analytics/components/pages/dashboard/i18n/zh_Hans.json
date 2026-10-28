@@ -2,6 +2,8 @@
   "title": "咨询问答看板",
   "subtitle": "查看当前 Workspace 的知识库咨询问答情况",
   "rangeLabel": "时间范围",
+  "bot.label": "机器人",
+  "bots.all": "全部机器人",
   "range.today": "今天",
   "range.7d": "近 7 天",
   "range.30d": "近 30 天",

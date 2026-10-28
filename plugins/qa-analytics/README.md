@@ -2,7 +2,8 @@
 
 This plugin adds the **Q&A Analytics** page to the LangBot sidebar. It is a
 read-only view of the Workspace's knowledge-base questions, sessions, keyword
-cloud, frequent questions, and visitor regions.
+cloud, frequent questions, and visitor regions. All views can be filtered by
+the bots configured in the current Workspace.
 
 The page asset and sidebar entry come from this plugin. Question collection,
 storage, retention, and queries are implemented in LangBot Core, so a plugin
@@ -15,7 +16,7 @@ and install the `.lbpkg` from **Add extension → Upload extension** in the WebU
 
 ```bash
 cd plugins/qa-analytics
-zip -r ../qa-analytics-0.1.0.lbpkg .
+zip -r ../qa-analytics-0.1.1.lbpkg .
 ```
 
 Choose **Manual add**, upload the `.lbpkg`, confirm the install, then enable the

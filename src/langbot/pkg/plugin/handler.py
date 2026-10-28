@@ -2471,6 +2471,7 @@ class RuntimeConnectionHandler(handler.Handler):
             filters = data.get('filters') or {}
             run_id = data.get('run_id')  # Optional: present for Runner calls
             caller_plugin_identity = data.get('caller_plugin_identity')  # Optional: for cross-plugin validation
+            query = None
 
             # Permission validation for Runner calls
             if run_id:
@@ -2479,6 +2480,9 @@ class RuntimeConnectionHandler(handler.Handler):
                 )
                 if error:
                     return error
+                # The run session holds the pipeline Query that owns the Q&A
+                # collection context, so retrieval can mark it as KB-backed.
+                query = session.get('execution_query') if session else None
 
             kb = await self.ap.rag_mgr.get_knowledge_base_by_uuid(
                 execution_context,
@@ -2490,14 +2494,17 @@ class RuntimeConnectionHandler(handler.Handler):
                 )
 
             try:
-                entries = await kb.retrieve(
-                    execution_context,
-                    query_text,
-                    settings={
-                        'top_k': top_k,
-                        'filters': filters,
-                    },
-                )
+                from ..qa_analytics.context import bind_query_collection_context
+
+                with bind_query_collection_context(query):
+                    entries = await kb.retrieve(
+                        execution_context,
+                        query_text,
+                        settings={
+                            'top_k': top_k,
+                            'filters': filters,
+                        },
+                    )
                 results = [entry.model_dump(mode='json') for entry in entries]
                 return handler.ActionResponse.success(data={'results': results})
             except Exception as e:
@@ -2610,11 +2617,16 @@ class RuntimeConnectionHandler(handler.Handler):
                             'sender_id': str(query.sender_id),
                         }
                     )
-                entries = await kb.retrieve(
-                    execution_context,
-                    query_text,
-                    settings=settings,
-                )
+                # Retrieval actions run on the Runtime connector task, so rebind
+                # the Query's collection context before the knowledge hook fires.
+                from ..qa_analytics.context import bind_query_collection_context
+
+                with bind_query_collection_context(query):
+                    entries = await kb.retrieve(
+                        execution_context,
+                        query_text,
+                        settings=settings,
+                    )
                 results = [entry.model_dump(mode='json') for entry in entries]
                 return handler.ActionResponse.success(data={'results': results})
             except Exception as e:

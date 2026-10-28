@@ -2,6 +2,8 @@
   "title": "Аналитика вопросов",
   "subtitle": "Вопросы к базе знаний в этом Workspace",
   "rangeLabel": "Период",
+  "bot.label": "Бот",
+  "bots.all": "Все боты",
   "range.today": "Сегодня",
   "range.7d": "7 дней",
   "range.30d": "30 дней",

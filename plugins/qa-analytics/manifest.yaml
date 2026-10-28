@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   author: langbot-team
   name: qa-analytics
-  version: 0.1.0
+  version: 0.1.1
   label:
     en_US: Q&A Analytics
     zh_Hans: 咨询问答看板
@@ -24,7 +24,7 @@ metadata:
     vi_VN: Thống kê hỏi đáp từ cơ sở tri thức của Workspace hiện tại.
   icon: assets/icon.svg
 spec:
-  version: 0.1.0
+  version: 0.1.1
   config: []
   components:
     Page:

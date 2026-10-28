@@ -2,6 +2,8 @@
   "title": "Análisis de preguntas",
   "subtitle": "Preguntas de la base de conocimiento de este Workspace",
   "rangeLabel": "Periodo",
+  "bot.label": "Bot",
+  "bots.all": "Todos los bots",
   "range.today": "Hoy",
   "range.7d": "7 días",
   "range.30d": "30 días",

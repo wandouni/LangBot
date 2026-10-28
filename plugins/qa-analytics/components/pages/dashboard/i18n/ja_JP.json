@@ -2,6 +2,8 @@
   "title": "Q&A 分析",
   "subtitle": "この Workspace のナレッジベース Q&A 状況",
   "rangeLabel": "期間",
+  "bot.label": "ボット",
+  "bots.all": "すべてのボット",
   "range.today": "今日",
   "range.7d": "7 日間",
   "range.30d": "30 日間",

@@ -44,6 +44,12 @@
     }
     .segmented button:hover { color: var(--text); }
     .segmented button.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+    .bot-select {
+      max-width: 220px; padding: 7px 30px 7px 10px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--card); color: var(--text); font-size: 13px; outline: none;
+      text-overflow: ellipsis;
+    }
+    .bot-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
     .view-tabs {
       display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px;
       border: 1px solid var(--border); border-radius: 10px; background: var(--card);
@@ -67,6 +73,7 @@
     }
     .banner code { font-size: 12px; opacity: .8; overflow-wrap: anywhere; }
     .banner button { border: 0; background: transparent; color: inherit; text-decoration: underline; padding: 0; }
+    #statsPanel { display: flex; flex-direction: column; gap: 16px; }
     .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
     .card { border: 1px solid var(--border); background: var(--card); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
     .card-label { color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -168,7 +175,8 @@
     @media (max-width: 640px) {
       body { padding: 12px; }
       .cards { grid-template-columns: minmax(0, 1fr); }
-      .header-actions { width: 100%; justify-content: space-between; }
+      .header-actions { width: 100%; flex-wrap: wrap; justify-content: space-between; }
+      .bot-select { width: 100%; max-width: none; }
       .segmented { flex: 1; }
       .segmented button { flex: 1; padding: 6px 8px; }
       .filter-input { width: 100%; }
@@ -185,6 +193,7 @@
         <p class="subtitle" data-i18n="subtitle">Knowledge-base questions in this Workspace</p>
       </div>
       <div class="header-actions">
+        <select id="botFilter" class="bot-select" data-i18n-aria-label="bot.label" aria-label="Bot"></select>
         <div class="segmented" role="group" data-i18n-aria-label="rangeLabel" aria-label="Time range">
           <button type="button" data-range="today" data-i18n="range.today">Today</button>
           <button type="button" data-range="7d" data-i18n="range.7d">7 days</button>
@@ -313,6 +322,10 @@
         tab: 'stats',
         booted: false,
         pendingRange: null,
+        bots: [],
+        botsLoaded: false,
+        botUuid: '',
+        pendingBot: null,
         questionPage: 1,
         visitPage: 1,
         questionFilters: { keyword: '', ip: '', region: '' },
@@ -431,11 +444,29 @@
         return String(value) + ' ms';
       }
 
+      function errorText(error) {
+        if (!error) return '';
+        if (typeof error === 'string') return error;
+        if (error.msg) return String(error.msg);
+        if (error.message && error.message !== '[object Object]') return String(error.message);
+        if (error.error) {
+          return typeof error.error === 'string' ? error.error : String(error.error);
+        }
+        try {
+          var json = JSON.stringify(error);
+          if (json && json !== '{}') return json;
+        } catch (e) {
+          // Fall through for circular or otherwise opaque values.
+        }
+        if (error.message === '[object Object]') return t('loadFailed', 'Could not load analytics.');
+        return String(error);
+      }
+
       function showError(error) {
         var banner = document.getElementById('errorBanner');
         var detail = document.getElementById('errorDetail');
         banner.hidden = false;
-        detail.textContent = error && error.message ? error.message : '';
+        detail.textContent = errorText(error);
       }
 
       function clearError() {
@@ -449,9 +480,72 @@
         }
         var body = Object.assign({}, payload || {}, {
           range: state.range,
-          tz_offset_minutes: new Date().getTimezoneOffset()
+          tz_offset_minutes: new Date().getTimezoneOffset(),
+          bot_uuid: state.botUuid || ''
         });
         return window.langbot.api(endpoint, body, 'POST');
+      }
+
+      function loadBots() {
+        return api('/qa-analytics/bots').then(function (data) {
+          var items = data && Array.isArray(data.items) ? data.items : [];
+          state.bots = items.filter(function (bot) {
+            return bot && typeof bot.uuid === 'string' && bot.uuid;
+          });
+        }).catch(function () {
+          state.bots = [];
+        }).then(function () {
+          state.botsLoaded = true;
+          if (state.pendingBot !== null) {
+            var pending = state.pendingBot;
+            state.pendingBot = null;
+            state.botUuid = state.bots.some(function (bot) {
+              return bot.uuid === pending;
+            }) ? pending : '';
+          }
+          if (state.botUuid && !state.bots.some(function (bot) {
+            return bot.uuid === state.botUuid;
+          })) {
+            state.botUuid = '';
+          }
+          renderBotOptions();
+        });
+      }
+
+      function renderBotOptions() {
+        var select = document.getElementById('botFilter');
+        if (!select) return;
+        select.textContent = '';
+        var allOption = el('option', null, t('bots.all', 'All bots'));
+        allOption.value = '';
+        select.appendChild(allOption);
+        state.bots.forEach(function (bot) {
+          var option = el('option', null, bot.name || bot.uuid);
+          option.value = bot.uuid;
+          select.appendChild(option);
+        });
+        select.value = state.botUuid || '';
+        select.disabled = state.bots.length === 0;
+      }
+
+      function setBot(botUuid, persist) {
+        var next = typeof botUuid === 'string' ? botUuid : '';
+        if (next && !state.bots.some(function (bot) { return bot.uuid === next; })) {
+          next = '';
+        }
+        state.botUuid = next;
+        var select = document.getElementById('botFilter');
+        if (select) select.value = next;
+        if (persist) {
+          window.parent.postMessage({
+            type: 'langbot:preferences',
+            preferences: { qaAnalyticsBot: next }
+          }, '*');
+        }
+        state.questionPage = 1;
+        state.visitPage = 1;
+        closeDetail();
+        if (state.booted) refreshAll();
       }
 
       function setRange(range, persist) {
@@ -494,6 +588,7 @@
       }
 
       function renderLocalizedContent() {
+        renderBotOptions();
         if (state.overview) renderOverview();
         if (state.tab !== 'stats') {
           var tableData = state.tab === 'questions' ? state.questionData : state.visitData;
@@ -863,6 +958,12 @@
           if (!state.booted) state.pendingRange = range;
           else if (range !== state.range) setRange(range, false);
         }
+        if (Object.prototype.hasOwnProperty.call(preferences, 'qaAnalyticsBot')) {
+          var botUuid = preferences.qaAnalyticsBot;
+          if (typeof botUuid !== 'string') botUuid = '';
+          if (!state.booted || !state.botsLoaded) state.pendingBot = botUuid;
+          else if (botUuid !== state.botUuid) setBot(botUuid, false);
+        }
       }
 
       window.addEventListener('message', function (event) {
@@ -877,6 +978,9 @@
 
       Array.prototype.forEach.call(document.querySelectorAll('[data-range]'), function (button) {
         button.addEventListener('click', function () { setRange(button.getAttribute('data-range'), true); });
+      });
+      document.getElementById('botFilter').addEventListener('change', function (event) {
+        setBot(event.target.value, true);
       });
       document.getElementById('refreshButton').addEventListener('click', refreshAll);
       document.getElementById('retryButton').addEventListener('click', refreshAll);
@@ -923,10 +1027,12 @@
       function boot(context) {
         if (state.booted) return;
         state.booted = true;
-        loadPageTranslations().then(renderLocalizedContent);
-        var range = state.pendingRange || '7d';
-        state.pendingRange = null;
-        setRange(range, false);
+        Promise.all([loadPageTranslations(), loadBots()]).then(function () {
+          renderLocalizedContent();
+          var range = state.pendingRange || '7d';
+          state.pendingRange = null;
+          setRange(range, false);
+        });
       }
 
       if (window.langbot && typeof window.langbot.onReady === 'function') {

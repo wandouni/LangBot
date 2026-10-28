@@ -13,9 +13,10 @@ import uuid
 
 import sqlalchemy
 
+from ..entity.persistence import bot as persistence_bot
 from ..entity.persistence import qa_analytics as persistence_qa
 from . import text as qa_text
-from .context import QACollectionContext
+from .context import QACollectionContext, attach_collection_context
 from .geo import GeoResolver
 
 _RANGE_KEYS = frozenset({'today', '7d', '30d', 'all'})
@@ -24,6 +25,7 @@ _MAX_PAGE_SIZE = 100
 _MAX_KEYWORD_LENGTH = 200
 _MAX_IP_LENGTH = 64
 _MAX_REGION_LENGTH = 200
+_MAX_BOT_UUID_LENGTH = 36
 _MAX_CLEANUP_BATCH = 5000
 _MAX_CLEANUP_BATCHES = 20
 _CATALOG_LANGUAGES = frozenset(
@@ -129,7 +131,7 @@ class QAAnalyticsService:
             session_part = f'{launcher_value}:{getattr(query, "launcher_id", "")}'
         session_key = f'{getattr(query, "bot_uuid", None) or "unknown"}:{session_part}'[:512]
 
-        return QACollectionContext(
+        context = QACollectionContext(
             workspace_uuid=execution_context.workspace_uuid,
             bot_uuid=str(getattr(query, 'bot_uuid', None) or ''),
             pipeline_uuid=str(getattr(query, 'pipeline_uuid', None) or ''),
@@ -139,6 +141,10 @@ class QAAnalyticsService:
             started_at=_utc_now_naive(),
             started_perf=time.perf_counter(),
         )
+        # Retrieval runs on the Runtime connector task, so keep the context on
+        # the Query where the retrieval handler can find it.
+        attach_collection_context(query, context)
+        return context
 
     async def finish_query(self, query: typing.Any, context: QACollectionContext | None) -> None:
         """Persist one completed (or failed) question without delaying the answer."""
@@ -155,7 +161,10 @@ class QAAnalyticsService:
         if not rewritten and isinstance(variables, dict):
             rewritten = str(variables.get('_qa_rewritten_question', '') or '').strip()
         normalized_question = qa_text.normalize_question(question)
-        normalized_group = qa_text.normalize_question(rewritten or question)
+        # The dashboard's frequent-question ranking is built from the visitor's
+        # question.  A plugin-provided rewrite is display metadata only and may
+        # be absent or unrelated to what the visitor asked.
+        normalized_group = normalized_question
         latency_ms = max(0, int((time.perf_counter() - context.started_perf) * 1000))
         finished_at = _utc_now_naive()
 
@@ -303,12 +312,16 @@ class QAAnalyticsService:
         workspace_uuid: str,
         start: datetime.datetime | None,
         end: datetime.datetime,
+        bot_uuid: typing.Any = '',
     ) -> list[typing.Any]:
         model = persistence_qa.QAAnalyticsRecord
         conditions: list[typing.Any] = [model.workspace_uuid == workspace_uuid]
         if start is not None:
             conditions.append(model.created_at >= start)
         conditions.append(model.created_at <= end)
+        bot_text = str(bot_uuid or '').strip()[:_MAX_BOT_UUID_LENGTH]
+        if bot_text:
+            conditions.append(model.bot_uuid == bot_text)
         return conditions
 
     @contextlib.asynccontextmanager
@@ -330,15 +343,39 @@ class QAAnalyticsService:
         value = result.scalar()
         return int(value or 0)
 
+    async def get_bots(self, workspace_uuid: str) -> dict[str, typing.Any]:
+        """List bots in the Workspace for the dashboard's bot filter."""
+
+        model = persistence_bot.Bot
+        async with self._read_unit(workspace_uuid) as uow:
+            result = await self._execute(
+                uow,
+                sqlalchemy.select(model.uuid, model.name, model.enable)
+                .where(model.workspace_uuid == workspace_uuid)
+                .order_by(model.name.asc(), model.uuid.asc()),
+            )
+            rows = result.all()
+        return {
+            'items': [
+                {
+                    'uuid': row[0],
+                    'name': row[1] or '',
+                    'enabled': bool(row[2]),
+                }
+                for row in rows
+            ]
+        }
+
     async def get_overview(
         self,
         workspace_uuid: str,
         range_key: str,
         tz_offset_minutes: typing.Any = None,
+        bot_uuid: typing.Any = '',
     ) -> dict[str, typing.Any]:
         resolved_key, start, end = self.resolve_range(range_key, tz_offset_minutes)
         model = persistence_qa.QAAnalyticsRecord
-        conditions = self._record_conditions(workspace_uuid, start, end)
+        conditions = self._record_conditions(workspace_uuid, start, end, bot_uuid)
         word_cloud_limit = _bounded_int(self._config().get('word_cloud_words', 100), 100, 1, 200)
         sample_size = _bounded_int(self._config().get('word_cloud_sample_size', 500), 500, 1, 5000)
 
@@ -362,34 +399,42 @@ class QAAnalyticsService:
                 uow,
                 sqlalchemy.select(sqlalchemy.func.count()).select_from(frequent_subquery),
             )
-            average_latency_result = await self._execute(
+            latency_result = await self._execute(
                 uow,
-                sqlalchemy.select(sqlalchemy.func.avg(model.latency_ms)).where(*conditions),
+                sqlalchemy.select(
+                    sqlalchemy.func.sum(model.latency_ms),
+                    sqlalchemy.func.count(model.latency_ms),
+                ).where(*conditions),
             )
-            average_latency = average_latency_result.scalar()
+            latency_sum, latency_count = latency_result.one()
+            average_latency = (
+                float(latency_sum) / int(latency_count) if latency_sum is not None and latency_count else None
+            )
 
             sample_result = await self._execute(
                 uow,
-                sqlalchemy.select(model.question, model.rewritten_question)
+                sqlalchemy.select(model.question)
                 .where(*conditions)
                 .order_by(model.created_at.desc(), model.id.desc())
                 .limit(sample_size),
             )
-            sample_texts = [(row[1] or row[0] or '') for row in sample_result.all() if (row[0] or row[1])]
+            sample_texts = [row[0] for row in sample_result.all() if row[0]]
 
+            question_count = sqlalchemy.func.count()
+            first_seen = sqlalchemy.func.min(model.created_at)
             top_result = await self._execute(
                 uow,
                 sqlalchemy.select(
-                    model.normalized_group_question.label('group_key'),
-                    sqlalchemy.func.count().label('question_count'),
-                    sqlalchemy.func.min(model.created_at).label('first_seen'),
+                    model.normalized_question.label('group_key'),
+                    question_count.label('question_count'),
+                    first_seen.label('first_seen'),
                     sqlalchemy.func.min(model.id).label('sample_id'),
                 )
-                .where(*conditions, model.normalized_group_question != '')
-                .group_by(model.normalized_group_question)
+                .where(*conditions, model.normalized_question != '')
+                .group_by(model.normalized_question)
                 .order_by(
-                    sqlalchemy.desc('question_count'),
-                    sqlalchemy.asc('first_seen'),
+                    question_count.desc(),
+                    first_seen.asc(),
                 )
                 .limit(10),
             )
@@ -402,7 +447,6 @@ class QAAnalyticsService:
                     sqlalchemy.select(
                         model.id,
                         model.question,
-                        model.rewritten_question,
                     ).where(model.id.in_(sample_ids)),
                 )
                 samples = {row[0]: row for row in sample_record_result.all()}
@@ -413,7 +457,7 @@ class QAAnalyticsService:
             sample = samples.get(row.sample_id)
             display_question = ''
             if sample is not None:
-                display_question = (sample[2] or sample[1] or '').strip()
+                display_question = (sample[1] or '').strip()
             if not display_question:
                 display_question = str(row.group_key or '')
             top_questions.append(
@@ -472,11 +516,12 @@ class QAAnalyticsService:
         keyword: typing.Any = '',
         visitor_ip: typing.Any = '',
         region: typing.Any = '',
+        bot_uuid: typing.Any = '',
     ) -> dict[str, typing.Any]:
         resolved_key, start, end = self.resolve_range(range_key, tz_offset_minutes)
         model = persistence_qa.QAAnalyticsRecord
         conditions = self._question_filter_conditions(
-            self._record_conditions(workspace_uuid, start, end),
+            self._record_conditions(workspace_uuid, start, end, bot_uuid),
             keyword,
             visitor_ip,
             region,
@@ -534,32 +579,51 @@ class QAAnalyticsService:
         self,
         workspace_uuid: str,
         record_id: str,
+        bot_uuid: typing.Any = '',
     ) -> dict[str, typing.Any] | None:
         model = persistence_qa.QAAnalyticsRecord
         text_id = str(record_id or '').strip()
         if not text_id:
             return None
+        conditions: list[typing.Any] = [model.workspace_uuid == workspace_uuid, model.id == text_id]
+        bot_text = str(bot_uuid or '').strip()[:_MAX_BOT_UUID_LENGTH]
+        if bot_text:
+            conditions.append(model.bot_uuid == bot_text)
         async with self._read_unit(workspace_uuid) as uow:
             result = await self._execute(
                 uow,
-                sqlalchemy.select(model).where(model.workspace_uuid == workspace_uuid, model.id == text_id).limit(1),
+                sqlalchemy.select(
+                    model.id,
+                    model.created_at,
+                    model.finished_at,
+                    model.question,
+                    model.rewritten_question,
+                    model.answer,
+                    model.latency_ms,
+                    model.visitor_ip,
+                    model.region,
+                )
+                .where(*conditions)
+                .limit(1),
             )
             row = result.first()
         if row is None:
             return None
 
-        # ``select(model)`` yields one ORM-mapped entity per row in SQLAlchemy 2.
-        record = row[0] if isinstance(row, tuple) else row
+        # Select explicit columns rather than the mapped entity: a production
+        # tenant UoW executes through an ORM session, where ``select(model)``
+        # returns a row keyed by the entity instead of its columns, so
+        # attribute access such as ``row.id`` raises AttributeError.
         return {
-            'id': record.id,
-            'created_at': _iso_utc(record.created_at),
-            'finished_at': _iso_utc(record.finished_at),
-            'question': record.question or '',
-            'rewritten_question': record.rewritten_question or '',
-            'answer': record.answer or '',
-            'latency_ms': record.latency_ms,
-            'visitor_ip': record.visitor_ip or '',
-            'region': record.region or '',
+            'id': row[0],
+            'created_at': _iso_utc(row[1]),
+            'finished_at': _iso_utc(row[2]),
+            'question': row[3] or '',
+            'rewritten_question': row[4] or '',
+            'answer': row[5] or '',
+            'latency_ms': row[6],
+            'visitor_ip': row[7] or '',
+            'region': row[8] or '',
         }
 
     async def get_visits(
@@ -571,11 +635,12 @@ class QAAnalyticsService:
         page_size: typing.Any = 20,
         visitor_ip: typing.Any = '',
         region: typing.Any = '',
+        bot_uuid: typing.Any = '',
     ) -> dict[str, typing.Any]:
         resolved_key, start, end = self.resolve_range(range_key, tz_offset_minutes)
         model = persistence_qa.QAAnalyticsRecord
         conditions = self._question_filter_conditions(
-            self._record_conditions(workspace_uuid, start, end),
+            self._record_conditions(workspace_uuid, start, end, bot_uuid),
             '',
             visitor_ip,
             region,
@@ -589,19 +654,20 @@ class QAAnalyticsService:
                 uow,
                 sqlalchemy.select(sqlalchemy.func.count(sqlalchemy.distinct(model.session_key))).where(*conditions),
             )
+            last_seen = sqlalchemy.func.max(model.created_at)
             result = await self._execute(
                 uow,
                 sqlalchemy.select(
                     model.session_key,
                     sqlalchemy.func.min(model.created_at).label('first_seen'),
-                    sqlalchemy.func.max(model.created_at).label('last_seen'),
+                    last_seen.label('last_seen'),
                     sqlalchemy.func.count().label('rounds'),
                     sqlalchemy.func.max(model.visitor_ip).label('visitor_ip'),
                     sqlalchemy.func.max(model.region).label('region'),
                 )
                 .where(*conditions)
                 .group_by(model.session_key)
-                .order_by(sqlalchemy.desc('last_seen'))
+                .order_by(last_seen.desc())
                 .limit(page_limit)
                 .offset(offset),
             )
@@ -653,11 +719,14 @@ class QAAnalyticsService:
         if not workspace_uuid:
             raise ValueError('Workspace is required')
 
+        if endpoint == '/qa-analytics/bots':
+            return await self.get_bots(workspace_uuid)
         if endpoint == '/qa-analytics/overview':
             return await self.get_overview(
                 workspace_uuid,
                 payload.get('range'),
                 payload.get('tz_offset_minutes'),
+                payload.get('bot_uuid'),
             )
         if endpoint == '/qa-analytics/questions':
             return await self.get_questions(
@@ -669,9 +738,14 @@ class QAAnalyticsService:
                 payload.get('keyword'),
                 payload.get('ip'),
                 payload.get('region'),
+                payload.get('bot_uuid'),
             )
         if endpoint == '/qa-analytics/questions/detail':
-            detail = await self.get_question_detail(workspace_uuid, payload.get('id'))
+            detail = await self.get_question_detail(
+                workspace_uuid,
+                payload.get('id'),
+                payload.get('bot_uuid'),
+            )
             if detail is None:
                 raise ValueError('Question not found')
             return detail
@@ -684,6 +758,7 @@ class QAAnalyticsService:
                 payload.get('page_size'),
                 payload.get('ip'),
                 payload.get('region'),
+                payload.get('bot_uuid'),
             )
         if endpoint == '/qa-analytics/i18n':
             return await self.get_page_translations(payload.get('language'))

@@ -2,6 +2,8 @@
   "title": "Bảng phân tích hỏi đáp",
   "subtitle": "Câu hỏi từ cơ sở tri thức trong Workspace này",
   "rangeLabel": "Khoảng thời gian",
+  "bot.label": "Bot",
+  "bots.all": "Tất cả bot",
   "range.today": "Hôm nay",
   "range.7d": "7 ngày",
   "range.30d": "30 ngày",
