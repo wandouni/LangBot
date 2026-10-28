@@ -50,10 +50,12 @@ interface ProviderCardProps {
   isLoading: boolean;
   models?: ProviderModels;
   isWorkspaceOwner: boolean;
-  ownerSpaceBound: boolean;
-  spaceCredits: number | null;
-  modelMetadata: Record<string, LangBotModelAvailabilityItem>;
-  modelAvailabilityLoaded: boolean;
+  // LangBot Models-specific props. That card is no longer rendered by the
+  // settings panel, so these stay optional for callers that omit them.
+  ownerSpaceBound?: boolean;
+  spaceCredits?: number | null;
+  modelMetadata?: Record<string, LangBotModelAvailabilityItem>;
+  modelAvailabilityLoaded?: boolean;
   // Popover states
   addModelPopoverOpen: string | null;
   editModelPopoverOpen: string | null;
@@ -62,7 +64,7 @@ interface ProviderCardProps {
   onToggle: () => void;
   onEditProvider: () => void;
   onDeleteProvider: () => void;
-  onSpaceLogin: () => void;
+  onSpaceLogin?: () => void;
   onOpenAddModel: () => void;
   onCloseAddModel: () => void;
   onAddModel: (
@@ -120,17 +122,17 @@ export default function ProviderCard({
   isLoading,
   models,
   isWorkspaceOwner,
-  ownerSpaceBound,
-  spaceCredits,
-  modelMetadata,
-  modelAvailabilityLoaded,
+  ownerSpaceBound = false,
+  spaceCredits = null,
+  modelMetadata = {},
+  modelAvailabilityLoaded = false,
   addModelPopoverOpen,
   editModelPopoverOpen,
   deleteConfirmOpen,
   onToggle,
   onEditProvider,
   onDeleteProvider,
-  onSpaceLogin,
+  onSpaceLogin = () => {},
   onOpenAddModel,
   onCloseAddModel,
   onAddModel,

@@ -26,8 +26,6 @@ import {
 import { CustomApiError } from '@/app/infra/entities/common';
 import { PanelBody } from '../settings-dialog/panel-layout';
 import { useCurrentWorkspace } from '@/app/infra/http';
-import type { WorkspaceSpaceBilling } from '@/app/infra/entities/workspace';
-import { useLangBotModelAvailability } from '../model-availability/useLangBotModelAvailability';
 
 interface ModelsPanelProps {
   // True when this panel is the active section and the dialog is open.
@@ -90,14 +88,8 @@ export default function ModelsPanel({
   const currentWorkspace = useCurrentWorkspace();
   const canManage =
     currentWorkspace?.permissions.includes('provider_secret.manage') ?? false;
-  const {
-    metadata: langbotModelMetadata,
-    loaded: langbotModelAvailabilityLoaded,
-  } = useLangBotModelAvailability(active && !systemInfo.disable_models_service);
 
   const [providers, setProviders] = useState<ModelProvider[]>([]);
-  const [spaceBilling, setSpaceBilling] =
-    useState<WorkspaceSpaceBilling | null>(null);
 
   // Expanded providers and their models
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(
@@ -138,20 +130,14 @@ export default function ModelsPanel({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
-  // Track if providers have been loaded initially
-  const [providersLoaded, setProvidersLoaded] = useState(false);
-
-  // Separate LangBot Models provider (hide when models service is disabled)
-  const langbotProvider = systemInfo.disable_models_service
-    ? undefined
-    : providers.find((p) => p.requester === LANGBOT_MODELS_PROVIDER_REQUESTER);
+  // LangBot Models is not exposed in this panel; keep its provider out of the
+  // custom provider list so it cannot resurface as a regular card.
   const otherProviders = providers.filter(
     (p) => p.requester !== LANGBOT_MODELS_PROVIDER_REQUESTER,
   );
 
   useEffect(() => {
     if (active) {
-      loadWorkspaceBilling();
       loadProviders();
       loadRequesterSupportTypes();
     }
@@ -162,31 +148,10 @@ export default function ModelsPanel({
     onBlockingChange?.(providerFormOpen);
   }, [providerFormOpen, onBlockingChange]);
 
-  // Auto-expand LangBot Models when no external providers exist
-  useEffect(() => {
-    if (providersLoaded && langbotProvider && otherProviders.length === 0) {
-      if (!expandedProviders.has(langbotProvider.uuid)) {
-        setExpandedProviders(new Set([langbotProvider.uuid]));
-        if (!providerModels[langbotProvider.uuid]) {
-          loadProviderModels(langbotProvider.uuid);
-        }
-      }
-    }
-  }, [providersLoaded, providers]);
-
-  async function loadWorkspaceBilling() {
-    try {
-      setSpaceBilling(await httpClient.getWorkspaceSpaceBilling());
-    } catch {
-      setSpaceBilling(null);
-    }
-  }
-
   async function loadProviders() {
     try {
       const resp = await httpClient.getModelProviders();
       setProviders(resp.providers);
-      setProvidersLoaded(true);
     } catch (err) {
       console.error('Failed to load providers', err);
       toast.error(t('models.loadError'));
@@ -271,17 +236,6 @@ export default function ModelsPanel({
       loadProviders();
     } catch (err) {
       toast.error(t('models.providerDeleteError') + (err as Error).message);
-    }
-  }
-
-  async function handleSpaceLogin() {
-    try {
-      const currentOrigin = window.location.origin;
-      const redirectUri = `${currentOrigin}/auth/space/callback?mode=bind`;
-      const response = await httpClient.getSpaceBindAuthorizeUrl(redirectUri);
-      window.location.href = response.authorize_url;
-    } catch {
-      toast.error(t('common.spaceLoginFailed'));
     }
   }
 
@@ -566,32 +520,23 @@ export default function ModelsPanel({
     setProviderFormOpen(false);
   }
 
-  function renderProviderCard(
-    provider: ModelProvider,
-    isLangBotModels: boolean = false,
-  ) {
+  function renderProviderCard(provider: ModelProvider) {
     return (
       <ProviderCard
         key={provider.uuid}
         provider={provider}
         canManage={canManage}
-        isLangBotModels={isLangBotModels}
         supportTypes={requesterSupportTypes[provider.requester]}
         isExpanded={expandedProviders.has(provider.uuid)}
         isLoading={loadingProviders.has(provider.uuid)}
         models={providerModels[provider.uuid]}
         isWorkspaceOwner={currentWorkspace?.membership.role === 'owner'}
-        ownerSpaceBound={spaceBilling?.owner_space_bound ?? false}
-        spaceCredits={spaceBilling?.credits ?? null}
-        modelMetadata={langbotModelMetadata}
-        modelAvailabilityLoaded={langbotModelAvailabilityLoaded}
         addModelPopoverOpen={addModelPopoverOpen}
         editModelPopoverOpen={editModelPopoverOpen}
         deleteConfirmOpen={deleteConfirmOpen}
         onToggle={() => toggleProvider(provider.uuid)}
         onEditProvider={() => handleEditProvider(provider.uuid)}
         onDeleteProvider={() => handleDeleteProvider(provider.uuid)}
-        onSpaceLogin={handleSpaceLogin}
         onOpenAddModel={() => setAddModelPopoverOpen(provider.uuid)}
         onCloseAddModel={() => setAddModelPopoverOpen(null)}
         onAddModel={(
@@ -664,11 +609,7 @@ export default function ModelsPanel({
   return (
     <>
       <PanelBody>
-        {/* LangBot Models (Space) provider card is intentionally pinned to the
-            top, above the "add custom provider" action row. */}
-        {langbotProvider && renderProviderCard(langbotProvider, true)}
-
-        {/* Add-provider row: stays below the pinned card by design. */}
+        {/* Add-provider row */}
         <div className="mb-3 flex items-center justify-between gap-3">
           <span className="text-sm text-muted-foreground">
             {otherProviders.length === 0
