@@ -33,6 +33,20 @@ import { Plugin } from '@/app/infra/entities/plugin';
 import { MCPServer, Skill } from '@/app/infra/entities/api';
 import PluginComponentList from '@/app/home/plugins/components/plugin-installed/PluginComponentList';
 import { useInstalledPluginIcon } from '@/app/infra/hooks/useInstalledPluginIcon';
+import { extractI18nObject } from '@/i18n/I18nProvider';
+
+function getPluginDisplayName(plugin: Plugin): string {
+  const metadata = plugin.manifest.manifest.metadata;
+  return extractI18nObject(metadata.label) || metadata.name;
+}
+
+function getPluginIdLabel(metadata: {
+  author?: string;
+  name: string;
+  version?: string;
+}): string {
+  return `${metadata.author}/${metadata.name} • v${metadata.version}`;
+}
 
 function PluginThumbnail({ author, name }: { author: string; name: string }) {
   const iconURL = useInstalledPluginIcon(author, name);
@@ -93,9 +107,9 @@ function PluginCard({
       <div className="flex-1 flex items-center gap-3">
         <PluginThumbnail author={metadata.author || ''} name={metadata.name} />
         <div className="flex-1">
-          <div className="font-medium">{metadata.name}</div>
+          <div className="font-medium">{getPluginDisplayName(plugin)}</div>
           <div className="text-sm text-muted-foreground">
-            {metadata.author} • v{metadata.version}
+            {getPluginIdLabel(metadata)}
           </div>
           <div className="flex gap-1 mt-1">
             <PluginComponentList
@@ -802,9 +816,11 @@ export default function PipelineExtension({
                       name={metadata.name}
                     />
                     <div className="flex-1">
-                      <div className="font-medium">{metadata.name}</div>
+                      <div className="font-medium">
+                        {getPluginDisplayName(plugin)}
+                      </div>
                       <div className="text-sm text-muted-foreground">
-                        {metadata.author} • v{metadata.version}
+                        {getPluginIdLabel(metadata)}
                       </div>
                       <div className="flex gap-1 mt-1">
                         <PluginComponentList
