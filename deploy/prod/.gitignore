@@ -1,4 +1,6 @@
 # Local build and transfer artifacts
 dist/
 .last-image
+.last-gateway-image
+.last-sqlbot-image
 .env

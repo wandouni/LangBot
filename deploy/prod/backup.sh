@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Back up LangBot state on the production host.
+# Back up LangBot and SqlBot state on the production host.
 #
 # Run on the server from the deployment directory:
 #   cd /opt/langbot && sudo ./backup.sh
@@ -39,8 +39,19 @@ restart_stack() {
 }
 trap restart_stack EXIT
 
+# SqlBot keeps its own data directory (PostgreSQL, uploads, images). Include
+# it when the stack has been migrated to the application center layout.
+SQLBOT_DATA_DIR="$(sed -n 's/^SQLBOT_DATA_DIR=//p' .env | tail -1)"
+SQLBOT_DATA_DIR="${SQLBOT_DATA_DIR:-./sqlbot-data}"
+DATA_DIRS=(data)
+if [ -d "$SQLBOT_DATA_DIR" ]; then
+    DATA_DIRS+=("$SQLBOT_DATA_DIR")
+else
+    echo "note: ${SQLBOT_DATA_DIR} not found; skipping SqlBot data"
+fi
+
 echo "==> writing ${ARCHIVE}"
-tar -czf "$ARCHIVE" data docker-compose.yaml .env
+tar -czf "$ARCHIVE" "${DATA_DIRS[@]}" docker-compose.yaml .env
 tar -tzf "$ARCHIVE" >/dev/null
 
 echo "==> archive: $(du -h "$ARCHIVE" | awk '{print $1}')"

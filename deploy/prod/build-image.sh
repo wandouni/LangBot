@@ -51,5 +51,36 @@ docker run --rm --platform "$PLATFORM" --entrypoint /app/.venv/bin/python "$IMAG
     -c 'import langbot._build_info as info; print("image revision:", info.CORE_REVISION)'
 
 printf '%s\n' "$IMAGE" > "$REPO_ROOT/deploy/prod/.last-image"
+
+GATEWAY_IMAGE="${PORTAL_GATEWAY_IMAGE:-langbot-portal-gateway:${SHORT_SHA}}"
+echo "==> building ${GATEWAY_IMAGE} (${PLATFORM})"
+docker buildx build \
+    --platform "$PLATFORM" \
+    --label "org.opencontainers.image.revision=${SHA}" \
+    --tag "$GATEWAY_IMAGE" \
+    --load \
+    --file deploy/portal/Dockerfile \
+    deploy/portal
+printf '%s\n' "$GATEWAY_IMAGE" > "$REPO_ROOT/deploy/prod/.last-gateway-image"
+
 echo "==> built ${IMAGE}"
-echo "    next: ./deploy/prod/ship-image.sh ${IMAGE}"
+echo "==> built ${GATEWAY_IMAGE}"
+
+# SqlBot is built from its own repository. Set SQLBOT_SOURCE_DIR to tag and
+# export a local build together with the other two images.
+if [ -n "${SQLBOT_SOURCE_DIR:-}" ]; then
+    SQLBOT_IMAGE="${SQLBOT_IMAGE:-sqlbot:${SHORT_SHA}}"
+    echo "==> building ${SQLBOT_IMAGE} (${PLATFORM}) from ${SQLBOT_SOURCE_DIR}"
+    docker buildx build \
+        --platform "$PLATFORM" \
+        --tag "$SQLBOT_IMAGE" \
+        --load \
+        --file "${SQLBOT_SOURCE_DIR}/Dockerfile" \
+        "${SQLBOT_SOURCE_DIR}"
+    printf '%s\n' "$SQLBOT_IMAGE" > "$REPO_ROOT/deploy/prod/.last-sqlbot-image"
+    echo "==> built ${SQLBOT_IMAGE}"
+else
+    echo "note: SQLBOT_SOURCE_DIR is unset; ship the SqlBot image built in its own repository"
+fi
+
+echo "    next: ./deploy/prod/ship-image.sh"

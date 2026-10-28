@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Save a locally built image, copy it to the production host and load it.
+# Save locally built images, copy them to the production host and load them.
 #
 # Usage:
-#   ./deploy/prod/ship-image.sh [image-tag]
+#   ./deploy/prod/ship-image.sh [image-tag ...]
+#
+# With no arguments it ships the tags recorded by build-image.sh: LangBot, the
+# portal gateway and, when it was built, SqlBot.
 #
 # Environment:
 #   DEPLOY_HOST  default jj@192.168.31.66
@@ -14,56 +17,74 @@ DIST_DIR="$REPO_ROOT/deploy/prod/dist"
 DEPLOY_HOST="${DEPLOY_HOST:-jj@192.168.31.66}"
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/langbot}"
 
-IMAGE="${1:-}"
-if [ -z "$IMAGE" ] && [ -f "$REPO_ROOT/deploy/prod/.last-image" ]; then
-    IMAGE="$(cat "$REPO_ROOT/deploy/prod/.last-image")"
+IMAGES=("$@")
+if [ ${#IMAGES[@]} -eq 0 ]; then
+    for marker in .last-image .last-gateway-image .last-sqlbot-image; do
+        marker_path="$REPO_ROOT/deploy/prod/$marker"
+        if [ -f "$marker_path" ]; then
+            IMAGES+=("$(cat "$marker_path")")
+        fi
+    done
 fi
-if [ -z "$IMAGE" ]; then
-    echo "usage: $0 <image-tag>" >&2
+if [ ${#IMAGES[@]} -eq 0 ]; then
+    echo "usage: $0 <image-tag> [...]" >&2
+    echo "run build-image.sh first, or pass the tags explicitly" >&2
     exit 1
 fi
 
-docker image inspect "$IMAGE" >/dev/null
+ship_one() {
+    local image="$1"
+    local safe_name archive local_hash remote_archive remote_hash
 
-IMAGE_PLATFORM="$(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}')"
-if [ "$IMAGE_PLATFORM" != "linux/amd64" ]; then
-    echo "error: ${IMAGE} is ${IMAGE_PLATFORM}, expected linux/amd64" >&2
-    exit 1
-fi
+    docker image inspect "$image" >/dev/null
 
-SAFE_NAME="$(printf '%s' "$IMAGE" | tr '/:' '__')"
-ARCHIVE="$DIST_DIR/${SAFE_NAME}.tar.zst"
-mkdir -p "$DIST_DIR"
+    local image_platform
+    image_platform="$(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}')"
+    if [ "$image_platform" != "linux/amd64" ]; then
+        echo "error: ${image} is ${image_platform}, expected linux/amd64" >&2
+        exit 1
+    fi
 
-echo "==> saving ${IMAGE}"
-docker save "$IMAGE" | zstd -T0 -3 -f -o "$ARCHIVE"
+    safe_name="$(printf '%s' "$image" | tr '/:' '__')"
+    archive="$DIST_DIR/${safe_name}.tar.zst"
+    mkdir -p "$DIST_DIR"
 
-if command -v sha256sum >/dev/null 2>&1; then
-    LOCAL_HASH="$(sha256sum "$ARCHIVE" | awk '{print $1}')"
-else
-    LOCAL_HASH="$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
-fi
+    echo "==> saving ${image}"
+    docker save "$image" | zstd -T0 -3 -f -o "$archive"
 
-ARCHIVE_SIZE="$(du -h "$ARCHIVE" | awk '{print $1}')"
-echo "==> archive ${ARCHIVE} (${ARCHIVE_SIZE}) sha256=${LOCAL_HASH}"
+    if command -v sha256sum >/dev/null 2>&1; then
+        local_hash="$(sha256sum "$archive" | awk '{print $1}')"
+    else
+        local_hash="$(shasum -a 256 "$archive" | awk '{print $1}')"
+    fi
 
-REMOTE_ARCHIVE="${DEPLOY_DIR}/images/$(basename "$ARCHIVE")"
+    local archive_size
+    archive_size="$(du -h "$archive" | awk '{print $1}')"
+    echo "==> archive ${archive} (${archive_size}) sha256=${local_hash}"
 
-echo "==> copying to ${DEPLOY_HOST}:${DEPLOY_DIR}/images"
-ssh "$DEPLOY_HOST" "mkdir -p '${DEPLOY_DIR}/images'"
-scp "$ARCHIVE" "${DEPLOY_HOST}:${REMOTE_ARCHIVE}"
+    remote_archive="${DEPLOY_DIR}/images/$(basename "$archive")"
 
-REMOTE_HASH="$(ssh "$DEPLOY_HOST" "sha256sum '${REMOTE_ARCHIVE}' | awk '{print \$1}'")"
-if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-    echo "error: checksum mismatch (local ${LOCAL_HASH}, remote ${REMOTE_HASH})" >&2
-    exit 1
-fi
-echo "==> checksum verified"
+    echo "==> copying to ${DEPLOY_HOST}:${DEPLOY_DIR}/images"
+    ssh "$DEPLOY_HOST" "mkdir -p '${DEPLOY_DIR}/images'"
+    scp "$archive" "${DEPLOY_HOST}:${remote_archive}"
 
-echo "==> loading image on ${DEPLOY_HOST}"
-ssh "$DEPLOY_HOST" "zstd -dc '${REMOTE_ARCHIVE}' | sudo docker load"
-ssh "$DEPLOY_HOST" "sudo docker image inspect '${IMAGE}' --format 'loaded: {{.Id}} created={{.Created}}'"
+    remote_hash="$(ssh "$DEPLOY_HOST" "sha256sum '${remote_archive}' | awk '{print \$1}'")"
+    if [ "$local_hash" != "$remote_hash" ]; then
+        echo "error: checksum mismatch for ${image} (local ${local_hash}, remote ${remote_hash})" >&2
+        exit 1
+    fi
+    echo "==> checksum verified"
 
-echo "==> shipped ${IMAGE}"
+    echo "==> loading ${image} on ${DEPLOY_HOST}"
+    ssh "$DEPLOY_HOST" "zstd -dc '${remote_archive}' | sudo docker load"
+    ssh "$DEPLOY_HOST" "sudo docker image inspect '${image}' --format 'loaded: {{.Id}} created={{.Created}}'"
+
+    echo "==> shipped ${image}"
+}
+
+for image in "${IMAGES[@]}"; do
+    ship_one "$image"
+done
+
 echo "    rollback tags on the host:"
-ssh "$DEPLOY_HOST" "sudo docker image ls --format '{{.Repository}}:{{.Tag}} {{.CreatedSince}}' | grep '^langbot:' || true"
+ssh "$DEPLOY_HOST" "sudo docker image ls --format '{{.Repository}}:{{.Tag}} {{.CreatedSince}}' | grep -E '^(langbot|sqlbot|langbot-portal-gateway):' || true"

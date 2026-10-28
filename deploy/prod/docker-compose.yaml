@@ -1,9 +1,16 @@
-# Production deployment for LangBot on a single air-gapped host.
+# Production deployment for LangBot and SqlBot on a single air-gapped host.
 #
 #   cd /opt/langbot
 #   sudo docker compose --env-file .env up -d
 #
-# The image is built locally and transferred with build-image.sh/ship-image.sh;
+# portal_gateway publishes the browser-facing port (5300 by default). LangBot
+# is only reachable on loopback and SqlBot only on the compose network, so the
+# gateway is the single entry point:
+#
+#   http://<host>:5300/        -> LangBot (login, application center, WebUI)
+#   http://<host>:5300/sqlbot/ -> SqlBot (CONTEXT_PATH=/sqlbot)
+#
+# Images are built locally and transferred with build-image.sh/ship-image.sh;
 # this host never pulls from a registry. Box is intentionally not deployed.
 name: langbot
 
@@ -19,6 +26,7 @@ services:
     container_name: langbot_plugin_runtime
     command: ["uv", "run", "--no-sync", "-m", "langbot_plugin.cli.__init__", "rt"]
     restart: unless-stopped
+    pull_policy: never
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       # Shared secret for the control WebSocket. Set the same value on both
@@ -53,10 +61,11 @@ services:
   langbot:
     image: ${LANGBOT_IMAGE:?LANGBOT_IMAGE must be set in .env}
     container_name: langbot
+    restart: unless-stopped
+    pull_policy: never
     depends_on:
       langbot_plugin_runtime:
         condition: service_healthy
-    restart: unless-stopped
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN: ${LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN:-}
@@ -82,11 +91,22 @@ services:
       SYSTEM__BLOCKING_EXECUTOR__MAX_WORKERS: ${LANGBOT_BLOCKING_EXECUTOR_MAX_WORKERS:-8}
       SYSTEM__BLOCKING_EXECUTOR__MAX_PENDING: ${LANGBOT_BLOCKING_EXECUTOR_MAX_PENDING:-128}
       SYSTEM__BLOCKING_EXECUTOR__MAX_INFLIGHT_PER_SCOPE: ${LANGBOT_BLOCKING_EXECUTOR_MAX_INFLIGHT_PER_SCOPE:-4}
+      # Application center. Enable only after the gateway and SqlBot are
+      # healthy; the flags can be rolled back independently.
+      SYSTEM__PORTAL__ENABLED: ${PORTAL_ENABLED:-false}
+      SYSTEM__PORTAL__SQLBOT_ENABLED: ${PORTAL_SQLBOT_ENABLED:-false}
+      SYSTEM__PORTAL__PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      SQLBOT__BASE_URL: ${SQLBOT_BASE_URL:-http://sqlbot:8000}
+      SQLBOT__CONTEXT_PATH: ${SQLBOT_CONTEXT_PATH:-/sqlbot}
+      SQLBOT__SSO__ENABLED: ${SQLBOT_SSO_ENABLED:-false}
+      # Must match LANGBOT_SSO_SHARED_SECRET on the sqlbot service.
+      SQLBOT__SSO__SHARED_SECRET: ${SQLBOT_SSO_SHARED_SECRET:-}
     volumes:
       # config.yaml, SQLite, Chroma, uploads and logs all live here.
       - ${LANGBOT_DATA_DIR:-./data}:/app/data
     ports:
-      - "${LANGBOT_HTTP_PORT:-5300}:5300"
+      # Loopback only: browsers go through portal_gateway.
+      - "127.0.0.1:${LANGBOT_INTERNAL_PORT:-5301}:5300"
       # Platform reverse-connection range kept for adapters that need it.
       - "2280-2285:2280-2285"
     healthcheck:
@@ -96,6 +116,77 @@ services:
       retries: 3
       # First start runs Alembic migrations and can be slow on cold storage.
       start_period: 120s
+    logging: *default-logging
+    networks:
+      - langbot_network
+
+  sqlbot:
+    image: ${SQLBOT_IMAGE:?SQLBOT_IMAGE must be set in .env}
+    container_name: sqlbot
+    restart: unless-stopped
+    pull_policy: never
+    # The vendor image runs its embedded PostgreSQL under supervisor and ships
+    # this flag in its own compose file; keep parity with the supported setup.
+    privileged: true
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      PROJECT_NAME: SQLBot
+      POSTGRES_SERVER: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: sqlbot
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: ${SQLBOT_POSTGRES_PASSWORD:?SQLBOT_POSTGRES_PASSWORD must be set in .env}
+      SECRET_KEY: ${SQLBOT_SECRET_KEY:?SQLBOT_SECRET_KEY must be set in .env}
+      DEFAULT_PWD: ${SQLBOT_DEFAULT_PWD:-}
+      # Must match SQLBOT__CONTEXT_PATH on the langbot service. The gateway
+      # forwards /sqlbot/ with the prefix intact.
+      CONTEXT_PATH: ${SQLBOT_CONTEXT_PATH:-/sqlbot}
+      SQLBOT_DOC_ENABLED: "false"
+      LOG_LEVEL: ${SQLBOT_LOG_LEVEL:-INFO}
+      SQL_DEBUG: "False"
+      # LangBot server-to-server handoff. The ticket endpoints require a
+      # single worker, which start.sh already enforces.
+      LANGBOT_SSO_ENABLED: "true"
+      LANGBOT_SSO_SHARED_SECRET: ${SQLBOT_SSO_SHARED_SECRET:?SQLBOT_SSO_SHARED_SECRET must be set in .env}
+      LANGBOT_SSO_TICKET_TTL_SECONDS: ${SQLBOT_SSO_TICKET_TTL_SECONDS:-60}
+      LANGBOT_SSO_TOKEN_TTL_MINUTES: ${SQLBOT_SSO_TOKEN_TTL_MINUTES:-480}
+      LANGBOT_SSO_DEFAULT_WORKSPACE_ID: ${SQLBOT_SSO_DEFAULT_WORKSPACE_ID:-1}
+    volumes:
+      - ${SQLBOT_DATA_DIR:-./sqlbot-data}/excel:/opt/sqlbot/data/excel
+      - ${SQLBOT_DATA_DIR:-./sqlbot-data}/file:/opt/sqlbot/data/file
+      - ${SQLBOT_DATA_DIR:-./sqlbot-data}/images:/opt/sqlbot/images
+      - ${SQLBOT_DATA_DIR:-./sqlbot-data}/logs:/opt/sqlbot/app/logs
+      - ${SQLBOT_DATA_DIR:-./sqlbot-data}/postgresql:/var/lib/postgresql/data
+    healthcheck:
+      # Checks the SPA mount point, not just the process.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/sqlbot/', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # First start initializes PostgreSQL and runs migrations.
+      start_period: 180s
+    logging: *default-logging
+    networks:
+      - langbot_network
+
+  portal_gateway:
+    image: ${PORTAL_GATEWAY_IMAGE:?PORTAL_GATEWAY_IMAGE must be set in .env}
+    container_name: portal_gateway
+    restart: unless-stopped
+    pull_policy: never
+    depends_on:
+      langbot:
+        condition: service_healthy
+      sqlbot:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_HTTP_PORT:-5300}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/gateway-healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging: *default-logging
     networks:
       - langbot_network
