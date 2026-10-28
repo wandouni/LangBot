@@ -40,13 +40,48 @@ def _is_valid_uuid(s: str) -> bool:
     return bool(re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', s))
 
 
+_QUICK_QUESTIONS_MAX_ITEMS = 12
+_QUICK_QUESTION_MAX_LENGTH = 200
+_QUICK_QUESTIONS_MAX_RAW_CHARS = 20_000
+
+
+def _parse_quick_questions(raw) -> list[str]:
+    """Normalize the admin-configured newline-separated quick questions."""
+    if not isinstance(raw, str):
+        return []
+
+    questions: list[str] = []
+    seen: set[str] = set()
+
+    # The field is admin-controlled, but bound the per-request work anyway.
+    for line in raw[:_QUICK_QUESTIONS_MAX_RAW_CHARS].splitlines():
+        question = line.strip()
+        if not question:
+            continue
+        if len(question) > _QUICK_QUESTION_MAX_LENGTH:
+            question = question[:_QUICK_QUESTION_MAX_LENGTH].rstrip()
+        if not question or question in seen:
+            continue
+        seen.add(question)
+        questions.append(question)
+        if len(questions) >= _QUICK_QUESTIONS_MAX_ITEMS:
+            break
+
+    return questions
+
+
 def _get_client_ip() -> str:
-    """Return the visitor IP exactly as the existing operation log does."""
+    """Return the visitor IP for the active embed WebSocket connection.
+
+    WebSocket handlers run in a WebSocket context, so ``quart.request`` is not
+    available here; reading it through the request proxy would raise and the
+    collector would store no IP at all.
+    """
     try:
-        forwarded = quart.request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        forwarded = quart.websocket.headers.get('X-Forwarded-For', '').split(',')[0].strip()
         if forwarded:
             return forwarded[:64]
-        return str(quart.request.remote_addr or '')[:64]
+        return str(quart.websocket.remote_addr or '')[:64]
     except Exception:
         return ''
 
@@ -224,11 +259,20 @@ class EmbedRouterGroup(group.RouterGroup):
             site_key = config.get('turnstile_site_key', '')
             locale = config.get('language', 'en_US') or 'en_US'
             bubble_icon = config.get('bubble_icon', 'logo') or 'logo'
+            quick_questions = _parse_quick_questions(config.get('quick_questions', ''))
+            # ensure_ascii=True also escapes U+2028/U+2029; "<" is escaped so a
+            # question such as "</script>" can never terminate an inline script.
+            quick_questions_json = json.dumps(quick_questions, ensure_ascii=True).replace('<', '\\u003c')
+
             widget_js = template.replace('__LANGBOT_TURNSTILE_SITE_KEY__', site_key)
             widget_js = widget_js.replace('__LANGBOT_BOT_UUID__', bot_uuid)
             widget_js = widget_js.replace('__LANGBOT_BASE_URL__', base_url)
             widget_js = widget_js.replace('__LANGBOT_LOCALE__', locale)
             widget_js = widget_js.replace('__LANGBOT_BUBBLE_ICON__', bubble_icon)
+            # Inject the array last so question text containing other
+            # __LANGBOT_* tokens cannot be rewritten by the replacements above.
+            widget_js = widget_js.replace('"__LANGBOT_QUICK_QUESTIONS__"', quick_questions_json)
+            widget_js = widget_js.replace("'__LANGBOT_QUICK_QUESTIONS__'", quick_questions_json)
 
             response = quart.Response(widget_js, content_type='application/javascript; charset=utf-8')
             response.headers['Cache-Control'] = 'public, max-age=300'

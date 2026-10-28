@@ -18,6 +18,7 @@
   var I18N = {
     en_US: {
       welcomeMessage: "Send a message to start the conversation",
+      quickQuestions: "Suggested questions",
       inputPlaceholder: "Type a message...",
       openChat: "Open chat",
       resetConversation: "Reset conversation",
@@ -35,6 +36,7 @@
     },
     zh_Hans: {
       welcomeMessage: "发送消息开始对话",
+      quickQuestions: "快捷提问",
       inputPlaceholder: "输入消息...",
       openChat: "打开聊天",
       resetConversation: "重置对话",
@@ -52,6 +54,7 @@
     },
     zh_Hant: {
       welcomeMessage: "傳送訊息開始對話",
+      quickQuestions: "快捷提問",
       inputPlaceholder: "輸入訊息...",
       openChat: "開啟聊天",
       resetConversation: "重置對話",
@@ -69,6 +72,7 @@
     },
     ja_JP: {
       welcomeMessage: "メッセージを送信して会話を始めましょう",
+      quickQuestions: "質問候補",
       inputPlaceholder: "メッセージを入力...",
       openChat: "チャットを開く",
       resetConversation: "会話をリセット",
@@ -86,6 +90,7 @@
     },
     es_ES: {
       welcomeMessage: "Envía un mensaje para iniciar la conversación",
+      quickQuestions: "Preguntas sugeridas",
       inputPlaceholder: "Escribe un mensaje...",
       openChat: "Abrir chat",
       resetConversation: "Reiniciar conversación",
@@ -103,6 +108,7 @@
     },
     ru_RU: {
       welcomeMessage: "Отправьте сообщение, чтобы начать разговор",
+      quickQuestions: "Быстрые вопросы",
       inputPlaceholder: "Введите сообщение...",
       openChat: "Открыть чат",
       resetConversation: "Сбросить разговор",
@@ -120,6 +126,7 @@
     },
     th_TH: {
       welcomeMessage: "ส่งข้อความเพื่อเริ่มการสนทนา",
+      quickQuestions: "คำถามที่แนะนำ",
       inputPlaceholder: "พิมพ์ข้อความ...",
       openChat: "เปิดแชท",
       resetConversation: "รีเซ็ตการสนทนา",
@@ -137,6 +144,7 @@
     },
     vi_VN: {
       welcomeMessage: "Gửi tin nhắn để bắt đầu cuộc trò chuyện",
+      quickQuestions: "Câu hỏi gợi ý",
       inputPlaceholder: "Nhập tin nhắn...",
       openChat: "Mở trò chuyện",
       resetConversation: "Đặt lại cuộc trò chuyện",
@@ -172,7 +180,26 @@
     heartbeatInterval: 30000,
     turnstileSiteKey: "__LANGBOT_TURNSTILE_SITE_KEY__",
     bubbleIcon: "__LANGBOT_BUBBLE_ICON__",
+    // JSON array injected by the backend; the quoted placeholder keeps the
+    // template valid JavaScript before substitution (used by the unit tests).
+    quickQuestions: "__LANGBOT_QUICK_QUESTIONS__",
   };
+
+  var MAX_QUICK_QUESTIONS = 12;
+
+  function normalizeQuickQuestions(raw) {
+    if (!Array.isArray(raw)) return [];
+    var result = [];
+    for (var i = 0; i < raw.length && result.length < MAX_QUICK_QUESTIONS; i++) {
+      if (typeof raw[i] !== "string") continue;
+      var question = raw[i].trim();
+      if (!question || result.indexOf(question) !== -1) continue;
+      result.push(question);
+    }
+    return result;
+  }
+
+  var QUICK_QUESTIONS = normalizeQuickQuestions(CONFIG.quickQuestions);
 
   // Wizard previews must use the browser-visible backend URL. Behind a TLS
   // proxy the server's request URL can be HTTP even when widget.js uses HTTPS.
@@ -271,6 +298,13 @@
     @keyframes lb-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }\
     .lb-welcome { text-align: center; color: #9ca3af; padding: 40px 20px; font-size: 14px; }\
     .lb-welcome-logo { width: 48px; height: 48px; border-radius: 12px; margin: 0 auto 12px; }\
+    .lb-quick-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px; }\
+    .lb-quick-dock { display: none; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 8px 16px 0; overflow-x: auto; overflow-y: hidden; flex-shrink: 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }\
+    .lb-quick-dock::-webkit-scrollbar { display: none; }\
+    .lb-quick-btn { display: inline-block; max-width: 100%; padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; color: #374151; font-family: inherit; font-size: 13px; line-height: 1.3; text-align: left; cursor: pointer; white-space: normal; word-break: break-word; overflow-wrap: anywhere; transition: background 0.15s, border-color 0.15s, color 0.15s; }\
+    .lb-quick-btn:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }\
+    .lb-quick-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }\
+    .lb-quick-dock .lb-quick-btn { flex: 0 0 auto; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\
     .lb-input-area { display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e7eb; background: #fff; flex-shrink: 0; }\
     .lb-input { flex: 1; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-family: inherit; line-height: 1.4; resize: none; outline: none; max-height: 120px; min-height: 40px; transition: border-color 0.15s; overflow-y: auto; }\
     .lb-input:focus { border-color: #2563eb; }\
@@ -823,6 +857,7 @@
       els.welcome.style.display = "none";
     }
     els.messages.appendChild(el);
+    updateQuickQuestionsDock();
     if (!silent) scrollToBottom();
   }
 
@@ -1002,17 +1037,61 @@
     while (els.messages.firstChild) {
       els.messages.removeChild(els.messages.firstChild);
     }
+    els.welcome = null;
 
     // Re-add welcome if no messages
     if (state.messages.length === 0) {
       els.messages.appendChild(createWelcomeEl());
+      updateQuickQuestionsDock();
       return;
     }
 
     for (var i = 0; i < state.messages.length; i++) {
       els.messages.appendChild(createMessageEl(state.messages[i]));
     }
+    updateQuickQuestionsDock();
     scrollToBottom();
+  }
+
+  function fillInput(text) {
+    if (!els.input) return;
+    els.input.value = text;
+    autoResizeInput();
+    if (typeof els.input.focus === "function") els.input.focus();
+    if (typeof els.input.setSelectionRange === "function") {
+      try {
+        els.input.setSelectionRange(text.length, text.length);
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  function createQuickQuestionButtons(mode) {
+    if (!QUICK_QUESTIONS.length) return null;
+    var wrap = document.createElement("div");
+    wrap.className = mode === "dock" ? "lb-quick-dock" : "lb-quick-questions";
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", t("quickQuestions"));
+    for (var i = 0; i < QUICK_QUESTIONS.length; i++) {
+      (function (question) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lb-quick-btn";
+        btn.textContent = question;
+        btn.title = question;
+        btn.addEventListener("click", function () {
+          fillInput(question);
+        });
+        wrap.appendChild(btn);
+      })(QUICK_QUESTIONS[i]);
+    }
+    return wrap;
+  }
+
+  function updateQuickQuestionsDock() {
+    if (!els.quickDock) return;
+    els.quickDock.style.display = state.messages.length > 0 ? "flex" : "none";
   }
 
   function createWelcomeEl() {
@@ -1030,6 +1109,10 @@
 
     div.appendChild(logo);
     div.appendChild(text);
+
+    var quick = createQuickQuestionButtons("welcome");
+    if (quick) div.appendChild(quick);
+
     return div;
   }
 
@@ -1190,8 +1273,12 @@
   }
 
   function autoResizeInput() {
+    if (!els.input) return;
     els.input.style.height = "auto";
-    els.input.style.height = Math.min(els.input.scrollHeight, 120) + "px";
+    var height = els.input.scrollHeight;
+    if (typeof height === "number" && isFinite(height)) {
+      els.input.style.height = Math.min(height, 120) + "px";
+    }
   }
 
   function handleImageSelect(e) {
@@ -1423,7 +1510,14 @@
     footer.innerHTML = t("poweredBy");
     panel.appendChild(footer);
 
+    var quickDock = createQuickQuestionButtons("dock");
+    if (quickDock) {
+      els.quickDock = quickDock;
+      panel.appendChild(quickDock);
+    }
+
     panel.appendChild(inputArea);
+    updateQuickQuestionsDock();
 
     shadow.appendChild(panel);
 

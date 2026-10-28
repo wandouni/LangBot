@@ -40,6 +40,19 @@ class FakeElement {
     this.listeners.click?.({});
   }
 
+  focus() {
+    this.focused = true;
+  }
+
+  setSelectionRange(start, end) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
+
+  get scrollHeight() {
+    return 40;
+  }
+
   attachShadow() {
     this.shadowRoot = new FakeElement('shadow-root');
     return this.shadowRoot;
@@ -119,13 +132,16 @@ class FakeWebSocket {
   constructor(url) {
     this.url = url;
     this.readyState = FakeWebSocket.OPEN;
+    this.sent = [];
     FakeWebSocket.instances.push(this);
   }
 
-  send() {}
+  send(payload) {
+    this.sent.push(payload);
+  }
 }
 
-function launchWidget() {
+function launchWidget(options = {}) {
   FakeWebSocket.instances = [];
   const document = new FakeDocument();
   const window = {
@@ -147,7 +163,15 @@ function launchWidget() {
     clearInterval: () => {},
   });
 
-  vm.runInContext(widgetSource, context, { filename: widgetPath });
+  const source =
+    options.quickQuestions === undefined
+      ? widgetSource
+      : widgetSource.replace(
+          '"__LANGBOT_QUICK_QUESTIONS__"',
+          JSON.stringify(options.quickQuestions),
+        );
+
+  vm.runInContext(source, context, { filename: widgetPath });
   const root = document.getElementById('langbot-widget-root');
   assert.ok(root, 'widget should initialize');
   root.shadowRoot.querySelector('.lb-bubble').click();
@@ -155,6 +179,8 @@ function launchWidget() {
   assert.ok(socket, 'opening widget should connect its WebSocket');
 
   return {
+    root,
+    socket,
     receive(message) {
       socket.onmessage({
         data: JSON.stringify({ type: 'response', data: message }),
@@ -200,4 +226,58 @@ test('still keeps two distinct non-empty assistant frames', () => {
   widget.receive(assistant('answer-2', 'second answer'));
 
   assert.equal(widget.assistantMessages().length, 2);
+});
+
+test('renders configured quick questions under the welcome message', () => {
+  const widget = launchWidget({
+    quickQuestions: ['How do I start?', 'Pricing?'],
+  });
+
+  const welcome = widget.root.shadowRoot.querySelector('.lb-welcome');
+  assert.equal(welcome.querySelectorAll('.lb-quick-btn').length, 2);
+
+  const dock = widget.root.shadowRoot.querySelector('.lb-quick-dock');
+  assert.ok(dock, 'a dock is created when questions are configured');
+  assert.equal(dock.style.display, 'none');
+});
+
+test('clicking a quick question fills the input without sending', () => {
+  const widget = launchWidget({ quickQuestions: ['How do I start?'] });
+
+  const input = widget.root.shadowRoot.querySelector('.lb-input');
+  const button = widget.root.shadowRoot.querySelector('.lb-quick-btn');
+  button.click();
+
+  assert.equal(input.value, 'How do I start?');
+  assert.equal(input.focused, true);
+  assert.equal(input.selectionStart, 'How do I start?'.length);
+  assert.equal(input.selectionEnd, 'How do I start?'.length);
+  assert.equal(
+    widget.socket.sent.filter((payload) =>
+      String(payload).includes('"type":"message"'),
+    ).length,
+    0,
+  );
+});
+
+test('shows the dock and hides the welcome after the conversation starts', () => {
+  const widget = launchWidget({ quickQuestions: ['Q1', 'Q2'] });
+
+  widget.receive(assistant('a1', 'hello'));
+
+  const welcome = widget.root.shadowRoot.querySelector('.lb-welcome');
+  const dock = widget.root.shadowRoot.querySelector('.lb-quick-dock');
+  assert.equal(welcome.style.display, 'none');
+  assert.equal(dock.style.display, 'flex');
+  assert.equal(dock.querySelectorAll('.lb-quick-btn').length, 2);
+});
+
+test('does not render quick questions when none are configured', () => {
+  const widget = launchWidget();
+
+  assert.equal(
+    widget.root.shadowRoot.querySelectorAll('.lb-quick-btn').length,
+    0,
+  );
+  assert.equal(widget.root.shadowRoot.querySelector('.lb-quick-dock'), null);
 });

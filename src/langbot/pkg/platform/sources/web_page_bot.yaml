@@ -131,6 +131,28 @@ spec:
         - name: "vi_VN"
           label:
             en_US: "Tiếng Việt"
+    - name: quick_questions
+      label:
+        en_US: "Quick Questions"
+        zh_Hans: "快捷提问"
+        zh_Hant: "快捷提問"
+        ja_JP: "質問候補"
+        es_ES: "Preguntas rápidas"
+        ru_RU: "Быстрые вопросы"
+        th_TH: "คำถามด่วน"
+        vi_VN: "Câu hỏi nhanh"
+      description:
+        en_US: "Suggested questions shown below the welcome message and above the input box. Enter one question per line; up to 12 questions, each up to 200 characters. Visitors click one to fill the input box."
+        zh_Hans: "显示在欢迎语下方和输入框上方的快捷提问。每行一个问题，最多 12 个，每行最多 200 个字符。访客点击后填入输入框。"
+        zh_Hant: "顯示在歡迎語下方和輸入框上方的快捷提問。每行一個問題，最多 12 個，每行最多 200 個字元。訪客點擊後填入輸入框。"
+        ja_JP: "ウェルカムメッセージの下と入力欄の上に表示する質問候補です。1行に1つ、最大12件まで入力できます（各行200文字まで）。クリックすると入力欄に反映されます。"
+        es_ES: "Preguntas sugeridas que se muestran bajo el mensaje de bienvenida y sobre el cuadro de entrada. Escribe una pregunta por línea (máximo 12; hasta 200 caracteres por línea). Al hacer clic se rellena el cuadro de entrada."
+        ru_RU: "Быстрые вопросы отображаются под приветствием и над полем ввода. Введите по одному вопросу в строке (до 12 вопросов; до 200 символов в каждой строке). При нажатии вопрос подставляется в поле ввода."
+        th_TH: "คำถามด่วนที่แสดงใต้ข้อความต้อนรับและเหนือช่องป้อนข้อความ ป้อนหนึ่งคำถามต่อบรรทัด (สูงสุด 12 คำถาม และไม่เกิน 200 ตัวอักษรต่อบรรทัด) คลิกเพื่อเติมลงในช่องป้อนข้อความ"
+        vi_VN: "Câu hỏi nhanh hiển thị bên dưới lời chào và phía trên ô nhập. Nhập mỗi dòng một câu hỏi (tối đa 12 câu; tối đa 200 ký tự mỗi dòng). Nhấp để điền vào ô nhập."
+      type: text
+      required: false
+      default: ""
     - name: embed_code
       label:
         en_US: Embed Code
