@@ -749,6 +749,13 @@ const MCPForm = forwardRef<MCPFormHandle, MCPFormProps>(function MCPForm(
           server.extra_args.tool_call_timeout_sec;
       }
 
+      if (
+        'ssereadtimeout' in server.extra_args &&
+        typeof server.extra_args.ssereadtimeout === 'number'
+      ) {
+        formValues.ssereadtimeout = server.extra_args.ssereadtimeout;
+      }
+
       let newExtraArgs: {
         key: string;
         type: 'string' | 'number' | 'boolean';
@@ -833,6 +840,7 @@ const MCPForm = forwardRef<MCPFormHandle, MCPFormProps>(function MCPForm(
             url: value.url!,
             headers,
             timeout: value.timeout,
+            ssereadtimeout: value.ssereadtimeout,
             tool_call_timeout_sec: value.tool_call_timeout_sec,
           },
         };

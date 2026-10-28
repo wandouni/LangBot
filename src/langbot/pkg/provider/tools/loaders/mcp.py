@@ -19,6 +19,7 @@ import sqlalchemy
 import asyncio
 import hashlib
 import httpx
+import anyio
 
 import uuid as uuid_module
 from mcp import ClientSession, StdioServerParameters, types as mcp_types
@@ -458,7 +459,7 @@ class RuntimeMCPSession:
                 self.server_config['url'],
                 headers=self.server_config.get('headers', {}),
                 timeout=self.server_config.get('timeout', 10),
-                sse_read_timeout=self.server_config.get('ssereadtimeout', 30),
+                sse_read_timeout=self.server_config.get('ssereadtimeout', 300),
                 httpx_client_factory=httpx_client_factory,
             )
         )
@@ -557,31 +558,38 @@ class RuntimeMCPSession:
     _MAX_RETRIES = 3
     _RETRY_DELAYS = [2, 4, 8]
 
-    async def _lifecycle_loop(self):
-        """Manage the full MCP session lifecycle in a background task."""
+    async def _lifecycle_loop(self, *, skip_init: bool = False):
+        """Manage the full MCP session lifecycle in a background task.
+
+        ``skip_init`` is used after a caller-driven reconnect: that path has
+        already rebuilt and refreshed the session, so this loop must only wait
+        on it. Re-initializing here would open a second transport and then tear
+        the healthy one down during the remote-mode fallback cleanup.
+        """
         wait_tasks: list[asyncio.Task] = []
         try:
-            await self._assert_execution_active()
-            if self.server_config['mode'] == 'stdio':
-                await self._init_stdio_python_server()
-            elif self.server_config['mode'] == 'remote':
-                await self._init_remote_server()
-            elif self.server_config['mode'] == 'sse':
-                await self._init_sse_server()
-            elif self.server_config['mode'] == 'http':
-                await self._init_streamable_http_server()
-            else:
-                raise ValueError(f'Unknown MCP server mode for {self.server_name}')
+            if not skip_init:
+                await self._assert_execution_active()
+                if self.server_config['mode'] == 'stdio':
+                    await self._init_stdio_python_server()
+                elif self.server_config['mode'] == 'remote':
+                    await self._init_remote_server()
+                elif self.server_config['mode'] == 'sse':
+                    await self._init_sse_server()
+                elif self.server_config['mode'] == 'http':
+                    await self._init_streamable_http_server()
+                else:
+                    raise ValueError(f'Unknown MCP server mode for {self.server_name}')
 
-            await self._assert_execution_active()
-            await self.refresh()
-            await self._assert_execution_active()
+                await self._assert_execution_active()
+                await self.refresh()
+                await self._assert_execution_active()
 
-            self.status = MCPSessionStatus.CONNECTED
-            self._connection_generation += 1
+                self.status = MCPSessionStatus.CONNECTED
+                self._connection_generation += 1
 
-            # Notify start() that connection is established
-            self._ready_event.set()
+                # Notify start() that connection is established
+                self._ready_event.set()
 
             # Wait for shutdown signal, with optional health monitoring for Box stdio
             if self._uses_box_stdio():
@@ -671,10 +679,12 @@ class RuntimeMCPSession:
     async def _lifecycle_loop_with_retry(self):
         """Wrap _lifecycle_loop with retry and exponential backoff."""
         attempt = 0
+        skip_init = False
         while attempt <= self._MAX_RETRIES:
             connection_generation_before = self._connection_generation
             try:
-                lifecycle_task = asyncio.create_task(self._lifecycle_loop())
+                lifecycle_task = asyncio.create_task(self._lifecycle_loop(skip_init=skip_init))
+                skip_init = False
                 try:
                     await lifecycle_task
                 except asyncio.CancelledError as exc:
@@ -734,6 +744,11 @@ class RuntimeMCPSession:
                     await self.refresh()
                     await self._assert_execution_active()
                     self.status = MCPSessionStatus.CONNECTED
+                    self._connection_generation += 1
+                    self._ready_event.set()
+                    # The session is already rebuilt; the next lifecycle pass
+                    # must wait on it instead of initializing a second transport.
+                    skip_init = True
                     self.ap.logger.info(f'MCP session {self.server_name} reconnected successfully after session expiry')
                 except WorkspaceError as reconnect_err:
                     self._stop_for_stale_execution(reconnect_err)
@@ -977,13 +992,24 @@ class RuntimeMCPSession:
 
     @staticmethod
     def _is_session_terminated(exc: BaseException) -> bool:
-        """Whether exc indicates the server-side session expired.
+        """Whether exc indicates the server-side session is no longer usable.
 
         Long-lived MCP servers (notably UDP/HTTP transports) commonly enforce
         their own session timeout (e.g. ~30 minutes); once it fires, any call
         on the cached session raises this rather than a transport-level error.
+
+        Legacy SSE sessions also die when the read stream is closed, either by
+        the server or by a client-side read timeout. The SDK then surfaces
+        ``McpError(CONNECTION_CLOSED, 'Connection closed')`` or an anyio
+        ``ClosedResourceError`` from the memory streams; both are terminal for
+        the cached session and require a reconnect just like an explicit
+        session-expiry error.
         """
         for leaf in RuntimeMCPSession._iter_exception_leaves(exc):
+            if isinstance(leaf, (anyio.ClosedResourceError, anyio.BrokenResourceError)):
+                return True
+            if isinstance(leaf, McpError) and leaf.error.code == mcp_types.CONNECTION_CLOSED:
+                return True
             msg = str(leaf).lower()
             if 'session terminated' in msg or 'session expired' in msg:
                 return True

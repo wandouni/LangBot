@@ -846,7 +846,7 @@ class TestGetRuntimeInfoDict:
         )
         attempts = 0
 
-        async def lifecycle():
+        async def lifecycle(*, skip_init: bool = False):
             nonlocal attempts
             attempts += 1
             if attempts == 1:
@@ -881,7 +881,7 @@ class TestGetRuntimeInfoDict:
         )
         attempts = 0
 
-        async def lifecycle():
+        async def lifecycle(*, skip_init: bool = False):
             nonlocal attempts
             attempts += 1
             session.error_phase = mcp_module.MCPSessionErrorPhase.BOX_UNAVAILABLE

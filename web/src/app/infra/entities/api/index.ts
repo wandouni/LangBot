@@ -808,6 +808,7 @@ export interface MCPServerExtraArgsRemote {
   url: string;
   headers?: Record<string, string>;
   timeout?: number;
+  ssereadtimeout?: number;
   tool_call_timeout_sec?: number;
 }
 
