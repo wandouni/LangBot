@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "無法啟動 ChatGPT 裝置登入。請在 ChatGPT 設定中啟用裝置代碼登入。",
   "Option {number}": "選項 {number}",
   "Confirmation needed": "需要確認",
-  "Session reset successfully": "對話已重設"
+  "Session reset successfully": "對話已重設",
+  "MCP import entry for {name} must be an object": "MCP 匯入項目 {name} 必須是物件",
+  "MCP import only supports remote servers (sse/http), got {type}": "MCP 匯入僅支援遠端伺服器（sse/http），收到類型 {type}",
+  "MCP import only supports remote servers (sse/http)": "MCP 匯入僅支援遠端伺服器（sse/http）",
+  "MCP import entry for {name} is missing a url": "MCP 匯入項目 {name} 缺少 url",
+  "MCP import entry for {name} must use an http(s) url": "MCP 匯入項目 {name} 必須使用 http(s) URL",
+  "MCP import url for {name} must not contain credentials": "MCP 匯入項目 {name} 的 URL 不能包含使用者名稱或密碼",
+  "MCP import headers for {name} must be an object": "MCP 匯入項目 {name} 的 headers 必須是物件",
+  "MCP import headers for {name} exceed {limit} entries": "MCP 匯入項目 {name} 的 headers 超過 {limit} 項",
+  "MCP import header name for {name} is invalid": "MCP 匯入項目 {name} 的 Header 名稱無效",
+  "MCP import header value for {name} is invalid": "MCP 匯入項目 {name} 的 Header 值無效",
+  "MCP import config must be an object": "MCP 匯入設定必須是物件",
+  "MCP import config contains no mcpServers": "MCP 匯入設定不包含 mcpServers",
+  "MCP import supports at most {limit} servers": "MCP 匯入最多支援 {limit} 個伺服器",
+  "MCP import config must contain mcpServers or a single server url": "MCP 匯入設定必須包含 mcpServers 或單一伺服器 url",
+  "Invalid JSON body": "請求內容不是有效的 JSON"
 }

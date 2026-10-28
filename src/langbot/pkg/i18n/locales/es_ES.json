@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "No se pudo iniciar el acceso por dispositivo. Activa el inicio de sesión con código de dispositivo en la configuración de ChatGPT.",
   "Option {number}": "Opción {number}",
   "Confirmation needed": "Se requiere confirmación",
-  "Session reset successfully": "Sesión restablecida"
+  "Session reset successfully": "Sesión restablecida",
+  "MCP import entry for {name} must be an object": "La entrada de importación MCP {name} debe ser un objeto",
+  "MCP import only supports remote servers (sse/http), got {type}": "La importación MCP solo admite servidores remotos (sse/http); se recibió el tipo {type}",
+  "MCP import only supports remote servers (sse/http)": "La importación MCP solo admite servidores remotos (sse/http)",
+  "MCP import entry for {name} is missing a url": "La entrada de importación MCP {name} no tiene url",
+  "MCP import entry for {name} must use an http(s) url": "La entrada de importación MCP {name} debe usar una URL http(s)",
+  "MCP import url for {name} must not contain credentials": "La URL de importación MCP de {name} no debe contener credenciales",
+  "MCP import headers for {name} must be an object": "Los headers de importación MCP de {name} deben ser un objeto",
+  "MCP import headers for {name} exceed {limit} entries": "Los headers de importación MCP de {name} superan las {limit} entradas",
+  "MCP import header name for {name} is invalid": "El nombre de header de importación MCP de {name} no es válido",
+  "MCP import header value for {name} is invalid": "El valor de header de importación MCP de {name} no es válido",
+  "MCP import config must be an object": "La configuración de importación MCP debe ser un objeto",
+  "MCP import config contains no mcpServers": "La configuración de importación MCP no contiene mcpServers",
+  "MCP import supports at most {limit} servers": "La importación MCP admite como máximo {limit} servidores",
+  "MCP import config must contain mcpServers or a single server url": "La configuración de importación MCP debe contener mcpServers o la url de un único servidor",
+  "Invalid JSON body": "El cuerpo de la solicitud no es un JSON válido"
 }

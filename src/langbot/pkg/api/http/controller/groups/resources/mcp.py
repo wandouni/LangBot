@@ -3,6 +3,7 @@ from __future__ import annotations
 import quart
 from urllib.parse import unquote
 
+from ......i18n import t
 from ....authz import Permission
 from ....context import RequestContext
 from ......operation_trace import service as settings_service
@@ -13,6 +14,25 @@ from ... import group
 @group.group_class('mcp', '/api/v1/mcp')
 class MCPRouterGroup(group.RouterGroup):
     async def initialize(self) -> None:
+        @self.route(
+            '/import',
+            methods=['POST'],
+            auth_type=group.AuthType.USER_TOKEN_OR_API_KEY,
+            permission=Permission.RESOURCE_MANAGE,
+        )
+        async def _(request_context: RequestContext) -> str:
+            try:
+                data = await quart.request.get_json()
+            except Exception:
+                return self.http_status(400, -1, t('Invalid JSON body'))
+            try:
+                result = await self.ap.mcp_service.import_mcp_servers(request_context, data)
+            except MCPStdioDisabledError as exc:
+                return self.http_status(403, exc.code, str(exc))
+            except ValueError as exc:
+                return self.http_status(400, -1, str(exc))
+            return self.success(data=result)
+
         @self.route(
             '/servers',
             methods=['GET'],

@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "Не удалось начать вход с устройства. Включите вход по коду устройства в настройках ChatGPT.",
   "Option {number}": "Вариант {number}",
   "Confirmation needed": "Требуется подтверждение",
-  "Session reset successfully": "Сессия сброшена"
+  "Session reset successfully": "Сессия сброшена",
+  "MCP import entry for {name} must be an object": "Элемент импорта MCP {name} должен быть объектом",
+  "MCP import only supports remote servers (sse/http), got {type}": "Импорт MCP поддерживает только удалённые серверы (sse/http), получен тип {type}",
+  "MCP import only supports remote servers (sse/http)": "Импорт MCP поддерживает только удалённые серверы (sse/http)",
+  "MCP import entry for {name} is missing a url": "В элементе импорта MCP {name} отсутствует url",
+  "MCP import entry for {name} must use an http(s) url": "Элемент импорта MCP {name} должен использовать URL http(s)",
+  "MCP import url for {name} must not contain credentials": "URL импорта MCP для {name} не должен содержать учётные данные",
+  "MCP import headers for {name} must be an object": "Headers импорта MCP для {name} должны быть объектом",
+  "MCP import headers for {name} exceed {limit} entries": "Headers импорта MCP для {name} превышают {limit} записей",
+  "MCP import header name for {name} is invalid": "Имя заголовка импорта MCP для {name} недопустимо",
+  "MCP import header value for {name} is invalid": "Значение заголовка импорта MCP для {name} недопустимо",
+  "MCP import config must be an object": "Конфигурация импорта MCP должна быть объектом",
+  "MCP import config contains no mcpServers": "Конфигурация импорта MCP не содержит mcpServers",
+  "MCP import supports at most {limit} servers": "Импорт MCP поддерживает не более {limit} серверов",
+  "MCP import config must contain mcpServers or a single server url": "Конфигурация импорта MCP должна содержать mcpServers или url одного сервера",
+  "Invalid JSON body": "Тело запроса не является допустимым JSON"
 }

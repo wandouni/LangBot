@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "ChatGPT のデバイスログインを開始できません。ChatGPT の設定でデバイスコードログインを有効にしてください。",
   "Option {number}": "選択肢 {number}",
   "Confirmation needed": "確認が必要です",
-  "Session reset successfully": "セッションをリセットしました"
+  "Session reset successfully": "セッションをリセットしました",
+  "MCP import entry for {name} must be an object": "MCP インポート項目 {name} はオブジェクトである必要があります",
+  "MCP import only supports remote servers (sse/http), got {type}": "MCP インポートはリモートサーバー（sse/http）のみに対応しています。受信した type: {type}",
+  "MCP import only supports remote servers (sse/http)": "MCP インポートはリモートサーバー（sse/http）のみに対応しています",
+  "MCP import entry for {name} is missing a url": "MCP インポート項目 {name} に url がありません",
+  "MCP import entry for {name} must use an http(s) url": "MCP インポート項目 {name} は http(s) URL を使用する必要があります",
+  "MCP import url for {name} must not contain credentials": "MCP インポート項目 {name} の URL に認証情報を含めることはできません",
+  "MCP import headers for {name} must be an object": "MCP インポート項目 {name} の headers はオブジェクトである必要があります",
+  "MCP import headers for {name} exceed {limit} entries": "MCP インポート項目 {name} の headers が {limit} 件を超えています",
+  "MCP import header name for {name} is invalid": "MCP インポート項目 {name} のヘッダー名が無効です",
+  "MCP import header value for {name} is invalid": "MCP インポート項目 {name} のヘッダー値が無効です",
+  "MCP import config must be an object": "MCP インポート設定はオブジェクトである必要があります",
+  "MCP import config contains no mcpServers": "MCP インポート設定に mcpServers がありません",
+  "MCP import supports at most {limit} servers": "MCP インポートは最大 {limit} 台のサーバーに対応しています",
+  "MCP import config must contain mcpServers or a single server url": "MCP インポート設定には mcpServers または単一サーバーの url が必要です",
+  "Invalid JSON body": "リクエスト本文が有効な JSON ではありません"
 }

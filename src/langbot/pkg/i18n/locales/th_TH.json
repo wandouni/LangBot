@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "ไม่สามารถเริ่มเข้าสู่ระบบด้วยอุปกรณ์ได้ โปรดเปิดการเข้าสู่ระบบด้วยรหัสอุปกรณ์ในการตั้งค่า ChatGPT",
   "Option {number}": "ตัวเลือก {number}",
   "Confirmation needed": "ต้องยืนยัน",
-  "Session reset successfully": "รีเซ็ตเซสชันแล้ว"
+  "Session reset successfully": "รีเซ็ตเซสชันแล้ว",
+  "MCP import entry for {name} must be an object": "รายการนำเข้า MCP {name} ต้องเป็นออบเจ็กต์",
+  "MCP import only supports remote servers (sse/http), got {type}": "การนำเข้า MCP รองรับเฉพาะเซิร์ฟเวอร์ระยะไกล (sse/http) แต่ได้รับประเภท {type}",
+  "MCP import only supports remote servers (sse/http)": "การนำเข้า MCP รองรับเฉพาะเซิร์ฟเวอร์ระยะไกล (sse/http)",
+  "MCP import entry for {name} is missing a url": "รายการนำเข้า MCP {name} ไม่มี url",
+  "MCP import entry for {name} must use an http(s) url": "รายการนำเข้า MCP {name} ต้องใช้ URL แบบ http(s)",
+  "MCP import url for {name} must not contain credentials": "URL ของการนำเข้า MCP สำหรับ {name} ต้องไม่มีข้อมูลรับรอง",
+  "MCP import headers for {name} must be an object": "headers ของการนำเข้า MCP สำหรับ {name} ต้องเป็นออบเจ็กต์",
+  "MCP import headers for {name} exceed {limit} entries": "headers ของการนำเข้า MCP สำหรับ {name} เกิน {limit} รายการ",
+  "MCP import header name for {name} is invalid": "ชื่อ header ของการนำเข้า MCP สำหรับ {name} ไม่ถูกต้อง",
+  "MCP import header value for {name} is invalid": "ค่า header ของการนำเข้า MCP สำหรับ {name} ไม่ถูกต้อง",
+  "MCP import config must be an object": "การกำหนดค่าการนำเข้า MCP ต้องเป็นออบเจ็กต์",
+  "MCP import config contains no mcpServers": "การกำหนดค่าการนำเข้า MCP ไม่มี mcpServers",
+  "MCP import supports at most {limit} servers": "การนำเข้า MCP รองรับเซิร์ฟเวอร์ไม่เกิน {limit} เครื่อง",
+  "MCP import config must contain mcpServers or a single server url": "การกำหนดค่าการนำเข้า MCP ต้องมี mcpServers หรือ url ของเซิร์ฟเวอร์เดียว",
+  "Invalid JSON body": "เนื้อหาคำขอไม่ใช่ JSON ที่ถูกต้อง"
 }

@@ -5,6 +5,7 @@ from ....i18n import t
 import copy
 import re
 import uuid
+from urllib.parse import urlsplit
 
 import sqlalchemy
 
@@ -13,7 +14,7 @@ from ....core.task_boundary import create_detached_task
 from ....entity.persistence import mcp as persistence_mcp
 from ....entity.persistence import plugin as persistence_plugin
 from ....provider.tools.loaders.mcp import MCPSessionStatus, RuntimeMCPSession
-from ....provider.tools.loaders.mcp_policy import require_stdio_mcp_enabled
+from ....provider.tools.loaders.mcp_policy import MCPStdioDisabledError, require_stdio_mcp_enabled
 from ....workspace.errors import WorkspaceNotFoundError
 from ..context import ExecutionContext
 from .secrets import is_url_key, redact_url_secrets, restore_url_secret_placeholders
@@ -157,6 +158,104 @@ def restore_mcp_secret_placeholders(value, current_value=_MISSING_SECRET, *, sen
     return value
 
 
+_MAX_MCP_IMPORT_SERVERS = 10
+_MAX_MCP_IMPORT_HEADERS = 20
+_MAX_MCP_HEADER_NAME = 256
+_MAX_MCP_HEADER_VALUE = 8192
+_MAX_MCP_SERVER_NAME = 120
+_REMOTE_MCP_TYPES = frozenset({'sse', 'http', 'streamable-http', 'streamablehttp', 'remote'})
+_MCP_HEADER_NAME_RE = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
+
+
+def _import_server_name(raw_name: object, url: str) -> str:
+    name = re.sub(r'[\x00-\x1f\x7f]+', ' ', str(raw_name or '')).strip()
+    if not name:
+        name = urlsplit(url).hostname or 'mcp-server'
+    return name[:_MAX_MCP_SERVER_NAME]
+
+
+def _parse_import_server(name: object, raw: object) -> dict:
+    """Validate one pasted MCP server entry and convert it to a remote config."""
+
+    if not isinstance(raw, dict):
+        raise ValueError(t('MCP import entry for {name} must be an object', name=name))
+
+    server_type = str(raw.get('type') or '').strip().lower()
+    if server_type and server_type not in _REMOTE_MCP_TYPES:
+        raise ValueError(t('MCP import only supports remote servers (sse/http), got {type}', type=server_type))
+    if raw.get('command') or raw.get('args'):
+        raise ValueError(t('MCP import only supports remote servers (sse/http)'))
+
+    url = raw.get('url')
+    if not isinstance(url, str) or not url.strip():
+        raise ValueError(t('MCP import entry for {name} is missing a url', name=name))
+    url = url.strip()
+    parsed = urlsplit(url)
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        raise ValueError(t('MCP import entry for {name} must use an http(s) url', name=name))
+    if parsed.username or parsed.password:
+        raise ValueError(t('MCP import url for {name} must not contain credentials', name=name))
+
+    headers = raw.get('headers')
+    if headers is None:
+        headers = {}
+    if not isinstance(headers, dict):
+        raise ValueError(t('MCP import headers for {name} must be an object', name=name))
+    if len(headers) > _MAX_MCP_IMPORT_HEADERS:
+        raise ValueError(t('MCP import headers for {name} exceed {limit} entries', name=name, limit=_MAX_MCP_IMPORT_HEADERS))
+    normalized_headers = {}
+    for header_name, header_value in headers.items():
+        key = str(header_name or '').strip()
+        if not key or len(key) > _MAX_MCP_HEADER_NAME or not _MCP_HEADER_NAME_RE.fullmatch(key):
+            raise ValueError(t('MCP import header name for {name} is invalid', name=name))
+        if (
+            not isinstance(header_value, str)
+            or len(header_value) > _MAX_MCP_HEADER_VALUE
+            or any(char in header_value for char in '\r\n\x00')
+        ):
+            raise ValueError(t('MCP import header value for {name} is invalid', name=name))
+        normalized_headers[key] = header_value
+
+    return {
+        'name': _import_server_name(name, url),
+        'mode': 'remote',
+        'enable': True,
+        'extra_args': {
+            'url': url,
+            'headers': normalized_headers,
+            'timeout': 30,
+            'tool_call_timeout_sec': 300,
+        },
+    }
+
+
+def parse_mcp_import_config(raw: object) -> list[dict]:
+    """Parse a pasted Claude-Desktop-style MCP config into remote server rows.
+
+    Accepts ``{"mcpServers": {...}}`` or a single ``{"url": ..., "headers": ...}``
+    entry. Stdio entries are rejected so an import can never spawn a local
+    process without an explicit policy check.
+    """
+
+    if not isinstance(raw, dict):
+        raise ValueError(t('MCP import config must be an object'))
+
+    if 'mcpServers' in raw:
+        servers = raw.get('mcpServers')
+        if not isinstance(servers, dict) or not servers:
+            raise ValueError(t('MCP import config contains no mcpServers'))
+        if len(servers) > _MAX_MCP_IMPORT_SERVERS:
+            raise ValueError(
+                t('MCP import supports at most {limit} servers', limit=_MAX_MCP_IMPORT_SERVERS)
+            )
+        return [_parse_import_server(name, entry) for name, entry in servers.items()]
+
+    if 'url' in raw:
+        return [_parse_import_server(raw.get('name'), raw)]
+
+    raise ValueError(t('MCP import config must contain mcpServers or a single server url'))
+
+
 class MCPService:
     """Workspace-scoped MCP configuration and runtime facade."""
 
@@ -270,6 +369,30 @@ class MCPService:
             else:
                 self.ap.tool_mgr.mcp_tool_loader._hosted_mcp_tasks.append(task)
         return payload['uuid']
+
+    async def import_mcp_servers(self, context: TenantContext, raw_config: object) -> dict:
+        """Create remote MCP servers from a pasted config, reporting per-entry errors.
+
+        Entries are independent: a duplicate name or quota failure does not
+        roll back servers created earlier in the same import.
+        """
+
+        servers = parse_mcp_import_config(raw_config)
+        created: list[dict] = []
+        errors: list[dict] = []
+        for server_data in servers:
+            try:
+                server_uuid = await self.create_mcp_server(context, server_data)
+            except MCPStdioDisabledError as exc:
+                errors.append({'name': server_data['name'], 'message': str(exc)})
+            except ValueError as exc:
+                errors.append({'name': server_data['name'], 'message': str(exc)})
+            except Exception as exc:
+                self.ap.logger.exception(f'MCP import failed for {server_data["name"]}: {exc}')
+                errors.append({'name': server_data['name'], 'message': str(exc)})
+            else:
+                created.append({'name': server_data['name'], 'uuid': server_uuid})
+        return {'servers': created, 'errors': errors}
 
     async def get_mcp_server_by_uuid(self, context: TenantContext, server_uuid: str) -> dict | None:
         execution_context = await self._execution_context(context)

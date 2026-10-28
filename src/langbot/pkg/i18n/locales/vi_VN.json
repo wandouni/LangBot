@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "Không thể bắt đầu đăng nhập thiết bị ChatGPT. Hãy bật đăng nhập bằng mã thiết bị trong cài đặt ChatGPT.",
   "Option {number}": "Lựa chọn {number}",
   "Confirmation needed": "Cần xác nhận",
-  "Session reset successfully": "Đã đặt lại phiên"
+  "Session reset successfully": "Đã đặt lại phiên",
+  "MCP import entry for {name} must be an object": "Mục nhập MCP {name} phải là một đối tượng",
+  "MCP import only supports remote servers (sse/http), got {type}": "Nhập MCP chỉ hỗ trợ máy chủ từ xa (sse/http), nhận được loại {type}",
+  "MCP import only supports remote servers (sse/http)": "Nhập MCP chỉ hỗ trợ máy chủ từ xa (sse/http)",
+  "MCP import entry for {name} is missing a url": "Mục nhập MCP {name} thiếu url",
+  "MCP import entry for {name} must use an http(s) url": "Mục nhập MCP {name} phải dùng URL http(s)",
+  "MCP import url for {name} must not contain credentials": "URL nhập MCP của {name} không được chứa thông tin xác thực",
+  "MCP import headers for {name} must be an object": "headers nhập MCP của {name} phải là một đối tượng",
+  "MCP import headers for {name} exceed {limit} entries": "headers nhập MCP của {name} vượt quá {limit} mục",
+  "MCP import header name for {name} is invalid": "Tên header nhập MCP của {name} không hợp lệ",
+  "MCP import header value for {name} is invalid": "Giá trị header nhập MCP của {name} không hợp lệ",
+  "MCP import config must be an object": "Cấu hình nhập MCP phải là một đối tượng",
+  "MCP import config contains no mcpServers": "Cấu hình nhập MCP không có mcpServers",
+  "MCP import supports at most {limit} servers": "Nhập MCP hỗ trợ tối đa {limit} máy chủ",
+  "MCP import config must contain mcpServers or a single server url": "Cấu hình nhập MCP phải chứa mcpServers hoặc url của một máy chủ",
+  "Invalid JSON body": "Nội dung yêu cầu không phải JSON hợp lệ"
 }

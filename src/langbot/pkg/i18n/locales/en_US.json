@@ -110,5 +110,20 @@
   "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.": "Unable to start ChatGPT device login. Enable device code login in ChatGPT settings.",
   "Option {number}": "Option {number}",
   "Confirmation needed": "Confirmation needed",
-  "Session reset successfully": "Session reset successfully"
+  "Session reset successfully": "Session reset successfully",
+  "MCP import entry for {name} must be an object": "MCP import entry for {name} must be an object",
+  "MCP import only supports remote servers (sse/http), got {type}": "MCP import only supports remote servers (sse/http), got {type}",
+  "MCP import only supports remote servers (sse/http)": "MCP import only supports remote servers (sse/http)",
+  "MCP import entry for {name} is missing a url": "MCP import entry for {name} is missing a url",
+  "MCP import entry for {name} must use an http(s) url": "MCP import entry for {name} must use an http(s) url",
+  "MCP import url for {name} must not contain credentials": "MCP import url for {name} must not contain credentials",
+  "MCP import headers for {name} must be an object": "MCP import headers for {name} must be an object",
+  "MCP import headers for {name} exceed {limit} entries": "MCP import headers for {name} exceed {limit} entries",
+  "MCP import header name for {name} is invalid": "MCP import header name for {name} is invalid",
+  "MCP import header value for {name} is invalid": "MCP import header value for {name} is invalid",
+  "MCP import config must be an object": "MCP import config must be an object",
+  "MCP import config contains no mcpServers": "MCP import config contains no mcpServers",
+  "MCP import supports at most {limit} servers": "MCP import supports at most {limit} servers",
+  "MCP import config must contain mcpServers or a single server url": "MCP import config must contain mcpServers or a single server url",
+  "Invalid JSON body": "Invalid JSON body"
 }
