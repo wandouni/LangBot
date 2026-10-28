@@ -44,12 +44,32 @@
     }
     .segmented button:hover { color: var(--text); }
     .segmented button.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+    .bot-combobox { position: relative; display: inline-flex; align-items: center; width: 220px; max-width: 220px; }
     .bot-select {
-      max-width: 220px; padding: 7px 30px 7px 10px; border: 1px solid var(--border); border-radius: 10px;
+      width: 100%; max-width: 220px; padding: 7px 30px 7px 10px; border: 1px solid var(--border); border-radius: 10px;
       background: var(--card); color: var(--text); font-size: 13px; outline: none;
       text-overflow: ellipsis;
     }
     .bot-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+    .bot-select:disabled { opacity: .6; cursor: not-allowed; }
+    .bot-caret {
+      position: absolute; right: 12px; top: 50%; width: 0; height: 0; pointer-events: none;
+      border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-top: 5px solid var(--muted); transform: translateY(-40%);
+    }
+    .bot-listbox {
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max(100%, 240px);
+      max-width: min(320px, 80vw); max-height: 260px; overflow-y: auto; margin: 0; padding: 4px;
+      list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+      box-shadow: 0 12px 32px rgb(15 23 42 / 0.16);
+    }
+    .bot-option {
+      padding: 7px 10px; border-radius: 7px; font-size: 13px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bot-option:hover, .bot-option.active { background: var(--card); }
+    .bot-option[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+    .bot-empty { padding: 8px 10px; color: var(--muted); font-size: 12px; }
     .view-tabs {
       display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px;
       border: 1px solid var(--border); border-radius: 10px; background: var(--card);
@@ -84,12 +104,17 @@
     .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
     .panel-title { margin: 0; font-size: 14px; font-weight: 650; }
     .panel-sub { color: var(--muted); font-size: 11px; }
-    .word-cloud { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-height: 150px; padding: 6px 2px; }
-    .word-cloud button {
-      border: 0; background: transparent; color: var(--accent); padding: 0 1px; line-height: 1.15;
-      border-radius: 4px; transition: opacity .15s, transform .15s;
+    .word-cloud {
+      position: relative; width: 100%; max-width: 420px; margin: 4px auto 0; aspect-ratio: 1;
+      overflow: hidden; border-radius: 50%; border: 1px dashed var(--border);
+      background: radial-gradient(circle at 50% 50%, var(--accent-soft) 0%, transparent 68%);
     }
-    .word-cloud button:hover { opacity: .72; transform: translateY(-1px); }
+    .word-cloud button {
+      position: absolute; border: 0; background: transparent; color: var(--accent);
+      padding: 1px 3px; line-height: 1.15; white-space: nowrap; border-radius: 999px;
+      transform: translate(-50%, -50%); transition: opacity .15s, background-color .15s;
+    }
+    .word-cloud button:hover { opacity: .72; background: var(--accent-soft); }
     .top-list { display: flex; flex-direction: column; gap: 9px; }
     .top-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; }
     .top-question {
@@ -176,11 +201,12 @@
       body { padding: 12px; }
       .cards { grid-template-columns: minmax(0, 1fr); }
       .header-actions { width: 100%; flex-wrap: wrap; justify-content: space-between; }
-      .bot-select { width: 100%; max-width: none; }
+      .bot-combobox, .bot-select { width: 100%; max-width: none; }
       .segmented { flex: 1; }
       .segmented button { flex: 1; padding: 6px 8px; }
       .filter-input { width: 100%; }
       .filters { width: 100%; }
+      .word-cloud { max-width: 300px; }
       .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
@@ -193,7 +219,11 @@
         <p class="subtitle" data-i18n="subtitle">Knowledge-base questions in this Workspace</p>
       </div>
       <div class="header-actions">
-        <select id="botFilter" class="bot-select" data-i18n-aria-label="bot.label" aria-label="Bot"></select>
+        <div class="bot-combobox" id="botCombobox">
+          <input id="botFilter" class="bot-select" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="botListbox" autocomplete="off" spellcheck="false" data-i18n-aria-label="bot.label" aria-label="Bot" data-i18n="bots.search" data-i18n-attr="placeholder" placeholder="Search bots">
+          <span class="bot-caret" aria-hidden="true"></span>
+          <ul id="botListbox" class="bot-listbox" role="listbox" data-i18n-aria-label="bot.label" aria-label="Bot" hidden></ul>
+        </div>
         <div class="segmented" role="group" data-i18n-aria-label="rangeLabel" aria-label="Time range">
           <button type="button" data-range="today" data-i18n="range.today">Today</button>
           <button type="button" data-range="7d" data-i18n="range.7d">7 days</button>
@@ -340,6 +370,8 @@
       };
       var requestSeq = { overview: 0, table: 0, detail: 0 };
       var rangeKeys = ['today', '7d', '30d', 'all'];
+      var botListEntries = [];
+      var botListActive = -1;
 
       function t(key, fallback) {
         if (state.translations && state.translations[key] != null) {
@@ -366,6 +398,7 @@
           .then(function () {
             if (seq !== state.languageSeq) return;
             applyTranslations();
+            refreshBotLabel();
             document.documentElement.lang = locale();
           });
       }
@@ -437,6 +470,19 @@
         if (!region) return t('unknownRegion', 'Unknown');
         if (region === 'local') return t('localRegion', 'Local network');
         return region;
+      }
+
+      function resolveRegionFilter(value) {
+        var text = String(value || '').trim();
+        if (!text) return '';
+        var normalized = text.toLowerCase();
+        if (normalized === 'local') return 'local';
+        // The table renders the stored value ``local`` with a localized label,
+        // so users naturally type that label back into the filter.  Map any
+        // prefix of the current label back to the raw value the backend stores.
+        var label = String(t('localRegion', 'Local network') || '').trim().toLowerCase();
+        if (label && label.indexOf(normalized) === 0) return 'local';
+        return text;
       }
 
       function formatLatency(value) {
@@ -512,20 +558,117 @@
         });
       }
 
-      function renderBotOptions() {
-        var select = document.getElementById('botFilter');
-        if (!select) return;
-        select.textContent = '';
-        var allOption = el('option', null, t('bots.all', 'All bots'));
-        allOption.value = '';
-        select.appendChild(allOption);
+      function botLabel(botUuid) {
+        if (!botUuid) return t('bots.all', 'All bots');
+        for (var i = 0; i < state.bots.length; i++) {
+          if (state.bots[i].uuid === botUuid) {
+            return state.bots[i].name || state.bots[i].uuid;
+          }
+        }
+        return '';
+      }
+
+      function refreshBotLabel() {
+        var input = document.getElementById('botFilter');
+        var list = document.getElementById('botListbox');
+        if (!input) return;
+        input.value = botLabel(state.botUuid);
+        if (list && !list.hidden) renderBotList('');
+      }
+
+      function botFilterQuery(input) {
+        var text = input ? input.value : '';
+        return text === botLabel(state.botUuid) ? '' : text;
+      }
+
+      function botListFiltered(query) {
+        var normalized = String(query || '').trim().toLowerCase();
+        var items = [{ value: '', label: t('bots.all', 'All bots') }];
         state.bots.forEach(function (bot) {
-          var option = el('option', null, bot.name || bot.uuid);
-          option.value = bot.uuid;
-          select.appendChild(option);
+          items.push({ value: bot.uuid, label: bot.name || bot.uuid });
         });
-        select.value = state.botUuid || '';
-        select.disabled = state.bots.length === 0;
+        if (!normalized) return items;
+        return items.filter(function (item) {
+          return item.label.toLowerCase().indexOf(normalized) !== -1 ||
+            item.value.toLowerCase().indexOf(normalized) !== -1;
+        });
+      }
+
+      function updateBotActiveOption() {
+        var input = document.getElementById('botFilter');
+        var list = document.getElementById('botListbox');
+        if (!input || !list) return;
+        var options = list.querySelectorAll('.bot-option');
+        Array.prototype.forEach.call(options, function (option, index) {
+          option.classList.toggle('active', index === botListActive);
+        });
+        if (botListActive >= 0 && options[botListActive]) {
+          input.setAttribute('aria-activedescendant', options[botListActive].id);
+          options[botListActive].scrollIntoView({ block: 'nearest' });
+        } else {
+          input.removeAttribute('aria-activedescendant');
+        }
+      }
+
+      function renderBotList(query) {
+        var list = document.getElementById('botListbox');
+        if (!list) return;
+        list.textContent = '';
+        botListEntries = botListFiltered(query);
+        botListActive = -1;
+        if (!botListEntries.length) {
+          var empty = el('li', 'bot-empty', t('bots.noMatch', 'No matching bots'));
+          empty.setAttribute('role', 'presentation');
+          list.appendChild(empty);
+          updateBotActiveOption();
+          return;
+        }
+        botListEntries.forEach(function (item, index) {
+          var option = el('li', 'bot-option', item.label);
+          option.id = 'botOption' + index;
+          option.setAttribute('role', 'option');
+          option.setAttribute('data-value', item.value);
+          option.setAttribute('aria-selected', item.value === state.botUuid ? 'true' : 'false');
+          option.addEventListener('click', function () {
+            chooseBotOption(item.value);
+          });
+          list.appendChild(option);
+        });
+        updateBotActiveOption();
+      }
+
+      function openBotList() {
+        var input = document.getElementById('botFilter');
+        var list = document.getElementById('botListbox');
+        if (!input || !list || input.disabled) return;
+        renderBotList(botFilterQuery(input));
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+      }
+
+      function closeBotList(restore) {
+        var input = document.getElementById('botFilter');
+        var list = document.getElementById('botListbox');
+        if (!input || !list) return;
+        list.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        botListActive = -1;
+        if (restore) input.value = botLabel(state.botUuid);
+      }
+
+      function chooseBotOption(botUuid) {
+        setBot(botUuid, true);
+        closeBotList(true);
+      }
+
+      function renderBotOptions() {
+        var input = document.getElementById('botFilter');
+        var list = document.getElementById('botListbox');
+        if (!input || !list) return;
+        input.disabled = state.bots.length === 0;
+        input.value = botLabel(state.botUuid);
+        closeBotList(false);
       }
 
       function setBot(botUuid, persist) {
@@ -534,8 +677,8 @@
           next = '';
         }
         state.botUuid = next;
-        var select = document.getElementById('botFilter');
-        if (select) select.value = next;
+        var input = document.getElementById('botFilter');
+        if (input) input.value = botLabel(next);
         if (persist) {
           window.parent.postMessage({
             type: 'langbot:preferences',
@@ -613,17 +756,72 @@
         renderTopQuestions(data.top_questions || []);
       }
 
-      function renderWordCloud(words) {
-        var container = document.getElementById('wordCloud');
-        var empty = document.getElementById('wordCloudEmpty');
-        container.textContent = '';
-        if (!words.length) {
-          empty.hidden = false;
-          return;
+      var wordCloudWords = [];
+      var wordCloudObserver = null;
+      var wordCloudFrame = 0;
+
+      function scheduleWordCloudLayout() {
+        if (wordCloudFrame) window.cancelAnimationFrame(wordCloudFrame);
+        wordCloudFrame = window.requestAnimationFrame(function () {
+          wordCloudFrame = 0;
+          layoutWordCloud();
+        });
+      }
+
+      function observeWordCloud(container) {
+        if (wordCloudObserver || typeof ResizeObserver !== 'function') return;
+        wordCloudObserver = new ResizeObserver(scheduleWordCloudLayout);
+        wordCloudObserver.observe(container);
+      }
+
+      function wordCloudRectsOverlap(a, b) {
+        return !(a.right + 2 <= b.left || b.right + 2 <= a.left ||
+          a.bottom + 2 <= b.top || b.bottom + 2 <= a.top);
+      }
+
+      function findWordCloudSpot(width, height, placed, cx, cy, radius, seed) {
+        var halfDiagonal = Math.sqrt(width * width + height * height) / 2;
+        var maxDistance = radius - halfDiagonal;
+        if (maxDistance < 0) return null;
+        var pitch = 2;
+        var step = 0.06;
+        var maxTheta = maxDistance / pitch;
+        for (var theta = 0; theta <= maxTheta + step; theta += step) {
+          var distance = Math.min(pitch * theta, maxDistance);
+          var angle = theta + seed;
+          var x = cx + Math.cos(angle) * distance;
+          var y = cy + Math.sin(angle) * distance;
+          var rect = {
+            left: x - width / 2, right: x + width / 2,
+            top: y - height / 2, bottom: y + height / 2
+          };
+          var overlap = false;
+          for (var i = 0; i < placed.length; i++) {
+            if (wordCloudRectsOverlap(rect, placed[i])) {
+              overlap = true;
+              break;
+            }
+          }
+          if (!overlap) return { x: x, y: y, rect: rect };
         }
-        empty.hidden = true;
-        var max = Math.max.apply(null, words.map(function (item) { return item.count || 0; })) || 1;
-        words.forEach(function (item, index) {
+        return null;
+      }
+
+      function layoutWordCloud() {
+        var container = document.getElementById('wordCloud');
+        if (!container || container.hidden) return;
+        var width = container.clientWidth;
+        var height = container.clientHeight;
+        if (!wordCloudWords.length || width < 80 || height < 80) return;
+
+        container.textContent = '';
+        var cx = width / 2;
+        var cy = height / 2;
+        var radius = Math.min(width, height) / 2 - 6;
+        var max = Math.max.apply(null, wordCloudWords.map(function (item) {
+          return Number(item.count) || 0;
+        })) || 1;
+        var items = wordCloudWords.map(function (item, index) {
           var ratio = Math.max(0, Number(item.count) || 0) / max;
           var button = el('button', null, item.word);
           button.type = 'button';
@@ -632,6 +830,7 @@
           button.style.opacity = (0.55 + ratio * 0.45).toFixed(2);
           button.style.color = 'hsl(' + ((index * 47) % 360) + ' 68% 45%)';
           button.title = item.word + ' · ' + item.count;
+          button.style.visibility = 'hidden';
           button.addEventListener('click', function () {
             document.getElementById('keywordFilter').value = item.word;
             state.questionFilters.keyword = item.word;
@@ -640,7 +839,72 @@
             document.querySelector('.table-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
           });
           container.appendChild(button);
+          return { button: button, seed: index * 2.399963 };
         });
+
+        function measure() {
+          items.forEach(function (item) {
+            item.width = item.button.offsetWidth;
+            item.height = item.button.offsetHeight;
+          });
+        }
+        measure();
+
+        // Scale labels down when their total area would not fit the disc, so
+        // the cloud keeps all keywords instead of dropping the tail.
+        var totalArea = items.reduce(function (sum, item) {
+          return sum + (item.width + 6) * (item.height + 6);
+        }, 0);
+        var usableArea = Math.PI * radius * radius * 0.52;
+        if (totalArea > usableArea) {
+          var scale = Math.sqrt(usableArea / totalArea);
+          items.forEach(function (item) {
+            var size = Math.max(9, parseFloat(item.button.style.fontSize) * scale);
+            item.button.style.fontSize = size.toFixed(1) + 'px';
+          });
+          measure();
+        }
+
+        // Place the largest words first so they occupy the center of the disc.
+        items.sort(function (a, b) {
+          return b.width * b.height - a.width * a.height;
+        });
+
+        var placed = [];
+        var maxWidth = radius * 2 - 4;
+        items.forEach(function (item) {
+          if (item.width > maxWidth) {
+            var size = Math.max(8, parseFloat(item.button.style.fontSize) * maxWidth / item.width);
+            item.button.style.fontSize = size.toFixed(1) + 'px';
+            item.width = item.button.offsetWidth;
+            item.height = item.button.offsetHeight;
+          }
+          var spot = findWordCloudSpot(item.width, item.height, placed, cx, cy, radius, item.seed);
+          if (!spot) {
+            item.button.style.display = 'none';
+            return;
+          }
+          item.button.style.left = spot.x.toFixed(1) + 'px';
+          item.button.style.top = spot.y.toFixed(1) + 'px';
+          item.button.style.visibility = 'visible';
+          placed.push(spot.rect);
+        });
+      }
+
+      function renderWordCloud(words) {
+        var container = document.getElementById('wordCloud');
+        var empty = document.getElementById('wordCloudEmpty');
+        container.textContent = '';
+        wordCloudWords = words;
+        if (!words.length) {
+          container.hidden = true;
+          empty.hidden = false;
+          return;
+        }
+        empty.hidden = true;
+        container.hidden = false;
+        observeWordCloud(container);
+        scheduleWordCloudLayout();
       }
 
       function renderTopQuestions(items) {
@@ -705,14 +969,14 @@
             page_size: 20,
             keyword: state.questionFilters.keyword,
             ip: state.questionFilters.ip,
-            region: state.questionFilters.region
+            region: resolveRegionFilter(state.questionFilters.region)
           });
         } else {
           request = api('/qa-analytics/visits', {
             page: state.visitPage,
             page_size: 20,
             ip: state.visitFilters.ip,
-            region: state.visitFilters.region
+            region: resolveRegionFilter(state.visitFilters.region)
           });
         }
         request.then(function (data) {
@@ -979,9 +1243,63 @@
       Array.prototype.forEach.call(document.querySelectorAll('[data-range]'), function (button) {
         button.addEventListener('click', function () { setRange(button.getAttribute('data-range'), true); });
       });
-      document.getElementById('botFilter').addEventListener('change', function (event) {
-        setBot(event.target.value, true);
-      });
+      (function () {
+        var botInput = document.getElementById('botFilter');
+        var botList = document.getElementById('botListbox');
+        botInput.addEventListener('focus', function () {
+          botInput.select();
+          openBotList();
+        });
+        botInput.addEventListener('click', function () {
+          if (botList.hidden) openBotList();
+        });
+        botInput.addEventListener('input', function () {
+          if (botList.hidden) {
+            botList.hidden = false;
+            botInput.setAttribute('aria-expanded', 'true');
+          }
+          renderBotList(botFilterQuery(botInput));
+        });
+        botInput.addEventListener('keydown', function (event) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            if (botList.hidden) openBotList();
+            if (botListEntries.length) {
+              botListActive = (botListActive + 1) % botListEntries.length;
+              updateBotActiveOption();
+            }
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (botList.hidden) openBotList();
+            if (botListEntries.length) {
+              botListActive = botListActive <= 0 ? botListEntries.length - 1 : botListActive - 1;
+              updateBotActiveOption();
+            }
+          } else if (event.key === 'Enter') {
+            if (!botList.hidden) {
+              event.preventDefault();
+              if (botListActive >= 0 && botListEntries[botListActive]) {
+                chooseBotOption(botListEntries[botListActive].value);
+              } else {
+                closeBotList(true);
+              }
+            }
+          } else if (event.key === 'Escape') {
+            if (!botList.hidden) {
+              event.preventDefault();
+              closeBotList(true);
+            }
+          } else if (event.key === 'Tab') {
+            closeBotList(true);
+          }
+        });
+        botInput.addEventListener('blur', function () {
+          closeBotList(true);
+        });
+        botList.addEventListener('mousedown', function (event) {
+          event.preventDefault();
+        });
+      })();
       document.getElementById('refreshButton').addEventListener('click', refreshAll);
       document.getElementById('retryButton').addEventListener('click', refreshAll);
       document.getElementById('applyQuestionFilters').addEventListener('click', applyQuestionFilters);

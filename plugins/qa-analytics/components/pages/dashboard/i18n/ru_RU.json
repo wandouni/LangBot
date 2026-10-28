@@ -4,6 +4,8 @@
   "rangeLabel": "Период",
   "bot.label": "Бот",
   "bots.all": "Все боты",
+  "bots.search": "Поиск ботов",
+  "bots.noMatch": "Подходящие боты не найдены",
   "range.today": "Сегодня",
   "range.7d": "7 дней",
   "range.30d": "30 дней",

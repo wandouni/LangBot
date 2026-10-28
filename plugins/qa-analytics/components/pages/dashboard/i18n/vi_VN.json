@@ -4,6 +4,8 @@
   "rangeLabel": "Khoảng thời gian",
   "bot.label": "Bot",
   "bots.all": "Tất cả bot",
+  "bots.search": "Tìm kiếm bot",
+  "bots.noMatch": "Không tìm thấy bot phù hợp",
   "range.today": "Hôm nay",
   "range.7d": "7 ngày",
   "range.30d": "30 ngày",

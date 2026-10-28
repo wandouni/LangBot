@@ -4,6 +4,8 @@
   "rangeLabel": "Periodo",
   "bot.label": "Bot",
   "bots.all": "Todos los bots",
+  "bots.search": "Buscar bots",
+  "bots.noMatch": "No hay bots coincidentes",
   "range.today": "Hoy",
   "range.7d": "7 días",
   "range.30d": "30 días",

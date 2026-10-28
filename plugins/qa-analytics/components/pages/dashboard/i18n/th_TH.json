@@ -4,6 +4,8 @@
   "rangeLabel": "ช่วงเวลา",
   "bot.label": "บอท",
   "bots.all": "บอททั้งหมด",
+  "bots.search": "ค้นหาบอท",
+  "bots.noMatch": "ไม่พบบอทที่ตรงกัน",
   "range.today": "วันนี้",
   "range.7d": "7 วัน",
   "range.30d": "30 วัน",
