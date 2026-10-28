@@ -491,6 +491,24 @@ const enUS = {
     editionCommunity: 'Community',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: 'Application Center',
+    subtitle: 'Choose an application to continue.',
+    welcome: 'Welcome back, {{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription:
+      'Build and operate bots, pipelines and knowledge bases.',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: 'Ask questions about your data in natural language.',
+    open: 'Open',
+    opening: 'Opening...',
+    disabled: 'Not available',
+    logout: 'Sign out',
+    loadError: 'Unable to load the application center',
+    retry: 'Retry',
+    sqlbotUnavailable: 'SqlBot is unavailable right now. Please try again.',
+    backToApps: 'Application center',
+  },
   common: {
     failureReasonNotRecorded:
       'The failure reason was not recorded. Check the bot logs or retry to capture more details.',

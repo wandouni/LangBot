@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { CloudBanner } from '@/components/CloudBanner';
 
@@ -8,9 +8,13 @@ import { CloudBanner } from '@/components/CloudBanner';
 // it publishes `--cloud-banner-height` for the fixed shell to offset itself.
 export default function RootLayout() {
   useDocumentTitle();
+  const { pathname } = useLocation();
+  // The application center owns the whole viewport; an instance notice above
+  // it would be the only piece of LangBot chrome on the page.
+  const isPortal = pathname === '/portal';
   return (
     <>
-      <CloudBanner />
+      {!isPortal && <CloudBanner />}
       <Outlet />
     </>
   );

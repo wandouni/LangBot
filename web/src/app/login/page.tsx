@@ -26,6 +26,7 @@ import {
   clearPendingInvitationToken,
   getPendingInvitationToken,
   httpClient,
+  resolvePortalEnabled,
 } from '@/app/infra/http';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -254,6 +255,15 @@ export default function Login() {
         );
         return false;
       }
+    }
+
+    // The application center is a top-level screen: it must not run inside
+    // HomeLayout, and it deliberately defers Workspace selection until the
+    // user opens LangBot. Portal-disabled deployments keep the old flow.
+    // beginAuthenticatedSession has already dropped any previous SqlBot keys.
+    if (await resolvePortalEnabled()) {
+      navigate('/portal', { replace: true });
+      return true;
     }
 
     const result = await bootstrapWorkspaceSession({

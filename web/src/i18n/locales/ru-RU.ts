@@ -491,6 +491,24 @@ const ruRU = {
     editionCommunity: 'Сообщество',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: 'Центр приложений',
+    subtitle: 'Выберите приложение для продолжения.',
+    welcome: 'С возвращением, {{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription:
+      'Создавайте и обслуживайте ботов, конвейеры и базы знаний.',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: 'Задавайте вопросы к данным на естественном языке.',
+    open: 'Открыть',
+    opening: 'Открытие...',
+    disabled: 'Недоступно',
+    logout: 'Выйти',
+    loadError: 'Не удалось загрузить центр приложений',
+    retry: 'Повторить',
+    sqlbotUnavailable: 'SqlBot сейчас недоступен. Попробуйте позже.',
+    backToApps: 'Центр приложений',
+  },
   common: {
     failureReasonNotRecorded:
       'Причина сбоя не сохранена. Проверьте журнал бота или отправьте сообщение повторно для получения подробностей.',

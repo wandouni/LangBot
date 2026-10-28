@@ -5,6 +5,7 @@ import { sidebarConfigList } from '@/app/home/components/home-sidebar/sidbarConf
 import langbotIcon from '@/app/assets/langbot-logo.webp';
 import { systemInfo, httpClient } from '@/app/infra/http/HttpClient';
 import {
+  clearSqlbotSession,
   clearUserInfo,
   getCloudServiceClientSync,
   useCurrentWorkspace,
@@ -42,6 +43,7 @@ import {
   ListTree,
   UsersRound,
   HardDrive,
+  LayoutGrid,
 } from 'lucide-react';
 import { useTheme } from '@/components/providers/theme-provider';
 
@@ -2106,6 +2108,7 @@ export default function HomeSidebar({
 
   function handleLogout() {
     clearUserInfo();
+    clearSqlbotSession();
     localStorage.removeItem('token');
     localStorage.removeItem('userEmail');
     window.location.href = '/login';
@@ -2469,6 +2472,21 @@ export default function HomeSidebar({
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
+
+                  {systemInfo.portal?.enabled ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          navigate('/portal');
+                        }}
+                      >
+                        <LayoutGrid />
+                        {t('portal.backToApps')}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  ) : null}
 
                   {/* Logout */}
                   <DropdownMenuItem onClick={() => handleLogout()}>

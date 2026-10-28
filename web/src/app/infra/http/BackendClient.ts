@@ -1787,6 +1787,22 @@ export class BackendClient extends BaseHttpClient {
     });
   }
 
+  /**
+   * Ask the backend for a one-time SqlBot login redirect.
+   *
+   * The response also sets an HttpOnly binding cookie scoped to the SqlBot
+   * mount point; the browser must follow `redirect_url` in the same tab so the
+   * cookie travels with the ticket.
+   */
+  public getSqlbotSsoTicket(): Promise<{
+    redirect_url: string;
+    expires_in: number;
+  }> {
+    return this.post('/api/v1/user/sqlbot/sso-ticket', undefined, {
+      skipWorkspace: true,
+    });
+  }
+
   // ============ Passkey (WebAuthn) API ============
   public getPasskeyAuthOptions(
     email?: string,

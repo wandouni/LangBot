@@ -133,6 +133,36 @@ export const initializeSystemInfo = async (options?: {
 };
 
 /**
+ * Whether the post-login application center is enabled.
+ *
+ * Older backends omit `portal`; treat that as disabled so existing deployments
+ * keep landing on /home. A failed lookup also falls back to disabled.
+ */
+export const resolvePortalEnabled = async (): Promise<boolean> => {
+  if (systemInfo.portal === undefined) {
+    await initializeSystemInfo();
+  }
+  return systemInfo.portal?.enabled === true;
+};
+
+/**
+ * Drop every SqlBot browser key. SqlBot stores its token and user cache under
+ * the `sqlbot_` prefix (derived from its mount point), so a LangBot logout must
+ * clear them or the next Account would inherit the previous SqlBot session.
+ */
+export const clearSqlbotSession = (): void => {
+  if (typeof window === 'undefined') return;
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key && key.startsWith('sqlbot_')) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+  }
+};
+
+/**
  * 初始化用户信息
  * 应该在用户登录后调用此方法
  */
@@ -216,6 +246,8 @@ export function beginAuthenticatedSession(
   userInfo = null;
   clearWorkspaceSelection();
   clearWorkspaceBootstrapSnapshot();
+  // A new LangBot Account must never reuse the previous SqlBot session.
+  clearSqlbotSession();
 
   if (typeof window === 'undefined') return;
   localStorage.removeItem('token');

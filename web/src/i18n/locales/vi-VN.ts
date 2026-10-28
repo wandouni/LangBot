@@ -487,6 +487,23 @@ const viVN = {
     editionCommunity: 'Bản cộng đồng',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: 'Trung tâm ứng dụng',
+    subtitle: 'Chọn một ứng dụng để tiếp tục.',
+    welcome: 'Chào mừng trở lại, {{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription: 'Xây dựng và vận hành bot, pipeline và cơ sở tri thức.',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: 'Đặt câu hỏi về dữ liệu bằng ngôn ngữ tự nhiên.',
+    open: 'Mở',
+    opening: 'Đang mở...',
+    disabled: 'Không khả dụng',
+    logout: 'Đăng xuất',
+    loadError: 'Không thể tải trung tâm ứng dụng',
+    retry: 'Thử lại',
+    sqlbotUnavailable: 'SqlBot hiện không khả dụng. Vui lòng thử lại.',
+    backToApps: 'Trung tâm ứng dụng',
+  },
   common: {
     failureReasonNotRecorded:
       'Chưa lưu nguyên nhân lỗi. Hãy kiểm tra nhật ký bot hoặc gửi lại tin nhắn để biết thêm chi tiết.',

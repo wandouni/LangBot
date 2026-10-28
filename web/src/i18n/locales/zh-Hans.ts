@@ -464,6 +464,23 @@ const zhHans = {
     editionCommunity: '社区版',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: '应用中心',
+    subtitle: '请选择要进入的应用',
+    welcome: '欢迎回来，{{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription: '构建并运营机器人、流水线与知识库。',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: '用自然语言查询和分析数据。',
+    open: '进入',
+    opening: '正在打开...',
+    disabled: '暂不可用',
+    logout: '退出登录',
+    loadError: '无法加载应用中心',
+    retry: '重试',
+    sqlbotUnavailable: 'SqlBot 暂时不可用，请稍后再试。',
+    backToApps: '应用中心',
+  },
   common: {
     failureReasonNotRecorded:
       '这条历史记录未保存失败原因，请查看机器人日志，或重新发送消息获取详细错误。',

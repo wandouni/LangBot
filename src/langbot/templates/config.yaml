@@ -154,6 +154,21 @@ system:
     recovery_key: ''
     allow_modify_login_info: true
     disabled_adapters: []
+    portal:
+        # Application center shown after login instead of going straight to the
+        # LangBot Workspace. Disabled by default so existing deployments and
+        # tests keep their current post-login destination.
+        enabled: false
+        # Show the SqlBot card. Requires sqlbot.sso to be configured as well.
+        sqlbot_enabled: false
+        # Post-login destination for the LangBot card.
+        langbot_path: '/home/monitoring'
+        # SqlBot mount point behind the same gateway origin.
+        sqlbot_path: '/sqlbot/'
+        # Public browser origin of this deployment (protocol + host + port).
+        # Used only to decide whether SSO cookies must carry the Secure flag;
+        # empty means derive it from the request scheme.
+        public_origin: ''
     blocking_executor:
         # All asyncio.to_thread work shares this process-wide bounded pool.
         # Both running threads and queued calls are capped to prevent tenant
@@ -207,6 +222,25 @@ system:
     jwt:
         expire: 604800
         secret: ''
+sqlbot:
+    # Internal base URL of the SqlBot backend. LangBot calls it server-to-server
+    # to mint a one-time login ticket; it must never be the browser origin.
+    base_url: 'http://sqlbot:8000'
+    # Mount point SQLBot is served under, shared with the gateway and SqlBot's
+    # own CONTEXT_PATH.
+    context_path: '/sqlbot'
+    ticket_ttl_seconds: 60
+    request_timeout_seconds: 5
+    rate_limit_per_minute: 10
+    sso:
+        # Enable the LangBot -> SqlBot ticket handoff. Requires a shared secret
+        # configured identically on both sides.
+        enabled: false
+        # Secret. Set via SQLBOT__SSO__SHARED_SECRET. Use at least 32 chars.
+        shared_secret: ''
+        # Lifetime of the HttpOnly binding cookie in seconds. Must be at least
+        # as long as the ticket TTL.
+        binding_ttl_seconds: 120
 database:
     use: sqlite
     sqlite:

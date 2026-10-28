@@ -492,6 +492,24 @@ const esES = {
     editionCommunity: 'Comunidad',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: 'Centro de aplicaciones',
+    subtitle: 'Elige una aplicación para continuar.',
+    welcome: 'Bienvenido de nuevo, {{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription: 'Crea y opera bots, flujos y bases de conocimiento.',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: 'Consulta y analiza tus datos en lenguaje natural.',
+    open: 'Abrir',
+    opening: 'Abriendo...',
+    disabled: 'No disponible',
+    logout: 'Cerrar sesión',
+    loadError: 'No se pudo cargar el centro de aplicaciones',
+    retry: 'Reintentar',
+    sqlbotUnavailable:
+      'SqlBot no está disponible en este momento. Inténtalo de nuevo.',
+    backToApps: 'Centro de aplicaciones',
+  },
   common: {
     failureReasonNotRecorded:
       'No se registró el motivo del fallo. Consulta los registros del bot o vuelve a enviar el mensaje para obtener más detalles.',

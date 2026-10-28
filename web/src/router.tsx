@@ -29,6 +29,7 @@ import PluginPagesPage from '@/app/home/plugin-pages/page';
 import RootLayout from '@/app/RootLayout';
 import AcceptInvitationPage from '@/app/invitations/accept/page';
 import WorkspaceSelectPage from '@/app/workspaces/select/page';
+import PortalPage from '@/app/portal/page';
 
 const Loading = () => <div>Loading...</div>;
 
@@ -64,6 +65,10 @@ export const router = createBrowserRouter([
             <ResetPasswordPage />
           </ResetPasswordLayout>
         ),
+      },
+      {
+        path: '/portal',
+        element: <PortalPage />,
       },
       {
         path: '/invitations/accept',

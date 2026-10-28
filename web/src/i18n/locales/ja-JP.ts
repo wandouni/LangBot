@@ -489,6 +489,25 @@ const jaJP = {
     editionCommunity: 'コミュニティ版',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: 'アプリセンター',
+    subtitle: '続行するアプリを選択してください',
+    welcome: 'おかえりなさい、{{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription:
+      'ボット・パイプライン・ナレッジベースを構築・運用します。',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: '自然言語でデータを分析します。',
+    open: '開く',
+    opening: '開いています...',
+    disabled: '利用不可',
+    logout: 'ログアウト',
+    loadError: 'アプリセンターを読み込めません',
+    retry: '再試行',
+    sqlbotUnavailable:
+      'SqlBot は現在利用できません。しばらくしてから再度お試しください。',
+    backToApps: 'アプリセンター',
+  },
   common: {
     failureReasonNotRecorded:
       'この記録には失敗の理由が保存されていません。ボットのログを確認するか、再送信して詳細を確認してください。',

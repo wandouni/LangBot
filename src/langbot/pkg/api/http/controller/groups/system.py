@@ -213,6 +213,20 @@ class SystemRouterGroup(group.RouterGroup):
             # Detect Cloud deployment mode
             is_cloud = getattr(getattr(self.ap, 'deployment', None), 'mode', 'oss') == 'cloud'
 
+            # The application center only exposes routing switches. Secrets and
+            # internal SqlBot addresses stay server-side.
+            portal_service = getattr(self.ap, 'sqlbot_sso_service', None)
+            portal = (
+                portal_service.portal_capability()
+                if portal_service is not None
+                else {
+                    'enabled': False,
+                    'sqlbot_enabled': False,
+                    'langbot_path': '/home/monitoring',
+                    'sqlbot_path': '/sqlbot/',
+                }
+            )
+
             return self.success(
                 data={
                     'version': constants.semantic_version,
@@ -241,6 +255,7 @@ class SystemRouterGroup(group.RouterGroup):
                     'limitation': self.ap.instance_config.data.get('system', {}).get('limitation', {}),
                     'outbound_ips': outbound_ips,
                     'invitation_delivery': invitation_delivery_service.capability(),
+                    'portal': portal,
                     'wizard_status': wizard_status,
                     'wizard_progress': wizard_progress,
                 }

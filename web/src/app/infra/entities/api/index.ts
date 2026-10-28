@@ -600,6 +600,14 @@ export interface ApiRespSystemInfo {
    *  config.yaml). Shown on adapter config forms whose platform requires
    *  trusted-IP / IP-whitelist settings. Empty = not configured. */
   outbound_ips: string[];
+  /** Application center (`system.portal`). Missing on older backends, which
+   *  must keep the post-login destination at /home. */
+  portal?: {
+    enabled: boolean;
+    sqlbot_enabled: boolean;
+    langbot_path: string;
+    sqlbot_path: string;
+  };
   wizard_status: string; // 'none' | 'skipped' | 'completed'
   wizard_progress: WizardProgress | null;
 }

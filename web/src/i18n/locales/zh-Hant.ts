@@ -459,6 +459,23 @@ const zhHant = {
     editionCommunity: '社區版',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: '應用中心',
+    subtitle: '請選擇要進入的應用',
+    welcome: '歡迎回來，{{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription: '建置並維運機器人、流程與知識庫。',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: '用自然語言查詢與分析資料。',
+    open: '進入',
+    opening: '正在開啟...',
+    disabled: '暫不可用',
+    logout: '登出',
+    loadError: '無法載入應用中心',
+    retry: '重試',
+    sqlbotUnavailable: 'SqlBot 暫時無法使用，請稍後再試。',
+    backToApps: '應用中心',
+  },
   common: {
     failureReasonNotRecorded:
       '這筆歷史記錄未儲存失敗原因，請查看機器人日誌，或重新傳送訊息取得詳細錯誤。',

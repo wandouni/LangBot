@@ -480,6 +480,23 @@ const thTH = {
     editionCommunity: 'รุ่นชุมชน',
     editionCloud: 'Cloud',
   },
+  portal: {
+    title: 'ศูนย์แอปพลิเคชัน',
+    subtitle: 'เลือกแอปพลิเคชันเพื่อดำเนินการต่อ',
+    welcome: 'ยินดีต้อนรับกลับ {{account}}',
+    langbotTitle: 'LangBot',
+    langbotDescription: 'สร้างและดูแลบอท ไปป์ไลน์ และฐานความรู้',
+    sqlbotTitle: 'SqlBot',
+    sqlbotDescription: 'ถามคำถามเกี่ยวกับข้อมูลด้วยภาษาธรรมชาติ',
+    open: 'เปิด',
+    opening: 'กำลังเปิด...',
+    disabled: 'ไม่พร้อมใช้งาน',
+    logout: 'ออกจากระบบ',
+    loadError: 'ไม่สามารถโหลดศูนย์แอปพลิเคชันได้',
+    retry: 'ลองใหม่',
+    sqlbotUnavailable: 'SqlBot ไม่พร้อมใช้งานในขณะนี้ โปรดลองอีกครั้ง',
+    backToApps: 'ศูนย์แอปพลิเคชัน',
+  },
   common: {
     failureReasonNotRecorded:
       'ไม่ได้บันทึกสาเหตุของข้อผิดพลาด โปรดตรวจสอบบันทึกของบอตหรือส่งข้อความอีกครั้งเพื่อดูรายละเอียด',

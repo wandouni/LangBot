@@ -16,6 +16,7 @@ from ...context import RequestContext
 from .....cloud.launch import SpaceLaunchError
 from ...service.user import ControlPlaneDirectoryRequiredError, PublicRegistrationClosedError
 from ...service import totp as totp_module
+from ...service import sqlbot_sso as sqlbot_sso_module
 from .....utils import constants
 
 # Fixed-window admission quota for the unauthenticated reset-password endpoint (#2392).
@@ -574,6 +575,43 @@ class UserRouterGroup(group.RouterGroup):
             if sso_service is None:
                 return self.http_status(503, 'sso_unavailable', 'Single sign-on is unavailable')
             return await sso_service.exchange_session()
+
+        # ---- SqlBot application-center handoff ----
+
+        @self.route('/sqlbot/sso-ticket', methods=['POST'], auth_type=group.AuthType.ACCOUNT_TOKEN)
+        async def _(account) -> typing.Any:
+            """Mint a one-time SqlBot login ticket for the current Account.
+
+            The browser receives the ticket in the redirect URL and the binding
+            secret in an HttpOnly cookie scoped to the SqlBot mount point, so
+            the URL alone cannot be replayed from another browser.
+            """
+            service = getattr(self.ap, 'sqlbot_sso_service', None)
+            if service is None:
+                return self.http_status(503, 'sqlbot_sso_unavailable', 'SqlBot single sign-on is unavailable')
+            try:
+                grant = await service.issue_ticket(account=account.user, account_uuid=account.uuid)
+            except sqlbot_sso_module.SqlbotSsoError as exc:
+                return self.http_status(exc.status_code, exc.code, exc.message)
+
+            response = quart.make_response(
+                self.success(
+                    data={
+                        'redirect_url': grant.redirect_url,
+                        'expires_in': grant.expires_in,
+                    }
+                )
+            )
+            response.set_cookie(
+                sqlbot_sso_module.SQLBOT_BIND_COOKIE,
+                grant.binding_secret,
+                max_age=grant.binding_max_age,
+                path=grant.binding_cookie_path,
+                secure=grant.cookie_secure,
+                httponly=True,
+                samesite='Lax',
+            )
+            return response
 
         @self.route('/set-password', methods=['POST'], auth_type=group.AuthType.ACCOUNT_TOKEN)
         async def _(account) -> str:
