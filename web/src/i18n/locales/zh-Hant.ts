@@ -493,7 +493,7 @@ const zhHant = {
     integration: '連接',
     email: '電子郵件',
     password: '密碼',
-    welcome: '歡迎回到 LangBot 👋',
+    welcome: '歡迎回到 岭南Bot 👋',
     continueToLogin: '登入以繼續',
     loginSuccess: '登入成功',
     loginFailed: '登入失敗，請檢查電子郵件和密碼是否正確',

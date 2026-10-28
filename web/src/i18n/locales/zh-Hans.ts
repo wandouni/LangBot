@@ -498,7 +498,7 @@ const zhHans = {
     integration: '连接',
     email: '邮箱',
     password: '密码',
-    welcome: '欢迎回到 LangBot 👋',
+    welcome: '欢迎回到 岭南Bot 👋',
     continueToLogin: '登录以继续',
     loginSuccess: '登录成功',
     loginFailed: '登录失败，请检查邮箱和密码是否正确',
