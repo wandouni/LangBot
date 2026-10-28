@@ -55,6 +55,9 @@ testsdk/
 /build
 *.egg-info
 
+# Playwright MCP local session artifacts
+.playwright-mcp/
+
 # Next.js build cache (legacy)
 web/.next/
 web/.pnpm-home
