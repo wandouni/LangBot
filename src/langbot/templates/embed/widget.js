@@ -25,6 +25,7 @@
       minimize: "Minimize",
       uploadFile: "Upload file",
       send: "Send",
+      thinking: "Thinking...",
       failedToConnect: "Failed to connect",
       imageTooLarge: "Image must be under 5MB",
       onlyImages: "Only image files are supported",
@@ -43,6 +44,7 @@
       minimize: "最小化",
       uploadFile: "上传文件",
       send: "发送",
+      thinking: "正在思考...",
       failedToConnect: "连接失败",
       imageTooLarge: "图片大小不能超过 5MB",
       onlyImages: "仅支持图片文件",
@@ -61,6 +63,7 @@
       minimize: "最小化",
       uploadFile: "上傳檔案",
       send: "傳送",
+      thinking: "正在思考...",
       failedToConnect: "連線失敗",
       imageTooLarge: "圖片大小不能超過 5MB",
       onlyImages: "僅支援圖片檔案",
@@ -79,6 +82,7 @@
       minimize: "最小化",
       uploadFile: "ファイルをアップロード",
       send: "送信",
+      thinking: "考え中...",
       failedToConnect: "接続に失敗しました",
       imageTooLarge: "画像は5MB以下にしてください",
       onlyImages: "画像ファイルのみ対応しています",
@@ -97,6 +101,7 @@
       minimize: "Minimizar",
       uploadFile: "Subir archivo",
       send: "Enviar",
+      thinking: "Pensando...",
       failedToConnect: "Error de conexión",
       imageTooLarge: "La imagen debe ser menor a 5MB",
       onlyImages: "Solo se admiten archivos de imagen",
@@ -115,6 +120,7 @@
       minimize: "Свернуть",
       uploadFile: "Загрузить файл",
       send: "Отправить",
+      thinking: "Думаю...",
       failedToConnect: "Ошибка подключения",
       imageTooLarge: "Изображение должно быть менее 5МБ",
       onlyImages: "Поддерживаются только изображения",
@@ -133,6 +139,7 @@
       minimize: "ย่อ",
       uploadFile: "อัปโหลดไฟล์",
       send: "ส่ง",
+      thinking: "กำลังคิด...",
       failedToConnect: "เชื่อมต่อไม่สำเร็จ",
       imageTooLarge: "รูปภาพต้องมีขนาดไม่เกิน 5MB",
       onlyImages: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น",
@@ -151,6 +158,7 @@
       minimize: "Thu nhỏ",
       uploadFile: "Tải lên tệp",
       send: "Gửi",
+      thinking: "Đang suy nghĩ...",
       failedToConnect: "Kết nối thất bại",
       imageTooLarge: "Hình ảnh phải nhỏ hơn 5MB",
       onlyImages: "Chỉ hỗ trợ tệp hình ảnh",
@@ -291,10 +299,11 @@
     .lb-footer { text-align: right; padding: 6px 12px; font-size: 9px; color: #d1d5db; font-style: italic; flex-shrink: 0; }\
     .lb-footer a { color: #d1d5db; text-decoration: none; }\
     .lb-footer a:hover { color: #9ca3af; }\
-    .lb-typing { display: inline-flex; gap: 4px; padding: 10px 14px; background: #f3f4f6; border-radius: 12px; border-bottom-left-radius: 4px; margin-left: 42px; }\
-    .lb-typing span { width: 6px; height: 6px; background: #9ca3af; border-radius: 50%; animation: lb-bounce 1.4s infinite both; }\
-    .lb-typing span:nth-child(2) { animation-delay: 0.16s; }\
-    .lb-typing span:nth-child(3) { animation-delay: 0.32s; }\
+    .lb-typing { display: inline-flex; align-items: center; gap: 4px; padding: 10px 14px; background: #f3f4f6; border-radius: 12px; border-bottom-left-radius: 4px; margin-left: 42px; }\
+    .lb-typing-dot { width: 6px; height: 6px; background: #9ca3af; border-radius: 50%; animation: lb-bounce 1.4s infinite both; }\
+    .lb-typing-dot:nth-child(2) { animation-delay: 0.16s; }\
+    .lb-typing-dot:nth-child(3) { animation-delay: 0.32s; }\
+    .lb-typing-label { margin-left: 4px; color: #6b7280; font-size: 13px; }\
     @keyframes lb-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }\
     .lb-welcome { text-align: center; color: #9ca3af; padding: 40px 20px; font-size: 14px; }\
     .lb-welcome-logo { width: 48px; height: 48px; border-radius: 12px; margin: 0 auto 12px; }\
@@ -607,6 +616,7 @@
 
     state.ws.onclose = function () {
       state.isConnected = false;
+      removeTypingIndicator();
       updateStatusDot();
       updateSendBtn();
       stopHeartbeat();
@@ -619,6 +629,7 @@
 
     state.ws.onerror = function () {
       state.isConnected = false;
+      removeTypingIndicator();
       updateStatusDot();
       updateSendBtn();
     };
@@ -655,12 +666,21 @@
         break;
 
       case "error":
+        removeTypingIndicator();
+        state.isStreaming = false;
+        state.streamingMsgId = null;
         showError(data.message || "Unknown error");
         break;
     }
   }
 
   function handleAssistantMessage(msg) {
+    // The answer may take a while to start; keep the typing indicator until
+    // there is something visible to replace it.
+    if (msg.is_final || (msg.content || extractText(msg)).trim()) {
+      removeTypingIndicator();
+    }
+
     // Streaming: update existing message with same id
     var existingIdx = -1;
     for (var i = state.messages.length - 1; i >= 0; i--) {
@@ -733,6 +753,7 @@
       is_final: true,
     };
     addMessage(localMsg);
+    showTypingIndicator();
 
     state.ws.send(
       JSON.stringify({ type: "message", message: chain, stream: true }),
@@ -841,6 +862,7 @@
         state.isStreaming = false;
         state.streamingMsgId = null;
         state.historyLoaded = true;
+        removeTypingIndicator();
         renderMessages();
       })
       .catch(function () {
@@ -1120,7 +1142,16 @@
     if (els.messages.querySelector(".lb-typing")) return;
     var div = document.createElement("div");
     div.className = "lb-typing";
-    div.innerHTML = "<span></span><span></span><span></span>";
+    div.setAttribute("role", "status");
+    div.setAttribute("aria-live", "polite");
+    div.innerHTML =
+      '<span class="lb-typing-dot"></span>' +
+      '<span class="lb-typing-dot"></span>' +
+      '<span class="lb-typing-dot"></span>';
+    var label = document.createElement("span");
+    label.className = "lb-typing-label";
+    label.textContent = t("thinking");
+    div.appendChild(label);
     els.messages.appendChild(div);
     scrollToBottom();
   }
