@@ -151,6 +151,12 @@ services:
       LANGBOT_SSO_TICKET_TTL_SECONDS: ${SQLBOT_SSO_TICKET_TTL_SECONDS:-60}
       LANGBOT_SSO_TOKEN_TTL_MINUTES: ${SQLBOT_SSO_TOKEN_TTL_MINUTES:-480}
       LANGBOT_SSO_DEFAULT_WORKSPACE_ID: ${SQLBOT_SSO_DEFAULT_WORKSPACE_ID:-1}
+      # Endpoint written into the "export MCP config" JSON. Without it SQLBot
+      # uses the request Host plus MCP_PORT, which yields http://<host>:8001/mcp
+      # -- a port this compose file never publishes, so LangBot cannot connect.
+      # MCP consumers here are the compose services, hence the service DNS name;
+      # override in .env if an outside MCP client has to reach SQLBot instead.
+      MCP_PUBLIC_URL: ${SQLBOT_MCP_PUBLIC_URL:-http://sqlbot:8001/mcp}
     volumes:
       - ${SQLBOT_DATA_DIR:-./sqlbot-data}/excel:/opt/sqlbot/data/excel
       - ${SQLBOT_DATA_DIR:-./sqlbot-data}/file:/opt/sqlbot/data/file
