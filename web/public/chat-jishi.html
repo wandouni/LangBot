@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>广东岭南现代技师学院咨询机器人</title>
+  <!--
+    Same structure as chat.html, branded for the technician college.
+
+    The bot below is the production page bot "广东岭南现代技师学院咨询机器人"
+    (uuid b4f94b95-9ef4-43eb-84be-1728e2f32d7c), not the vocational college
+    bot used by chat.html.
+
+    Roles mirror the college's positioning as a technician school: a national
+    key technician college in Guangzhou Science City that combines technical
+    education, vocational training, skill assessment and employment services,
+    and offers intermediate technician, senior technician and preparatory
+    technician levels across seven secondary colleges. The bot's own quick
+    questions are empty, so every role supplies its own list -- an empty list
+    would render no question chips.
+
+    Everything below can be overridden without editing this file:
+      ?embed=<bot uuid>   talk to a different page bot
+      ?title=<text>       header and tab title
+      ?theme=%23RRGGBB    accent color
+      ?config=<url>       load a JSON file with the same fields
+
+    accent: the emblem blue is rgb(19,121,181); it is deepened to #0f6fa8 so
+    white header text, the selected role tab and the 01/02 question indices
+    keep at least a 5:1 contrast ratio.
+  -->
+  <script type="application/json" id="chat-config">
+  {
+    "bot": "b4f94b95-9ef4-43eb-84be-1728e2f32d7c",
+    "title": "广东岭南现代技师学院咨询机器人",
+    "subtitle": "你好，请问想了解什么？学院是国家重点技师学院，开设中级技工、高级技工和预备技师等培养层次，可咨询招生报名、专业设置、就业实习、校园生活和教学管理等公开事项。",
+    "accent": "#0f6fa8",
+    "logo": "/brand/jishi-logo-symbol.png",
+    "roles": [
+      {
+        "id": "prospective-student-parent",
+        "label": "考生与家长",
+        "questions": [
+          "学院招收初中毕业生还是高中毕业生？",
+          "不同培养层次的学制有什么区别？",
+          "学院开设哪些二级学院和专业？",
+          "报名需要什么条件和材料？",
+          "学费和资助政策是怎样的？",
+          "学院地址和交通路线是什么？"
+        ]
+      },
+      {
+        "id": "current-student",
+        "label": "在校学生",
+        "questions": [
+          "在哪里查询课表、考试和实训安排？",
+          "学院有哪些技能竞赛和竞赛集训机会？",
+          "如何参加职业技能等级认定和考取证书？",
+          "实习安排和就业推荐由哪个部门负责？",
+          "宿舍、食堂、校园卡等生活服务怎么办理？"
+        ]
+      },
+      {
+        "id": "teacher-staff",
+        "label": "教职工",
+        "questions": [
+          "学院校历和教学安排在哪里查看？",
+          "实训室和教学设备如何申请使用？",
+          "教师培训和教研活动有哪些渠道？",
+          "学生技能竞赛指导由哪个部门统筹？",
+          "学籍、成绩和教学业务应联系哪个部门？"
+        ]
+      },
+      {
+        "id": "partner-company",
+        "label": "合作企业",
+        "questions": [
+          "如何与学院开展校企合作或共建订单班？",
+          "企业如何申请成为校外实习实训基地？",
+          "如何参加校园招聘或进校举办宣讲会？",
+          "学院提供哪些技能评价和员工培训服务？",
+          "校企合作洽谈应联系哪个部门？"
+        ]
+      },
+      {
+        "id": "alumni",
+        "label": "校友",
+        "questions": [
+          "如何补办毕业证明或职业技能证书？",
+          "毕业生档案问题应联系哪个部门？",
+          "校友返校需要预约吗？",
+          "在哪里了解校友活动和校友会？",
+          "学院是否提供校友就业或创业服务？"
+        ]
+      },
+      {
+        "id": "campus-visitor",
+        "label": "来校访客",
+        "questions": [
+          "学院各校区地址和交通路线是什么？",
+          "访客入校需要预约或登记吗？",
+          "校园参观的开放时间和预约方式是什么？",
+          "来校停车需要注意什么？",
+          "招生办和校务联系电话是多少？"
+        ]
+      }
+    ]
+  }
+  </script>
+  <script src="/chat-shell.js"></script>
+</head>
+<body></body>
+</html>

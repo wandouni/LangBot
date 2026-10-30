@@ -3,80 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>智能咨询</title>
-  <script>
-    // Standalone chat page: loads the LangBot embed widget and expands it to
-    // the full viewport. Vite copies web/public into web/dist, so the core
-    // serves this file at /chat.html and the widget URL stays same-origin --
-    // no host or scheme needs to be hard-coded.
-    //
-    // Query parameters:
-    //   embed=<bot uuid>  which bot to talk to
-    //   title=<text>      label shown in the widget header and the tab title
-    (function () {
-      var DEFAULT_BOT_UUID = '9da8c6a6-b4cc-4922-b23d-3fa015ed85e4';
-      var DEFAULT_TITLE = '广东岭南职业技术学院公共咨询机器人';
+  <title>广东岭南职业技术学院公共咨询机器人</title>
+  <!--
+    Page-level configuration for the standalone chat widget.
 
-      var params = new URLSearchParams(window.location.search);
-      var botUuid = params.get('embed') || DEFAULT_BOT_UUID;
-      var title = params.get('title') || DEFAULT_TITLE;
+    Everything below can be overridden without editing this file:
+      ?embed=<bot uuid>   talk to a different page bot
+      ?title=<text>       header and tab title
+      ?theme=%23RRGGBB    accent color
+      ?config=<url>       load a JSON file with the same fields
 
-      document.title = title;
-
-      var script = document.createElement('script');
-      script.src = '/api/v1/embed/' + encodeURIComponent(botUuid) + '/widget.js';
-      script.setAttribute('data-title', title);
-      // The page has no content of its own, so an unopened panel would leave
-      // the visitor staring at a blank screen.
-      script.setAttribute('data-auto-open', 'true');
-      document.head.appendChild(script);
-    })();
-
-    // The widget renders inside a Shadow DOM, so a plain <style> here cannot
-    // reach its panel. Append an override stylesheet to the widget's shadow
-    // root instead; it lands after the widget's own styles and wins on equal
-    // specificity.
-    (function () {
-      // Height reserved at the bottom for the launcher bubble: 20px offset +
-      // 56px bubble. Adjust to change the gap under the panel.
-      var BUBBLE_RESERVED = 76;
-
-      var OVERRIDE_CSS =
-        '.lb-panel {' +
-        '  left: 0;' +
-        '  right: 0;' +
-        '  width: auto;' +                                           // override width: 400px
-        '  bottom: ' + BUBBLE_RESERVED + 'px;' +
-        '  height: calc(100vh - ' + BUBBLE_RESERVED + 'px);' +
-        '  max-height: calc(100vh - ' + BUBBLE_RESERVED + 'px);' +  // override max-height: calc(100vh - 108px)
-        '  border-radius: 0;' +
-        '}';
-
-      function apply() {
-        var root = document.getElementById('langbot-widget-root');
-        if (!root || !root.shadowRoot) return false;
-        if (root.shadowRoot.querySelector('style[data-layout-override]')) return true;
-        var style = document.createElement('style');
-        style.setAttribute('data-layout-override', '');
-        style.textContent = OVERRIDE_CSS;
-        root.shadowRoot.appendChild(style);
-        return true;
+    roles[].questions: an empty list falls back to the bot's quick questions
+    configured in the admin console.
+  -->
+  <script type="application/json" id="chat-config">
+  {
+    "bot": "9da8c6a6-b4cc-4922-b23d-3fa015ed85e4",
+    "title": "广东岭南职业技术学院公共咨询机器人",
+    "subtitle": "你好，请问想了解什么？可以咨询招生、新生报到、校友服务、教师交流和来校访问等公开事项。",
+    "accent": "#72030C",
+    "accentHover": "#932020",
+    "accentBorder": "#E0BFBC",
+    "logo": "/brand/lingnan-logo-symbol.png",
+    "roles": [
+      {
+        "id": "prospective-student-parent",
+        "label": "考生与家长",
+        "questions": []
+      },
+      {
+        "id": "internal-teacher",
+        "label": "校内教师",
+        "questions": [
+          "在哪里查看学校公开校历？",
+          "学校有哪些公开教研活动？",
+          "教师培训信息在哪里查询？",
+          "如何了解对外交流合作项目？",
+          "校内个人业务应从哪个正式入口办理？"
+        ]
+      },
+      {
+        "id": "external-teacher",
+        "label": "校外教师",
+        "questions": [
+          "如何咨询访学交流？",
+          "如何了解公开教研活动？",
+          "教师培训有哪些报名渠道？",
+          "校际合作应联系哪个部门？",
+          "来校学术交流需要办理哪些手续？"
+        ]
+      },
+      {
+        "id": "alumni",
+        "label": "校友",
+        "questions": [
+          "如何申请成绩单？",
+          "如何办理学历或毕业证明？",
+          "毕业生档案问题应联系哪个部门？",
+          "校友返校需要预约吗？",
+          "在哪里了解校友活动？"
+        ]
+      },
+      {
+        "id": "campus-visitor",
+        "label": "来校访客",
+        "questions": [
+          "学校各校区的地址是什么？",
+          "来校有哪些公共交通方式？",
+          "访客入校需要预约吗？",
+          "校园参观的开放时间是什么？",
+          "来校停车需要注意什么？"
+        ]
+      },
+      {
+        "id": "other",
+        "label": "其他",
+        "questions": [
+          "学校有哪些对外公开服务？",
+          "企业合作应联系哪个部门？",
+          "如何找到学校官方联系方式？",
+          "在哪里查看学校最新公告？",
+          "学校各部门的办公电话是多少？"
+        ]
       }
-
-      if (apply()) return;
-
-      // The widget script is injected asynchronously and builds its root on
-      // DOMContentLoaded. Listen first, then poll as a fallback for the case
-      // where the root appears after that event.
-      document.addEventListener('DOMContentLoaded', apply);
-      var tries = 0;
-      var timer = setInterval(function () {
-        if (apply() || ++tries > 100) clearInterval(timer);
-      }, 50);
-    })();
+    ]
+  }
   </script>
+  <script src="/chat-shell.js"></script>
 </head>
-<body>
-
-</body>
+<body></body>
 </html>
