@@ -13,12 +13,32 @@
   var scriptAutoOpen = scriptEl
     ? scriptEl.getAttribute("data-auto-open") === "true"
     : false;
+  // Optional page-level presentation. Every attribute is ignored when absent,
+  // so existing embeds render exactly as before.
+  var scriptAccent = scriptEl ? scriptEl.getAttribute("data-accent") : null;
+  var scriptAccentHover = scriptEl
+    ? scriptEl.getAttribute("data-accent-hover")
+    : null;
+  var scriptAccentBorder = scriptEl
+    ? scriptEl.getAttribute("data-accent-border")
+    : null;
+  var scriptAccentSoft = scriptEl
+    ? scriptEl.getAttribute("data-accent-soft")
+    : null;
+  var scriptOnAccent = scriptEl
+    ? scriptEl.getAttribute("data-on-accent")
+    : null;
+  var scriptLogo = scriptEl ? scriptEl.getAttribute("data-logo") : null;
+  var scriptSubtitle = scriptEl ? scriptEl.getAttribute("data-subtitle") : null;
+  var scriptRoles = scriptEl ? scriptEl.getAttribute("data-roles") : null;
 
   // ========== i18n ==========
   var I18N = {
     en_US: {
       welcomeMessage: "Send a message to start the conversation",
       quickQuestions: "Suggested questions",
+      showMoreQuestions: "More",
+      collapseQuestions: "Collapse",
       inputPlaceholder: "Type a message...",
       openChat: "Open chat",
       resetConversation: "Reset conversation",
@@ -38,6 +58,8 @@
     zh_Hans: {
       welcomeMessage: "发送消息开始对话",
       quickQuestions: "快捷提问",
+      showMoreQuestions: "更多",
+      collapseQuestions: "收起",
       inputPlaceholder: "输入消息...",
       openChat: "打开聊天",
       resetConversation: "重置对话",
@@ -57,6 +79,8 @@
     zh_Hant: {
       welcomeMessage: "傳送訊息開始對話",
       quickQuestions: "快捷提問",
+      showMoreQuestions: "更多",
+      collapseQuestions: "收起",
       inputPlaceholder: "輸入訊息...",
       openChat: "開啟聊天",
       resetConversation: "重置對話",
@@ -76,6 +100,8 @@
     ja_JP: {
       welcomeMessage: "メッセージを送信して会話を始めましょう",
       quickQuestions: "質問候補",
+      showMoreQuestions: "もっと見る",
+      collapseQuestions: "閉じる",
       inputPlaceholder: "メッセージを入力...",
       openChat: "チャットを開く",
       resetConversation: "会話をリセット",
@@ -95,6 +121,8 @@
     es_ES: {
       welcomeMessage: "Envía un mensaje para iniciar la conversación",
       quickQuestions: "Preguntas sugeridas",
+      showMoreQuestions: "Más",
+      collapseQuestions: "Contraer",
       inputPlaceholder: "Escribe un mensaje...",
       openChat: "Abrir chat",
       resetConversation: "Reiniciar conversación",
@@ -114,6 +142,8 @@
     ru_RU: {
       welcomeMessage: "Отправьте сообщение, чтобы начать разговор",
       quickQuestions: "Быстрые вопросы",
+      showMoreQuestions: "Ещё",
+      collapseQuestions: "Свернуть",
       inputPlaceholder: "Введите сообщение...",
       openChat: "Открыть чат",
       resetConversation: "Сбросить разговор",
@@ -133,6 +163,8 @@
     th_TH: {
       welcomeMessage: "ส่งข้อความเพื่อเริ่มการสนทนา",
       quickQuestions: "คำถามที่แนะนำ",
+      showMoreQuestions: "เพิ่มเติม",
+      collapseQuestions: "ย่อ",
       inputPlaceholder: "พิมพ์ข้อความ...",
       openChat: "เปิดแชท",
       resetConversation: "รีเซ็ตการสนทนา",
@@ -152,6 +184,8 @@
     vi_VN: {
       welcomeMessage: "Gửi tin nhắn để bắt đầu cuộc trò chuyện",
       quickQuestions: "Câu hỏi gợi ý",
+      showMoreQuestions: "Xem thêm",
+      collapseQuestions: "Thu gọn",
       inputPlaceholder: "Nhập tin nhắn...",
       openChat: "Mở trò chuyện",
       resetConversation: "Đặt lại cuộc trò chuyện",
@@ -209,6 +243,39 @@
 
   var QUICK_QUESTIONS = normalizeQuickQuestions(CONFIG.quickQuestions);
 
+  // Role tabs are an opt-in page feature: a page passing data-roles gets a role
+  // switcher above the default questions, pages that do not pass it keep the
+  // plain welcome screen. A role with an empty question list falls back to the
+  // bot's configured quick questions.
+  var MAX_ROLES = 6;
+
+  function normalizeRoles(raw) {
+    if (typeof raw !== "string" || !raw) return [];
+    var parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      return [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    var result = [];
+    for (var i = 0; i < parsed.length && result.length < MAX_ROLES; i++) {
+      var item = parsed[i];
+      if (!item || typeof item !== "object") continue;
+      var id = typeof item.id === "string" ? item.id.trim() : "";
+      var label = typeof item.label === "string" ? item.label.trim() : "";
+      if (!id || !label) continue;
+      result.push({
+        id: id,
+        label: label,
+        questions: normalizeQuickQuestions(item.questions),
+      });
+    }
+    return result;
+  }
+
+  var ROLES = normalizeRoles(scriptRoles);
+
   // Wizard previews must use the browser-visible backend URL. Behind a TLS
   // proxy the server's request URL can be HTTP even when widget.js uses HTTPS.
   // External embeds retain their configured public webhook prefix.
@@ -218,6 +285,185 @@
       CONFIG.baseUrl = scriptUrl.origin;
       CONFIG.logoUrl = CONFIG.baseUrl + "/api/v1/embed/logo";
     }
+  }
+
+  // A page-supplied logo wins over the wizard preview default.
+  if (scriptLogo) CONFIG.logoUrl = scriptLogo;
+
+  // ========== Page palette ==========
+  // Colors arrive as validated hex strings and are written into a stylesheet,
+  // never interpolated into the DOM directly. When no accent is supplied the
+  // widget keeps its own blue, so nothing below runs.
+  var DEFAULT_PALETTE = {
+    accent: "#2563eb",
+    hover: "#1d4ed8",
+    border: "#93c5fd",
+    soft: "#eff6ff",
+    link: "#bfdbfe",
+    onAccent: "#ffffff",
+    shadow: "rgba(37,99,235,0.4)",
+    shadowHover: "rgba(37,99,235,0.5)",
+  };
+
+  function parseHex(value) {
+    if (typeof value !== "string") return null;
+    var match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value.trim());
+    if (!match) return null;
+    var hex = match[1];
+    if (hex.length === 3) {
+      hex =
+        hex.charAt(0) +
+        hex.charAt(0) +
+        hex.charAt(1) +
+        hex.charAt(1) +
+        hex.charAt(2) +
+        hex.charAt(2);
+    }
+    hex = hex.toLowerCase();
+    return {
+      hex: "#" + hex,
+      r: parseInt(hex.substring(0, 2), 16),
+      g: parseInt(hex.substring(2, 4), 16),
+      b: parseInt(hex.substring(4, 6), 16),
+    };
+  }
+
+  function mixHex(from, to, ratio) {
+    var channels = [from.r, from.g, from.b].map(function (channel, index) {
+      var target = [to.r, to.g, to.b][index];
+      var mixed = Math.round(channel + (target - channel) * ratio);
+      var part = mixed.toString(16);
+      return part.length === 1 ? "0" + part : part;
+    });
+    return "#" + channels.join("");
+  }
+
+  function channelLuminance(value) {
+    var ratio = value / 255;
+    return ratio <= 0.03928
+      ? ratio / 12.92
+      : Math.pow((ratio + 0.055) / 1.055, 2.4);
+  }
+
+  function relativeLuminance(color) {
+    return (
+      0.2126 * channelLuminance(color.r) +
+      0.7152 * channelLuminance(color.g) +
+      0.0722 * channelLuminance(color.b)
+    );
+  }
+
+  // Pick whichever of white or near-black ink contrasts better with the accent,
+  // following the WCAG contrast ratio formula.
+  function pickOnAccent(color) {
+    var luminance = relativeLuminance(color);
+    var whiteContrast = 1.05 / (luminance + 0.05);
+    var ink = { r: 17, g: 24, b: 39 };
+    var inkLuminance = relativeLuminance(ink);
+    var inkContrast =
+      (Math.max(luminance, inkLuminance) + 0.05) /
+      (Math.min(luminance, inkLuminance) + 0.05);
+    return whiteContrast >= inkContrast ? "#ffffff" : "#111827";
+  }
+
+  var PALETTE = null;
+
+  (function () {
+    var accent = parseHex(scriptAccent);
+    if (!accent) return;
+    var hover = parseHex(scriptAccentHover);
+    var border = parseHex(scriptAccentBorder);
+    var soft = parseHex(scriptAccentSoft);
+    var onAccent = parseHex(scriptOnAccent);
+    var light = { r: 255, g: 255, b: 255 };
+    PALETTE = {
+      accent: accent.hex,
+      hover: hover ? hover.hex : mixHex(accent, { r: 0, g: 0, b: 0 }, 0.12),
+      border: border ? border.hex : mixHex(accent, light, 0.6),
+      soft: soft ? soft.hex : mixHex(accent, light, 0.92),
+      // Links inside a user bubble need to stay readable on the accent color.
+      link: mixHex(
+        accent,
+        light,
+        relativeLuminance(accent) > 0.4 ? 0.45 : 0.78
+      ),
+      onAccent: onAccent ? onAccent.hex : pickOnAccent(accent),
+      shadow:
+        "rgba(" + accent.r + ", " + accent.g + ", " + accent.b + ", 0.4)",
+      shadowHover:
+        "rgba(" + accent.r + ", " + accent.g + ", " + accent.b + ", 0.5)",
+    };
+  })();
+
+  function buildThemeCSS(p) {
+    return (
+      ".lb-bubble { background: " + p.accent + "; box-shadow: 0 4px 12px " + p.shadow + "; }" +
+      ".lb-bubble:hover { box-shadow: 0 6px 20px " + p.shadowHover + "; }" +
+      ".lb-header { background: " + p.accent + "; color: " + p.onAccent + "; }" +
+      ".lb-header-btn { color: " + p.onAccent + "; }" +
+      ".lb-msg-user .lb-msg-bubble { background: " + p.accent + "; color: " + p.onAccent + "; }" +
+      ".lb-msg-bubble a { color: " + p.accent + "; }" +
+      ".lb-msg-user .lb-msg-bubble a { color: " + p.link + "; }" +
+      ".lb-avatar-user { background: " + p.accent + "; color: " + p.onAccent + "; }" +
+      ".lb-act-btn.lb-active { color: " + p.accent + "; border-color: " + p.border + "; background: " + p.soft + "; }" +
+      ".lb-quick-btn:hover { background: " + p.soft + "; border-color: " + p.border + "; color: " + p.hover + "; }" +
+      ".lb-quick-btn:focus-visible { outline: 2px solid " + p.accent + "; }" +
+      ".lb-input:focus { border-color: " + p.accent + "; }" +
+      ".lb-send-btn { background: " + p.accent + "; color: " + p.onAccent + "; }" +
+      ".lb-send-btn:hover { background: " + p.hover + "; }"
+    );
+  }
+
+  function buildConsultCSS(p) {
+    return (
+      ".lb-welcome { max-width: 1000px; width: 100%; margin: 0 auto; padding: 28px 20px 12px; color: #6b7280; }" +
+      ".lb-welcome-logo { width: 56px; height: 56px; border-radius: 14px; object-fit: contain; margin-bottom: 12px; }" +
+      ".lb-role-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 18px; }" +
+      ".lb-role-tab { min-height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; background: #f3f4f6; color: #4b5563; font-family: inherit; font-size: 13px; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }" +
+      ".lb-role-tab:hover { background: #e5e7eb; }" +
+      ".lb-role-tab.lb-role-active { background: " + p.accent + "; border-color: " + p.accent + "; color: " + p.onAccent + "; font-weight: 600; }" +
+      ".lb-role-tab:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-questions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 16px; text-align: left; }" +
+      "@media (min-width: 640px) { .lb-role-questions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }" +
+      "@media (min-width: 1100px) { .lb-role-questions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }" +
+      ".lb-role-question { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; color: #374151; font-family: inherit; font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }" +
+      ".lb-role-question:hover { background: " + p.soft + "; border-color: " + p.border + "; color: " + p.hover + "; }" +
+      ".lb-role-question:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-q-index { flex: 0 0 auto; color: " + p.accent + "; font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.7; }" +
+      ".lb-q-text { flex: 1 1 auto; min-width: 0; }" +
+      ".lb-q-arrow { flex: 0 0 auto; color: #9ca3af; font-size: 14px; line-height: 1.4; }" +
+      ".lb-role-dock { display: flex; flex-direction: column; flex-shrink: 0; border-top: 1px solid #e5e7eb; background: #fff; }" +
+      ".lb-role-dock[hidden] { display: none; }" +
+      ".lb-role-dock.lb-role-dock-expanded .lb-role-dock-row { display: none; }" +
+      ".lb-role-dock-row { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 6px 16px 2px; }" +
+      ".lb-role-dock-label { display: none; flex: 0 0 auto; color: #6b7280; font-size: 12px; }" +
+      ".lb-role-dock-preview { display: flex; flex: 1 1 auto; gap: 8px; min-width: 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }" +
+      ".lb-role-dock-preview::-webkit-scrollbar { display: none; }" +
+      ".lb-role-dock-preview-btn { flex: 0 0 auto; max-width: 240px; min-height: 36px; padding: 0 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; color: #374151; font-family: inherit; font-size: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }" +
+      ".lb-role-dock-preview-btn:hover { background: " + p.soft + "; border-color: " + p.border + "; color: " + p.hover + "; }" +
+      ".lb-role-dock-preview-btn:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-toggle { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px; border: none; border-radius: 6px; background: none; color: " + p.accent + "; font-family: inherit; font-size: 12px; cursor: pointer; }" +
+      ".lb-role-dock-toggle:hover { text-decoration: underline; }" +
+      ".lb-role-dock-toggle:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-chevron { display: inline-flex; }" +
+      ".lb-role-dock-chevron svg { width: 16px; height: 16px; fill: currentColor; transition: transform 0.15s; }" +
+      '.lb-role-dock-toggle[aria-expanded="true"] .lb-role-dock-chevron svg { transform: rotate(180deg); }' +
+      ".lb-role-dock-panel { margin: 6px 16px 10px; padding: 10px 12px 12px; border: 1px solid #e5e7eb; border-radius: 10px; max-height: min(45vh, 360px); overflow-y: auto; outline: none; }" +
+      ".lb-role-dock-panel[hidden] { display: none; }" +
+      ".lb-role-dock-panel:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }" +
+      ".lb-role-dock-title { color: #111827; font-size: 13px; font-weight: 600; }" +
+      ".lb-role-dock-close { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; border-radius: 6px; background: none; color: #6b7280; cursor: pointer; }" +
+      ".lb-role-dock-close:hover { background: #f3f4f6; color: #374151; }" +
+      ".lb-role-dock-close:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-close svg { width: 18px; height: 18px; fill: currentColor; }" +
+      ".lb-role-tabs.lb-role-tabs-dock { flex-wrap: nowrap; justify-content: flex-start; gap: 6px; margin-top: 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }" +
+      ".lb-role-tabs.lb-role-tabs-dock::-webkit-scrollbar { display: none; }" +
+      ".lb-role-tabs.lb-role-tabs-dock .lb-role-tab { flex: 0 0 auto; min-height: 32px; padding: 0 12px; font-size: 12px; }" +
+      ".lb-role-questions.lb-role-questions-dock { margin-top: 10px; }" +
+      ".lb-role-questions.lb-role-questions-dock .lb-role-question { min-height: 40px; padding: 8px 10px; }" +
+      "@media (min-width: 520px) { .lb-role-dock-label { display: block; } }"
+    );
   }
 
   // ========== Styles ==========
@@ -236,7 +482,7 @@
     .lb-panel.lb-visible { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }\
     .lb-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: #2563eb; color: #fff; flex-shrink: 0; }\
     .lb-header-left { display: flex; align-items: center; gap: 10px; }\
-    .lb-header-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; }\
+    .lb-header-logo { width: 28px; height: 28px; border-radius: 6px; object-fit: contain; }\
     .lb-header-title { font-size: 16px; font-weight: 600; }\
     .lb-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #fbbf24; flex-shrink: 0; }\
     .lb-status-dot.lb-connected { background: #34d399; }\
@@ -306,7 +552,7 @@
     .lb-typing-label { margin-left: 4px; color: #6b7280; font-size: 13px; }\
     @keyframes lb-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }\
     .lb-welcome { text-align: center; color: #9ca3af; padding: 40px 20px; font-size: 14px; }\
-    .lb-welcome-logo { width: 48px; height: 48px; border-radius: 12px; margin: 0 auto 12px; }\
+    .lb-welcome-logo { width: 48px; height: 48px; border-radius: 12px; object-fit: contain; margin: 0 auto 12px; }\
     .lb-quick-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px; }\
     .lb-quick-dock { display: none; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 8px 16px 0; overflow-x: auto; overflow-y: hidden; flex-shrink: 0; -webkit-overflow-scrolling: touch; scrollbar-width: none; }\
     .lb-quick-dock::-webkit-scrollbar { display: none; }\
@@ -346,6 +592,8 @@
   // ========== SVG Icons ==========
   var ICON_CLOSE =
     '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+  var ICON_CHEVRON_DOWN =
+    '<svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>';
   var ICON_SEND =
     '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
   var ICON_RESET =
@@ -431,6 +679,11 @@
     historyReloadTimer: null,
     pendingImage: null,
     feedbackState: {},
+    // Not cleared by resetSession(): the visitor keeps their selected role.
+    activeRole: ROLES.length ? ROLES[0].id : null,
+    // Past-message question dock. Collapsed by default so the conversation
+    // keeps the space; selecting a question closes it again.
+    roleDockOpen: false,
   };
 
   // ========== DOM References ==========
@@ -880,6 +1133,7 @@
     }
     els.messages.appendChild(el);
     updateQuickQuestionsDock();
+    updateRoleDock();
     if (!silent) scrollToBottom();
   }
 
@@ -1060,11 +1314,14 @@
       els.messages.removeChild(els.messages.firstChild);
     }
     els.welcome = null;
+    els.roleTabs = null;
+    els.roleQuestions = null;
 
     // Re-add welcome if no messages
     if (state.messages.length === 0) {
       els.messages.appendChild(createWelcomeEl());
       updateQuickQuestionsDock();
+      updateRoleDock();
       return;
     }
 
@@ -1072,6 +1329,7 @@
       els.messages.appendChild(createMessageEl(state.messages[i]));
     }
     updateQuickQuestionsDock();
+    updateRoleDock();
     scrollToBottom();
   }
 
@@ -1089,13 +1347,14 @@
     }
   }
 
-  function createQuickQuestionButtons(mode) {
-    if (!QUICK_QUESTIONS.length) return null;
+  function createQuickQuestionButtons(mode, source) {
+    var questions = source || QUICK_QUESTIONS;
+    if (!questions.length) return null;
     var wrap = document.createElement("div");
     wrap.className = mode === "dock" ? "lb-quick-dock" : "lb-quick-questions";
     wrap.setAttribute("role", "group");
     wrap.setAttribute("aria-label", t("quickQuestions"));
-    for (var i = 0; i < QUICK_QUESTIONS.length; i++) {
+    for (var i = 0; i < questions.length; i++) {
       (function (question) {
         var btn = document.createElement("button");
         btn.type = "button";
@@ -1106,7 +1365,96 @@
           fillInput(question);
         });
         wrap.appendChild(btn);
-      })(QUICK_QUESTIONS[i]);
+      })(questions[i]);
+    }
+    return wrap;
+  }
+
+  function findRole(roleId) {
+    for (var i = 0; i < ROLES.length; i++) {
+      if (ROLES[i].id === roleId) return ROLES[i];
+    }
+    return ROLES[0];
+  }
+
+  function activeRoleQuestions() {
+    if (!ROLES.length) return QUICK_QUESTIONS;
+    var role = findRole(state.activeRole);
+    return role && role.questions.length ? role.questions : QUICK_QUESTIONS;
+  }
+
+  function selectRole(roleId) {
+    if (state.activeRole === roleId) return;
+    state.activeRole = roleId;
+    // With no messages the welcome block owns the tabs, so a full re-render
+    // keeps it in sync. Once the conversation has started the tabs live in the
+    // role dock; rebuilding it is enough and keeps the message list intact.
+    if (state.messages.length === 0) {
+      renderMessages();
+      return;
+    }
+    updateRoleDock();
+    if (state.roleDockOpen) focusActiveRoleDockTab();
+  }
+
+  function createRoleTabs() {
+    var wrap = document.createElement("div");
+    wrap.className = "lb-role-tabs";
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", t("quickQuestions"));
+    for (var i = 0; i < ROLES.length; i++) {
+      (function (role) {
+        var isActive = role.id === state.activeRole;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lb-role-tab" + (isActive ? " lb-role-active" : "");
+        btn.textContent = role.label;
+        btn.title = role.label;
+        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+        btn.addEventListener("click", function () {
+          selectRole(role.id);
+        });
+        wrap.appendChild(btn);
+      })(ROLES[i]);
+    }
+    return wrap;
+  }
+
+  function createRoleQuestions(onSelect) {
+    var questions = activeRoleQuestions();
+    if (!questions.length) return null;
+    var wrap = document.createElement("div");
+    wrap.className = "lb-role-questions";
+    for (var i = 0; i < questions.length; i++) {
+      (function (question, index) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lb-role-question";
+        btn.title = question;
+
+        var order = document.createElement("span");
+        order.className = "lb-q-index";
+        order.textContent = (index + 1 < 10 ? "0" : "") + (index + 1);
+
+        var label = document.createElement("span");
+        label.className = "lb-q-text";
+        label.textContent = question;
+
+        var arrow = document.createElement("span");
+        arrow.className = "lb-q-arrow";
+        arrow.textContent = "›";
+
+        btn.appendChild(order);
+        btn.appendChild(label);
+        btn.appendChild(arrow);
+        btn.addEventListener("click", function () {
+          // Callers can close the surrounding panel before focus moves to the
+          // composer; fillInput() is always last so it keeps focus.
+          if (typeof onSelect === "function") onSelect(question);
+          fillInput(question);
+        });
+        wrap.appendChild(btn);
+      })(questions[i], i);
     }
     return wrap;
   }
@@ -1114,6 +1462,213 @@
   function updateQuickQuestionsDock() {
     if (!els.quickDock) return;
     els.quickDock.style.display = state.messages.length > 0 ? "flex" : "none";
+  }
+
+  // ========== Role dock ==========
+  // Once the conversation has messages the welcome block is gone, so the role
+  // tabs and their questions would disappear with it. The dock keeps three
+  // suggestions visible above the composer and expands into the full,
+  // tabbed list on demand.
+  var ROLE_DOCK_PREVIEW_COUNT = 3;
+
+  function roleDockAvailable() {
+    return (
+      ROLES.length > 0 &&
+      state.messages.length > 0 &&
+      activeRoleQuestions().length > 0
+    );
+  }
+
+  function fillRoleDockPreview() {
+    var host = els.roleDockPreview;
+    if (!host) return;
+    host.textContent = "";
+    var questions = activeRoleQuestions().slice(0, ROLE_DOCK_PREVIEW_COUNT);
+    for (var i = 0; i < questions.length; i++) {
+      (function (question) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lb-role-dock-preview-btn";
+        btn.textContent = question;
+        btn.title = question;
+        btn.addEventListener("click", function () {
+          fillInput(question);
+        });
+        host.appendChild(btn);
+      })(questions[i]);
+    }
+  }
+
+  function setRoleDockOpen(open) {
+    state.roleDockOpen = !!open && roleDockAvailable();
+    if (!els.roleDockPanel) return;
+    els.roleDockPanel.hidden = !state.roleDockOpen;
+    if (els.roleDock) {
+      els.roleDock.classList.toggle("lb-role-dock-expanded", state.roleDockOpen);
+    }
+    if (els.roleDockToggle) {
+      els.roleDockToggle.setAttribute(
+        "aria-expanded",
+        state.roleDockOpen ? "true" : "false"
+      );
+    }
+    if (els.roleDockToggleLabel) {
+      els.roleDockToggleLabel.textContent = t(
+        state.roleDockOpen ? "collapseQuestions" : "showMoreQuestions"
+      );
+    }
+    if (state.roleDockOpen) {
+      renderRoleDockPanelBody();
+      if (typeof els.roleDockPanel.focus === "function") {
+        els.roleDockPanel.focus();
+      }
+    } else if (els.roleDockBody) {
+      // Empty the hidden panel so its tabs and questions stay out of the
+      // document (and out of the accessibility tree).
+      els.roleDockBody.textContent = "";
+    }
+  }
+
+  function closeRoleDock(restoreFocus) {
+    if (!state.roleDockOpen) return;
+    setRoleDockOpen(false);
+    if (
+      restoreFocus &&
+      els.roleDockToggle &&
+      typeof els.roleDockToggle.focus === "function"
+    ) {
+      els.roleDockToggle.focus();
+    }
+  }
+
+  function focusActiveRoleDockTab() {
+    if (!els.roleDockBody) return;
+    var active = els.roleDockBody.querySelector(".lb-role-tab.lb-role-active");
+    if (active && typeof active.focus === "function") active.focus();
+  }
+
+  function renderRoleDockPanelBody() {
+    if (!els.roleDockBody) return;
+    els.roleDockBody.textContent = "";
+    var tabs = createRoleTabs();
+    tabs.classList.add("lb-role-tabs-dock");
+    els.roleDockBody.appendChild(tabs);
+    var questions = createRoleQuestions(function () {
+      // Choosing a question should reveal the composer, not leave the panel
+      // covering it.
+      closeRoleDock(false);
+    });
+    if (questions) {
+      questions.classList.add("lb-role-questions-dock");
+      els.roleDockBody.appendChild(questions);
+    }
+  }
+
+  function updateRoleDock() {
+    if (!els.roleDock) return;
+    if (!roleDockAvailable()) {
+      closeRoleDock(false);
+      els.roleDock.hidden = true;
+      return;
+    }
+    els.roleDock.hidden = false;
+    fillRoleDockPreview();
+    // The panel body is built on demand so a closed dock leaves no duplicate
+    // role tabs in the document.
+    if (state.roleDockOpen) renderRoleDockPanelBody();
+  }
+
+  function createRoleDock() {
+    var dock = document.createElement("div");
+    dock.className = "lb-role-dock";
+    dock.hidden = true;
+    dock.setAttribute("role", "region");
+    dock.setAttribute("aria-label", t("quickQuestions"));
+
+    var row = document.createElement("div");
+    row.className = "lb-role-dock-row";
+
+    var label = document.createElement("span");
+    label.className = "lb-role-dock-label";
+    label.textContent = t("quickQuestions");
+
+    var preview = document.createElement("div");
+    preview.className = "lb-role-dock-preview";
+    preview.setAttribute("role", "group");
+    preview.setAttribute("aria-label", t("quickQuestions"));
+    els.roleDockPreview = preview;
+
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "lb-role-dock-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", "lb-role-dock-panel");
+
+    var toggleLabel = document.createElement("span");
+    toggleLabel.textContent = t("showMoreQuestions");
+
+    var chevron = document.createElement("span");
+    chevron.className = "lb-role-dock-chevron";
+    chevron.innerHTML = ICON_CHEVRON_DOWN;
+
+    toggle.appendChild(toggleLabel);
+    toggle.appendChild(chevron);
+    toggle.addEventListener("click", function () {
+      var willOpen = !state.roleDockOpen;
+      setRoleDockOpen(willOpen);
+      if (!willOpen && typeof toggle.focus === "function") toggle.focus();
+    });
+    els.roleDockToggle = toggle;
+    els.roleDockToggleLabel = toggleLabel;
+
+    row.appendChild(label);
+    row.appendChild(preview);
+    row.appendChild(toggle);
+
+    var panel = document.createElement("div");
+    panel.className = "lb-role-dock-panel";
+    panel.id = "lb-role-dock-panel";
+    panel.hidden = true;
+    panel.tabIndex = -1;
+
+    var head = document.createElement("div");
+    head.className = "lb-role-dock-head";
+
+    var title = document.createElement("span");
+    title.className = "lb-role-dock-title";
+    title.textContent = t("quickQuestions");
+
+    var close = document.createElement("button");
+    close.type = "button";
+    close.className = "lb-role-dock-close";
+    close.setAttribute("aria-label", t("collapseQuestions"));
+    close.innerHTML = ICON_CLOSE;
+    close.addEventListener("click", function () {
+      closeRoleDock(true);
+    });
+
+    head.appendChild(title);
+    head.appendChild(close);
+
+    var body = document.createElement("div");
+    body.className = "lb-role-dock-body";
+    els.roleDockBody = body;
+
+    panel.appendChild(head);
+    panel.appendChild(body);
+    els.roleDockPanel = panel;
+
+    dock.appendChild(row);
+    dock.appendChild(panel);
+    dock.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && state.roleDockOpen) {
+        e.stopPropagation();
+        closeRoleDock(true);
+      }
+    });
+
+    els.roleDock = dock;
+    return dock;
   }
 
   function createWelcomeEl() {
@@ -1127,10 +1682,18 @@
     logo.alt = "LangBot";
 
     var text = document.createElement("div");
-    text.textContent = t("welcomeMessage");
+    text.textContent = scriptSubtitle || t("welcomeMessage");
 
     div.appendChild(logo);
     div.appendChild(text);
+
+    if (ROLES.length) {
+      els.roleTabs = createRoleTabs();
+      div.appendChild(els.roleTabs);
+      els.roleQuestions = createRoleQuestions();
+      if (els.roleQuestions) div.appendChild(els.roleQuestions);
+      return div;
+    }
 
     var quick = createQuickQuestionButtons("welcome");
     if (quick) div.appendChild(quick);
@@ -1397,6 +1960,11 @@
       style.textContent +=
         ".lb-bubble { bottom: 84px; } .lb-panel { bottom: 152px; max-height: calc(100vh - 172px); } @media (max-width: 480px) { .lb-panel { bottom: 64px; height: calc(100vh - 64px); max-height: calc(100vh - 64px); } }";
     }
+    // Page palette and role layout come last so they win over the defaults.
+    if (PALETTE) style.textContent += buildThemeCSS(PALETTE);
+    if (ROLES.length) {
+      style.textContent += buildConsultCSS(PALETTE || DEFAULT_PALETTE);
+    }
     shadow.appendChild(style);
 
     // Chat bubble button
@@ -1535,13 +2103,21 @@
     inputArea.appendChild(input);
     inputArea.appendChild(sendBtn);
 
+    // Role dock: quick questions for the active role, shown once the
+    // conversation starts. It sits directly above the composer.
+    if (ROLES.length) {
+      panel.appendChild(createRoleDock());
+    }
+
     // Footer: Powered by LangBot (above input area)
     var footer = document.createElement("div");
     footer.className = "lb-footer";
     footer.innerHTML = t("poweredBy");
     panel.appendChild(footer);
 
-    var quickDock = createQuickQuestionButtons("dock");
+    // Role mode keeps suggestions inside the welcome block, so no dock is
+    // created and updateQuickQuestionsDock() stays a no-op.
+    var quickDock = ROLES.length ? null : createQuickQuestionButtons("dock");
     if (quickDock) {
       els.quickDock = quickDock;
       panel.appendChild(quickDock);
@@ -1549,6 +2125,7 @@
 
     panel.appendChild(inputArea);
     updateQuickQuestionsDock();
+    updateRoleDock();
 
     shadow.appendChild(panel);
 
