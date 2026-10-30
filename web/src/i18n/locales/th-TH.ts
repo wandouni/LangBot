@@ -3690,6 +3690,9 @@ const thTH = {
     createSkill: 'สร้างสกิลใหม่',
     createSkillHint: 'นำเข้าจากไดเรกทอรีในเครื่องหรือสร้างด้วยตนเอง',
     unsupportedFileType: 'ประเภทไฟล์ไม่รองรับ รองรับเฉพาะไฟล์ .zip และ .lbpkg',
+    marketplaceDisabledTitle: 'ตลาดส่วนขยายไม่พร้อมใช้งาน',
+    marketplaceDisabledHint:
+      'การติดตั้งใช้งานนี้ปิดตลาดส่วนขยายไว้ คุณยังสามารถเพิ่มส่วนขยายด้วยตนเองจากแพ็กเกจในเครื่อง เซิร์ฟเวอร์ MCP ที่เก็บ GitHub หรือสกิลได้',
   },
   errorPage: {
     unexpectedError: 'เกิดข้อผิดพลาด',

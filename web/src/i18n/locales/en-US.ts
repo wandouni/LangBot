@@ -3764,6 +3764,9 @@ const enUS = {
     createSkillHint: 'Import from a local directory or create manually',
     unsupportedFileType:
       'Unsupported file type. Only .zip and .lbpkg files are supported',
+    marketplaceDisabledTitle: 'Extension marketplace is unavailable',
+    marketplaceDisabledHint:
+      'The marketplace is turned off in this deployment. You can still add extensions manually from a local package, an MCP server, a GitHub repository, or a Skill.',
   },
   errorPage: {
     unexpectedError: 'Something went wrong',

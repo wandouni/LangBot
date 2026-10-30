@@ -3542,6 +3542,9 @@ const zhHans = {
     createSkill: '创建新的技能',
     createSkillHint: '从本地目录导入或手动创建',
     unsupportedFileType: '不支持的文件类型，仅支持 .zip 和 .lbpkg 文件',
+    marketplaceDisabledTitle: '扩展市场当前不可用',
+    marketplaceDisabledHint:
+      '本部署已关闭扩展市场，你仍然可以通过本地安装包、MCP 服务器、GitHub 仓库或技能手动添加扩展。',
   },
   errorPage: {
     unexpectedError: '出错了',

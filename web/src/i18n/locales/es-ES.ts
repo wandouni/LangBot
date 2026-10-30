@@ -3830,6 +3830,9 @@ const esES = {
     createSkillHint: 'Importar desde un directorio local o crear manualmente',
     unsupportedFileType:
       'Tipo de archivo no admitido. Solo se admiten archivos .zip y .lbpkg',
+    marketplaceDisabledTitle: 'El mercado de extensiones no está disponible',
+    marketplaceDisabledHint:
+      'El mercado está desactivado en esta implementación. Aún puedes añadir extensiones manualmente desde un paquete local, un servidor MCP, un repositorio de GitHub o una skill.',
   },
   errorPage: {
     unexpectedError: 'Algo salió mal',

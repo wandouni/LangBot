@@ -3783,6 +3783,9 @@ const jaJP = {
     createSkillHint: '新しいスキル拡張を手動で作成',
     unsupportedFileType:
       'サポートされていないファイルタイプです。.zipと.lbpkgファイルのみサポートされています',
+    marketplaceDisabledTitle: '拡張マーケットプレイスは利用できません',
+    marketplaceDisabledHint:
+      'このデプロイではマーケットプレイスが無効になっています。ローカルパッケージ、MCP サーバー、GitHub リポジトリ、スキルから拡張を手動で追加できます。',
   },
   errorPage: {
     unexpectedError: 'エラーが発生しました',

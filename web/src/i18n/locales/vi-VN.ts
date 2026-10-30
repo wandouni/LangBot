@@ -3742,6 +3742,9 @@ const viVN = {
     createSkillHint: 'Nhập từ thư mục cục bộ hoặc tạo thủ công',
     unsupportedFileType:
       'Loại tệp không được hỗ trợ. Chỉ hỗ trợ tệp .zip và .lbpkg',
+    marketplaceDisabledTitle: 'Chợ tiện ích không khả dụng',
+    marketplaceDisabledHint:
+      'Bản triển khai này đã tắt chợ tiện ích. Bạn vẫn có thể thêm tiện ích thủ công từ gói cục bộ, máy chủ MCP, kho GitHub hoặc kỹ năng.',
   },
   errorPage: {
     unexpectedError: 'Đã xảy ra lỗi',

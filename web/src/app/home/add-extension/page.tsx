@@ -140,20 +140,21 @@ enum PluginInstallStatus {
 }
 
 export default function AddExtensionPage() {
-  const { t } = useTranslation();
-
-  if (!systemInfo?.enable_marketplace) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-        <p className="text-muted-foreground">{t('plugins.marketplace')}</p>
-      </div>
-    );
-  }
-
-  return <AddExtensionContent />;
+  return (
+    <AddExtensionContent
+      marketplaceAvailable={Boolean(systemInfo?.enable_marketplace)}
+    />
+  );
 }
 
-function AddExtensionContent() {
+// `marketplaceAvailable` only controls whether the Space marketplace listing is
+// rendered; the manual add entry (upload package, MCP, GitHub, Skill) must stay
+// reachable when the marketplace is disabled by deployment config.
+function AddExtensionContent({
+  marketplaceAvailable = true,
+}: {
+  marketplaceAvailable?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1440,14 +1441,29 @@ function AddExtensionContent() {
   return (
     <>
       <div className="h-full flex flex-col">
-        <div className="flex-1 overflow-y-auto">
-          <MarketPage
-            installPlugin={handleInstallPlugin}
-            headerActions={extensionActions}
-            installDisabled={extensionsReached}
-            installDisabledTooltip={extensionQuotaTooltip}
-          />
-        </div>
+        {marketplaceAvailable ? (
+          <div className="flex-1 overflow-y-auto">
+            <MarketPage
+              installPlugin={handleInstallPlugin}
+              headerActions={extensionActions}
+              installDisabled={extensionsReached}
+              installDisabledTooltip={extensionQuotaTooltip}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+            <Package className="size-10 text-muted-foreground/50" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                {t('addExtension.marketplaceDisabledTitle')}
+              </p>
+              <p className="max-w-md text-xs text-muted-foreground">
+                {t('addExtension.marketplaceDisabledHint')}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">{extensionActions}</div>
+          </div>
+        )}
       </div>
 
       <Dialog

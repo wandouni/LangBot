@@ -102,6 +102,7 @@ interface LangBotApiMockState {
   bots: BotMock[];
   counters: Record<string, number>;
   knowledgeBases: KnowledgeBaseMock[];
+  marketplaceEnabled: boolean;
   mcpServers: MCPServerMock[];
   monitoringData: unknown;
   monitoringSessions: unknown[];
@@ -687,7 +688,7 @@ async function handleBackendApi(route: Route, state: LangBotApiMockState) {
       version: 'frontend-smoke',
       edition: 'community',
       cloud_service_url: 'https://space.langbot.app',
-      enable_marketplace: true,
+      enable_marketplace: state.marketplaceEnabled,
       allow_modify_login_info: true,
       disable_models_service: false,
       limitation: {
@@ -1479,6 +1480,7 @@ export async function installLangBotApiMocks(
     authenticated?: boolean;
     withAssistant?: boolean;
     language?: string;
+    marketplaceEnabled?: boolean;
     monitoringData?: unknown;
     monitoringSessions?: unknown[];
     sessionAnalyses?: Record<string, unknown>;
@@ -1493,6 +1495,7 @@ export async function installLangBotApiMocks(
     authenticated = false,
     withAssistant = false,
     language = 'en-US',
+    marketplaceEnabled = true,
     monitoringData,
     monitoringSessions,
     sessionAnalyses,
@@ -1508,6 +1511,7 @@ export async function installLangBotApiMocks(
     bots: [],
     counters: {},
     knowledgeBases: [],
+    marketplaceEnabled,
     mcpServers: [],
     monitoringData: monitoringData || emptyMonitoringData(),
     monitoringSessions: monitoringSessions || [],

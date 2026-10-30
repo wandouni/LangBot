@@ -3542,6 +3542,9 @@ const zhHant = {
     createSkill: '建立新的技能',
     createSkillHint: '從本地目錄匯入或手動建立',
     unsupportedFileType: '不支援的檔案類型，僅支援 .zip 和 .lbpkg 檔案',
+    marketplaceDisabledTitle: '擴充市集目前無法使用',
+    marketplaceDisabledHint:
+      '此部署已關閉擴充市集，你仍然可以透過本機安裝包、MCP 伺服器、GitHub 倉庫或技能手動新增擴充。',
   },
   errorPage: {
     unexpectedError: '出錯了',
