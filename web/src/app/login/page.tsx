@@ -125,9 +125,10 @@ export default function Login() {
   });
 
   useEffect(() => {
-    // SqlBot hands off here after logging out of the application center so a
-    // single cleanup path drops both apps' browser state, then the parameter
-    // is removed to keep refresh and history clean.
+    // Forced cross-application logout entry, kept as a compatibility path for
+    // callers that need to drop both apps' browser state. SqlBot's own logout
+    // now returns to the application center instead. The parameter is removed
+    // to keep refresh and history clean.
     const params = new URLSearchParams(window.location.search);
     if (params.get('logout') === '1') {
       clearLocalSession();

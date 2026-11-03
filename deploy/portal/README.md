@@ -59,5 +59,6 @@ SQLBOT_SOURCE_DIR=/path/to/SQLBot ./deploy/prod/build-image.sh   # 额外构建 
 
 - SqlBot 必须保持单 worker（镜像里的 `start.sh` 已固定 `--workers 1`），否则内存中的
   ticket/nonce 不共享；重启后未兑换的票据失效，用户重新从应用中心进入即可。
-- 本期不做跨系统单点退出：SqlBot 退出不影响 LangBot 会话。
+- 从应用中心进入的 SqlBot 会话，退出入口显示为「返回应用中心」：只结束 SqlBot 会话并回到 `/portal`，LangBot 登录保持有效；需要完全退出时使用应用中心右上角的「退出」。
+- 直接在 SqlBot 登录页用本地密码登录的会话，不受门户标记影响，退出仍回到 SqlBot 登录页。
 - SqlBot 自身的密码登录默认仍可用；如需强制只走门户，需另行关闭其第三方登录。
