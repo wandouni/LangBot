@@ -81,7 +81,6 @@ def fake_embed_app():
         'turnstile_site_key': '',
         'language': 'en_US',
         'bubble_icon': 'logo',
-        'quick_questions': '',
     }
 
     mock_runtime_bot = Mock()
@@ -153,35 +152,104 @@ class TestEmbedWidgetEndpoint:
         body = await response.get_data(as_text=True)
         assert 'a1b2c3d4-5678-90ab-cdef-123456789abc' in body
         assert 'baseUrl: "http://localhost"' in body
-        assert 'quickQuestions: []' in body
+        assert 'roleGroups: []' in body
+        assert 'welcomeMessage: ""' in body
+        assert '__LANGBOT_QUICK_QUESTIONS__' not in body
         assert '__LANGBOT_' not in body
 
     @pytest.mark.asyncio
-    async def test_get_widget_js_injects_quick_questions(self, quart_test_client, fake_embed_app, monkeypatch):
-        """Admin-configured quick questions are normalized and injected as a JS array."""
+    async def test_get_widget_js_injects_quick_question_groups(self, quart_test_client, fake_embed_app, monkeypatch):
+        """Admin-configured groups are sanitized and injected as a JS array."""
         config = fake_embed_app.platform_mgr.bots[0].bot_entity.adapter_config
-        raw = 'First question?\n\n  Second question?  \nFirst question?\n</script><b>x</b>\n' + 'x' * 250
-        monkeypatch.setitem(config, 'quick_questions', raw)
+        raw = [
+            {
+                'id': 'group-a',
+                'label': 'Group A',
+                'questions': ['A1', ' A2 ', 'A1', '</script><b>x</b>'],
+            },
+            {
+                'id': 'group-a',
+                'label': 'Group B',
+                'questions': 'B1\n\nB2',
+            },
+            {'id': 'empty-label', 'label': '   ', 'questions': ['dropped']},
+        ]
+        monkeypatch.setitem(config, 'quick_question_groups', raw)
 
         response = await quart_test_client.get('/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/widget.js')
         body = await response.get_data(as_text=True)
 
-        expected = ['First question?', 'Second question?', '</script><b>x</b>', 'x' * 200]
+        expected = [
+            {
+                'id': 'group-a',
+                'label': 'Group A',
+                'questions': ['A1', 'A2', '</script><b>x</b>'],
+            },
+            {
+                'id': 'group-a-2',
+                'label': 'Group B',
+                'questions': ['B1', 'B2'],
+            },
+        ]
         expected_json = json.dumps(expected, ensure_ascii=True).replace('<', '\\u003c')
 
-        assert f'quickQuestions: {expected_json}' in body
-        assert '__LANGBOT_QUICK_QUESTIONS__' not in body
+        assert f'roleGroups: {expected_json}' in body
+        assert '__LANGBOT_ROLE_GROUPS__' not in body
         assert '</script><b>x</b>' not in body
 
-    def test_parse_quick_questions_normalizes_and_limits(self):
-        """Parser drops blanks/duplicates, truncates long lines, and caps the list."""
+    @pytest.mark.asyncio
+    async def test_get_widget_js_injects_welcome_message(self, quart_test_client, fake_embed_app, monkeypatch):
+        """The saved welcome message is escaped and injected as a JS string."""
+        config = fake_embed_app.platform_mgr.bots[0].bot_entity.adapter_config
+        monkeypatch.setitem(config, 'welcome_message', ' 你好 </script>\n第二行 ')
+
+        response = await quart_test_client.get('/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/widget.js')
+        body = await response.get_data(as_text=True)
+
+        expected_json = json.dumps('你好 </script>\n第二行', ensure_ascii=True).replace('<', '\\u003c')
+
+        assert f'welcomeMessage: {expected_json}' in body
+        assert '__LANGBOT_WELCOME_MESSAGE__' not in body
+        assert '</script>' not in body
+
+    def test_parse_quick_question_groups_normalizes_and_limits(self):
+        """Group parser accepts arrays/JSON strings and applies every bound."""
         import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
 
-        assert embed._parse_quick_questions(None) == []
-        assert embed._parse_quick_questions(123) == []
-        assert embed._parse_quick_questions(' a \r\n\r\n a \n b ') == ['a', 'b']
-        assert embed._parse_quick_questions('x' * 250) == ['x' * 200]
-        assert embed._parse_quick_questions('\n'.join(f'Q{i}' for i in range(20))) == [f'Q{i}' for i in range(12)]
+        assert embed._parse_quick_question_groups(None) == []
+        assert embed._parse_quick_question_groups('not json') == []
+        assert embed._parse_quick_question_groups(123) == []
+
+        parsed = embed._parse_quick_question_groups(
+            json.dumps(
+                [
+                    {'label': ' A ', 'questions': [' q1 ', '', 'q1']},
+                    {'id': 'custom', 'label': 'B', 'questions': 'b1\nb2'},
+                    {'id': 'custom', 'label': 'C', 'questions': []},
+                    {'label': '   ', 'questions': ['dropped']},
+                    {'id': 'x' * 100, 'label': 'y' * 50, 'questions': ['z']},
+                ]
+            )
+        )
+        assert parsed == [
+            {'id': 'group-1', 'label': 'A', 'questions': ['q1']},
+            {'id': 'custom', 'label': 'B', 'questions': ['b1', 'b2']},
+            {'id': 'custom-2', 'label': 'C', 'questions': []},
+            {'id': 'x' * 64, 'label': 'y' * 32, 'questions': ['z']},
+        ]
+
+        capped = embed._parse_quick_question_groups([{'label': f'G{i}', 'questions': []} for i in range(10)])
+        assert [group['label'] for group in capped] == [f'G{i}' for i in range(6)]
+
+        long_questions = [
+            {
+                'label': 'Long',
+                'questions': ['x' * 250] + [f'Q{i}' for i in range(20)],
+            }
+        ]
+        questions = embed._parse_quick_question_groups(long_questions)[0]['questions']
+        assert len(questions) == 12
+        assert questions[0] == 'x' * 200
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

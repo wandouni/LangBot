@@ -43,19 +43,22 @@ def _is_valid_uuid(s: str) -> bool:
 _QUICK_QUESTIONS_MAX_ITEMS = 12
 _QUICK_QUESTION_MAX_LENGTH = 200
 _QUICK_QUESTIONS_MAX_RAW_CHARS = 20_000
+_QUICK_QUESTION_GROUPS_MAX_ITEMS = 6
+_QUICK_QUESTION_GROUPS_MAX_RAW_ITEMS = 50
+_QUICK_QUESTION_GROUP_LABEL_MAX_LENGTH = 32
+_QUICK_QUESTION_GROUP_ID_MAX_LENGTH = 64
+_QUICK_QUESTION_GROUP_MAX_RAW_QUESTIONS = 120
 
 
-def _parse_quick_questions(raw) -> list[str]:
-    """Normalize the admin-configured newline-separated quick questions."""
-    if not isinstance(raw, str):
-        return []
-
+def _normalize_question_list(raw: list) -> list[str]:
+    """Trim, dedupe and bound one group's question list."""
     questions: list[str] = []
     seen: set[str] = set()
 
-    # The field is admin-controlled, but bound the per-request work anyway.
-    for line in raw[:_QUICK_QUESTIONS_MAX_RAW_CHARS].splitlines():
-        question = line.strip()
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        question = item.strip()
         if not question:
             continue
         if len(question) > _QUICK_QUESTION_MAX_LENGTH:
@@ -68,6 +71,68 @@ def _parse_quick_questions(raw) -> list[str]:
             break
 
     return questions
+
+
+def _parse_quick_question_groups(raw) -> list[dict]:
+    """Normalize admin-configured quick question groups.
+
+    ``adapter_config`` stores a JSON array. A JSON string is also accepted so
+    configurations written by hand or by older forms keep working.
+    """
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(raw, list):
+        return []
+
+    groups: list[dict] = []
+    seen_ids: set[str] = set()
+
+    # The field is admin-controlled, but bound the per-request work anyway.
+    for item in raw[:_QUICK_QUESTION_GROUPS_MAX_RAW_ITEMS]:
+        if len(groups) >= _QUICK_QUESTION_GROUPS_MAX_ITEMS:
+            break
+        if not isinstance(item, dict):
+            continue
+
+        label = item.get('label')
+        if not isinstance(label, str):
+            continue
+        label = label.strip()
+        if not label:
+            continue
+        if len(label) > _QUICK_QUESTION_GROUP_LABEL_MAX_LENGTH:
+            label = label[:_QUICK_QUESTION_GROUP_LABEL_MAX_LENGTH].rstrip()
+        if not label:
+            continue
+
+        raw_questions = item.get('questions', [])
+        if isinstance(raw_questions, str):
+            raw_questions = raw_questions[:_QUICK_QUESTIONS_MAX_RAW_CHARS].splitlines()
+        if not isinstance(raw_questions, list):
+            raw_questions = []
+        questions = _normalize_question_list(
+            raw_questions[:_QUICK_QUESTION_GROUP_MAX_RAW_QUESTIONS]
+        )
+
+        raw_id = item.get('id')
+        group_id = raw_id.strip() if isinstance(raw_id, str) else ''
+        if len(group_id) > _QUICK_QUESTION_GROUP_ID_MAX_LENGTH:
+            group_id = group_id[:_QUICK_QUESTION_GROUP_ID_MAX_LENGTH]
+        if not group_id:
+            group_id = f'group-{len(groups) + 1}'
+        base_id = group_id
+        suffix = 2
+        while group_id in seen_ids:
+            group_id = f'{base_id}-{suffix}'
+            suffix += 1
+        seen_ids.add(group_id)
+
+        groups.append({'id': group_id, 'label': label, 'questions': questions})
+
+    return groups
 
 
 def _get_client_ip() -> str:
@@ -259,20 +324,28 @@ class EmbedRouterGroup(group.RouterGroup):
             site_key = config.get('turnstile_site_key', '')
             locale = config.get('language', 'en_US') or 'en_US'
             bubble_icon = config.get('bubble_icon', 'logo') or 'logo'
-            quick_questions = _parse_quick_questions(config.get('quick_questions', ''))
+            # Existing bots created before this field keep an empty value, so
+            # the widget falls back to the standalone page subtitle.
+            welcome_message = str(config.get('welcome_message') or '').strip()
+            quick_question_groups = _parse_quick_question_groups(config.get('quick_question_groups', []))
             # ensure_ascii=True also escapes U+2028/U+2029; "<" is escaped so a
-            # question such as "</script>" can never terminate an inline script.
-            quick_questions_json = json.dumps(quick_questions, ensure_ascii=True).replace('<', '\\u003c')
+            # question or welcome text such as "</script>" can never terminate
+            # an inline script.
+            quick_question_groups_json = json.dumps(quick_question_groups, ensure_ascii=True).replace('<', '\\u003c')
+            welcome_message_json = json.dumps(welcome_message, ensure_ascii=True).replace('<', '\\u003c')
 
             widget_js = template.replace('__LANGBOT_TURNSTILE_SITE_KEY__', site_key)
             widget_js = widget_js.replace('__LANGBOT_BOT_UUID__', bot_uuid)
             widget_js = widget_js.replace('__LANGBOT_BASE_URL__', base_url)
             widget_js = widget_js.replace('__LANGBOT_LOCALE__', locale)
             widget_js = widget_js.replace('__LANGBOT_BUBBLE_ICON__', bubble_icon)
-            # Inject the array last so question text containing other
-            # __LANGBOT_* tokens cannot be rewritten by the replacements above.
-            widget_js = widget_js.replace('"__LANGBOT_QUICK_QUESTIONS__"', quick_questions_json)
-            widget_js = widget_js.replace("'__LANGBOT_QUICK_QUESTIONS__'", quick_questions_json)
+            widget_js = widget_js.replace('"__LANGBOT_ROLE_GROUPS__"', quick_question_groups_json)
+            widget_js = widget_js.replace("'__LANGBOT_ROLE_GROUPS__'", quick_question_groups_json)
+            # Inject the free-text welcome message last so text containing
+            # other __LANGBOT_* tokens cannot be rewritten by the replacements
+            # above.
+            widget_js = widget_js.replace('"__LANGBOT_WELCOME_MESSAGE__"', welcome_message_json)
+            widget_js = widget_js.replace("'__LANGBOT_WELCOME_MESSAGE__'", welcome_message_json)
 
             response = quart.Response(widget_js, content_type='application/javascript; charset=utf-8')
             response.headers['Cache-Control'] = 'public, max-age=300'

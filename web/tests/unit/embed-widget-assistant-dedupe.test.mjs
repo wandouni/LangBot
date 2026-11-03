@@ -101,11 +101,13 @@ class FakeElement {
 }
 
 class FakeDocument {
-  constructor() {
+  constructor(scriptAttributes = {}) {
     this.body = new FakeElement('body');
     this.head = new FakeElement('head');
     this.readyState = 'complete';
-    this.currentScript = { getAttribute: () => null };
+    this.currentScript = {
+      getAttribute: (name) => scriptAttributes[name] ?? null,
+    };
   }
 
   createElement(tagName) {
@@ -143,7 +145,7 @@ class FakeWebSocket {
 
 function launchWidget(options = {}) {
   FakeWebSocket.instances = [];
-  const document = new FakeDocument();
+  const document = new FakeDocument(options.scriptAttributes);
   const window = {
     location: { href: 'https://embed.test/' },
     crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
@@ -163,13 +165,17 @@ function launchWidget(options = {}) {
     clearInterval: () => {},
   });
 
-  const source =
-    options.quickQuestions === undefined
-      ? widgetSource
-      : widgetSource.replace(
-          '"__LANGBOT_QUICK_QUESTIONS__"',
-          JSON.stringify(options.quickQuestions),
-        );
+  let source = widgetSource;
+  if (options.roleGroups !== undefined) {
+    source = source.replace(
+      '"__LANGBOT_ROLE_GROUPS__"',
+      JSON.stringify(options.roleGroups),
+    );
+  }
+  source = source.replace(
+    '"__LANGBOT_WELCOME_MESSAGE__"',
+    JSON.stringify(options.welcomeMessage ?? ''),
+  );
 
   vm.runInContext(source, context, { filename: widgetPath });
   const root = document.getElementById('langbot-widget-root');
@@ -228,24 +234,35 @@ test('still keeps two distinct non-empty assistant frames', () => {
   assert.equal(widget.assistantMessages().length, 2);
 });
 
-test('renders configured quick questions under the welcome message', () => {
+test('renders configured group questions under the welcome message', () => {
   const widget = launchWidget({
-    quickQuestions: ['How do I start?', 'Pricing?'],
+    roleGroups: [
+      {
+        id: 'g1',
+        label: 'Visitors',
+        questions: ['How do I start?', 'Pricing?'],
+      },
+    ],
   });
 
   const welcome = widget.root.shadowRoot.querySelector('.lb-welcome');
-  assert.equal(welcome.querySelectorAll('.lb-quick-btn').length, 2);
+  assert.equal(welcome.querySelectorAll('.lb-role-question').length, 2);
+  assert.equal(welcome.querySelectorAll('.lb-quick-btn').length, 0);
 
-  const dock = widget.root.shadowRoot.querySelector('.lb-quick-dock');
-  assert.ok(dock, 'a dock is created when questions are configured');
-  assert.equal(dock.style.display, 'none');
+  const dock = widget.root.shadowRoot.querySelector('.lb-role-dock');
+  assert.ok(dock, 'a role dock is created when groups are configured');
+  assert.equal(dock.hidden, true);
 });
 
-test('clicking a quick question fills the input without sending', () => {
-  const widget = launchWidget({ quickQuestions: ['How do I start?'] });
+test('clicking a group question fills the input without sending', () => {
+  const widget = launchWidget({
+    roleGroups: [
+      { id: 'g1', label: 'Visitors', questions: ['How do I start?'] },
+    ],
+  });
 
   const input = widget.root.shadowRoot.querySelector('.lb-input');
-  const button = widget.root.shadowRoot.querySelector('.lb-quick-btn');
+  const button = widget.root.shadowRoot.querySelector('.lb-role-question');
   button.click();
 
   assert.equal(input.value, 'How do I start?');
@@ -260,24 +277,113 @@ test('clicking a quick question fills the input without sending', () => {
   );
 });
 
-test('shows the dock and hides the welcome after the conversation starts', () => {
-  const widget = launchWidget({ quickQuestions: ['Q1', 'Q2'] });
+test('shows the role dock and hides the welcome after the conversation starts', () => {
+  const widget = launchWidget({
+    roleGroups: [{ id: 'g1', label: 'Visitors', questions: ['Q1', 'Q2'] }],
+  });
 
   widget.receive(assistant('a1', 'hello'));
 
   const welcome = widget.root.shadowRoot.querySelector('.lb-welcome');
-  const dock = widget.root.shadowRoot.querySelector('.lb-quick-dock');
+  const dock = widget.root.shadowRoot.querySelector('.lb-role-dock');
   assert.equal(welcome.style.display, 'none');
-  assert.equal(dock.style.display, 'flex');
-  assert.equal(dock.querySelectorAll('.lb-quick-btn').length, 2);
+  assert.equal(dock.hidden, false);
+  assert.equal(dock.querySelectorAll('.lb-role-dock-preview-btn').length, 2);
 });
 
 test('does not render quick questions when none are configured', () => {
   const widget = launchWidget();
 
   assert.equal(
+    widget.root.shadowRoot.querySelectorAll('.lb-role-question').length,
+    0,
+  );
+  assert.equal(
     widget.root.shadowRoot.querySelectorAll('.lb-quick-btn').length,
     0,
   );
+  assert.equal(widget.root.shadowRoot.querySelector('.lb-role-dock'), null);
   assert.equal(widget.root.shadowRoot.querySelector('.lb-quick-dock'), null);
+});
+
+test('an empty group does not fall back to another question source', () => {
+  const widget = launchWidget({
+    roleGroups: [{ id: 'g1', label: 'Empty', questions: [] }],
+  });
+
+  assert.equal(
+    widget.root.shadowRoot.querySelectorAll('.lb-role-question').length,
+    0,
+  );
+  assert.equal(
+    widget.root.shadowRoot.querySelectorAll('.lb-quick-btn').length,
+    0,
+  );
+});
+
+function welcomeText(widget) {
+  const welcome = widget.root.shadowRoot.querySelector('.lb-welcome');
+  // The welcome block is logo + text (role tabs, if any, follow).
+  return welcome.children[1].innerHTML;
+}
+
+test('renders the saved welcome message from the bot config', () => {
+  const widget = launchWidget({ welcomeMessage: 'Bot hello' });
+
+  assert.equal(welcomeText(widget), 'Bot hello');
+});
+
+test('falls back to the page subtitle when the bot has no welcome message', () => {
+  const widget = launchWidget({
+    scriptAttributes: { 'data-subtitle': 'Page hello' },
+  });
+
+  assert.equal(welcomeText(widget), 'Page hello');
+});
+
+test('an unsaved welcome draft overrides the saved message', () => {
+  const widget = launchWidget({
+    welcomeMessage: 'Bot hello',
+    scriptAttributes: {
+      'data-preview-welcome': 'true',
+      'data-welcome': 'Draft hello',
+    },
+  });
+
+  assert.equal(welcomeText(widget), 'Draft hello');
+});
+
+test('an empty welcome draft clears the saved message', () => {
+  const widget = launchWidget({
+    welcomeMessage: 'Bot hello',
+    scriptAttributes: { 'data-preview-welcome': 'true' },
+  });
+
+  assert.equal(welcomeText(widget), '');
+});
+
+test('a draft preview overrides saved groups even when it is empty', () => {
+  const widget = launchWidget({
+    roleGroups: [{ id: 'saved', label: 'Saved', questions: ['Saved Q'] }],
+    scriptAttributes: {
+      'data-preview-roles': 'true',
+      'data-roles': JSON.stringify([
+        { id: 'draft', label: 'Draft', questions: ['Draft Q'] },
+      ]),
+    },
+  });
+  assert.equal(
+    widget.root.shadowRoot.querySelector('.lb-q-text').innerHTML,
+    'Draft Q',
+  );
+
+  const empty = launchWidget({
+    roleGroups: [{ id: 'saved', label: 'Saved', questions: ['Saved Q'] }],
+    scriptAttributes: { 'data-preview-roles': 'true' },
+  });
+  assert.equal(
+    empty.root.shadowRoot.querySelectorAll('.lb-role-question').length,
+    0,
+  );
+  assert.equal(empty.root.shadowRoot.querySelector('.lb-role-dock'), null);
 });

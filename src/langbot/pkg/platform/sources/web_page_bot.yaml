@@ -43,6 +43,28 @@ spec:
       type: string
       required: false
       default: "LangBot"
+    - name: welcome_message
+      label:
+        en_US: "Welcome Message"
+        zh_Hans: "欢迎语"
+        zh_Hant: "歡迎語"
+        ja_JP: "ウェルカムメッセージ"
+        th_TH: "ข้อความต้อนรับ"
+        vi_VN: "Lời chào"
+        es_ES: "Mensaje de bienvenida"
+        ru_RU: "Приветственное сообщение"
+      description:
+        en_US: "Text shown in the welcome area before the conversation starts. Leave empty to use the standalone page subtitle or the widget default. The admin test page previews unsaved edits."
+        zh_Hans: "对话开始前显示在欢迎区的文字。留空则使用独立聊天页自带的副标题或组件默认文案；后台「测试页面」可预览尚未保存的修改。"
+        zh_Hant: "對話開始前顯示在歡迎區的文字。留空則使用獨立聊天頁自帶的副標題或元件預設文案；後台「測試頁面」可預覽尚未儲存的修改。"
+        ja_JP: "会話開始前にウェルカムエリアへ表示するテキストです。空欄の場合は単独チャットページのサブタイトル、またはウィジェットの既定文言を使用します。管理画面の「テストページ」では未保存の編集内容を確認できます。"
+        th_TH: "ข้อความที่แสดงในพื้นที่ต้อนรับก่อนเริ่มการสนทนา หากเว้นว่างจะใช้คำโปรยของหน้าแชทแบบสแตนด์อโลนหรือข้อความเริ่มต้นของวิดเจ็ต หน้า \"ทดสอบหน้า\" ในหลังบ้านสามารถดูตัวอย่างการแก้ไขที่ยังไม่บันทึกได้"
+        vi_VN: "Văn bản hiển thị ở khu vực chào mừng trước khi cuộc trò chuyện bắt đầu. Để trống sẽ dùng phụ đề của trang trò chuyện độc lập hoặc văn bản mặc định của widget. Trang kiểm tra trong trang quản trị có thể xem trước thay đổi chưa lưu."
+        es_ES: "Texto que se muestra en el área de bienvenida antes de iniciar la conversación. Si se deja vacío, se usa el subtítulo de la página de chat independiente o el texto predeterminado del widget. La página de prueba del panel permite previsualizar cambios sin guardar."
+        ru_RU: "Текст, отображаемый в приветственной области до начала разговора. Если оставить пустым, используется подзаголовок отдельной страницы чата или текст виджета по умолчанию. Страница тестирования в панели администратора показывает несохранённые изменения."
+      type: text
+      required: false
+      default: "你好，请问想了解什么？可以咨询招生报名、专业设置、校园服务等公开事项。"
     - name: bubble_icon
       label:
         en_US: Bubble Icon
@@ -131,28 +153,28 @@ spec:
         - name: "vi_VN"
           label:
             en_US: "Tiếng Việt"
-    - name: quick_questions
+    - name: quick_question_groups
       label:
-        en_US: "Quick Questions"
-        zh_Hans: "快捷提问"
-        zh_Hant: "快捷提問"
-        ja_JP: "質問候補"
-        es_ES: "Preguntas rápidas"
-        ru_RU: "Быстрые вопросы"
-        th_TH: "คำถามด่วน"
-        vi_VN: "Câu hỏi nhanh"
+        en_US: "Quick Question Groups"
+        zh_Hans: "快捷提问分类"
+        zh_Hant: "快捷提問分類"
+        ja_JP: "質問候補のグループ"
+        es_ES: "Grupos de preguntas rápidas"
+        ru_RU: "Группы быстрых вопросов"
+        th_TH: "กลุ่มคำถามด่วน"
+        vi_VN: "Nhóm câu hỏi nhanh"
       description:
-        en_US: "Suggested questions shown below the welcome message and above the input box. Enter one question per line; up to 12 questions, each up to 200 characters. Visitors click one to fill the input box."
-        zh_Hans: "显示在欢迎语下方和输入框上方的快捷提问。每行一个问题，最多 12 个，每行最多 200 个字符。访客点击后填入输入框。"
-        zh_Hant: "顯示在歡迎語下方和輸入框上方的快捷提問。每行一個問題，最多 12 個，每行最多 200 個字元。訪客點擊後填入輸入框。"
-        ja_JP: "ウェルカムメッセージの下と入力欄の上に表示する質問候補です。1行に1つ、最大12件まで入力できます（各行200文字まで）。クリックすると入力欄に反映されます。"
-        es_ES: "Preguntas sugeridas que se muestran bajo el mensaje de bienvenida y sobre el cuadro de entrada. Escribe una pregunta por línea (máximo 12; hasta 200 caracteres por línea). Al hacer clic se rellena el cuadro de entrada."
-        ru_RU: "Быстрые вопросы отображаются под приветствием и над полем ввода. Введите по одному вопросу в строке (до 12 вопросов; до 200 символов в каждой строке). При нажатии вопрос подставляется в поле ввода."
-        th_TH: "คำถามด่วนที่แสดงใต้ข้อความต้อนรับและเหนือช่องป้อนข้อความ ป้อนหนึ่งคำถามต่อบรรทัด (สูงสุด 12 คำถาม และไม่เกิน 200 ตัวอักษรต่อบรรทัด) คลิกเพื่อเติมลงในช่องป้อนข้อความ"
-        vi_VN: "Câu hỏi nhanh hiển thị bên dưới lời chào và phía trên ô nhập. Nhập mỗi dòng một câu hỏi (tối đa 12 câu; tối đa 200 ký tự mỗi dòng). Nhấp để điền vào ô nhập."
-      type: text
+        en_US: "Plain-text quick question groups. Write one group name per line, then one question per line; separate groups with a blank line. Up to 6 groups, 12 questions per group, 200 characters per question. Leaving this empty configures no groups."
+        zh_Hans: "以纯文本维护的快捷提问分类。每行写一个分类名，下面每行写一个问题；空一行分隔下一个分类。最多 6 个分类，每个分类最多 12 个问题，每题最多 200 个字符。留空表示不配置分类。"
+        zh_Hant: "以純文字維護的快捷提問分類。每行寫一個分類名稱，下面每行寫一個問題；空一行分隔下一個分類。最多 6 個分類，每個分類最多 12 個問題，每題最多 200 個字元。留空表示不設定分類。"
+        ja_JP: "テキストで入力する質問候補のグループです。グループ名を1行に1つ、その下に質問を1行に1つ入力し、空行で次のグループを区切ります。最大6グループ、各グループ12件、1件200文字までです。空欄の場合はグループを設定しません。"
+        es_ES: "Grupos de preguntas rápidas en texto plano. Escribe un nombre de grupo por línea y, debajo, una pregunta por línea; separa los grupos con una línea en blanco. Máximo 6 grupos, 12 preguntas por grupo y 200 caracteres por pregunta. Si lo dejas vacío, no se configura ningún grupo."
+        ru_RU: "Группы быстрых вопросов в виде обычного текста. Укажите название группы на отдельной строке, ниже — по одному вопросу в строке; группы разделяйте пустой строкой. Не более 6 групп, 12 вопросов в группе и 200 символов в вопросе. Пустое поле означает, что группы не настроены."
+        th_TH: "กลุ่มคำถามด่วนในรูปแบบข้อความล้วน เขียนชื่อกลุ่มหนึ่งบรรทัด จากนั้นเขียนคำถามบรรทัดละหนึ่งข้อ และเว้นบรรทัดว่างเพื่อแยกกลุ่มถัดไป ตั้งได้สูงสุด 6 กลุ่ม กลุ่มละ 12 คำถาม และคำถามละไม่เกิน 200 ตัวอักษร หากเว้นว่างจะไม่ตั้งค่ากลุ่ม"
+        vi_VN: "Nhóm câu hỏi nhanh dạng văn bản thuần. Mỗi dòng ghi một tên nhóm, bên dưới mỗi dòng ghi một câu hỏi; dùng dòng trống để phân cách các nhóm. Tối đa 6 nhóm, 12 câu mỗi nhóm và 200 ký tự mỗi câu. Để trống nếu không cấu hình nhóm nào."
+      type: quick-question-groups
       required: false
-      default: ""
+      default: []
     - name: embed_code
       label:
         en_US: Embed Code

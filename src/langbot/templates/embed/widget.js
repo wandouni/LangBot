@@ -30,7 +30,14 @@
     : null;
   var scriptLogo = scriptEl ? scriptEl.getAttribute("data-logo") : null;
   var scriptSubtitle = scriptEl ? scriptEl.getAttribute("data-subtitle") : null;
+  // The admin test page can preview an unsaved welcome message. The flag is
+  // explicit so an empty draft clears the text instead of falling back.
+  var scriptWelcome = scriptEl ? scriptEl.getAttribute("data-welcome") : null;
+  var scriptPreviewWelcome =
+    scriptEl && scriptEl.getAttribute("data-preview-welcome") === "true";
   var scriptRoles = scriptEl ? scriptEl.getAttribute("data-roles") : null;
+  var scriptPreviewRoles =
+    scriptEl && scriptEl.getAttribute("data-preview-roles") === "true";
 
   // ========== i18n ==========
   var I18N = {
@@ -222,9 +229,12 @@
     heartbeatInterval: 30000,
     turnstileSiteKey: "__LANGBOT_TURNSTILE_SITE_KEY__",
     bubbleIcon: "__LANGBOT_BUBBLE_ICON__",
-    // JSON array injected by the backend; the quoted placeholder keeps the
-    // template valid JavaScript before substitution (used by the unit tests).
-    quickQuestions: "__LANGBOT_QUICK_QUESTIONS__",
+    // Injected by the backend. The quoted placeholder keeps the template
+    // valid JavaScript before substitution (used by the unit tests).
+    roleGroups: "__LANGBOT_ROLE_GROUPS__",
+    // Empty for bots created before the field existed; the page subtitle or
+    // the i18n default then takes over.
+    welcomeMessage: "__LANGBOT_WELCOME_MESSAGE__",
   };
 
   var MAX_QUICK_QUESTIONS = 12;
@@ -241,21 +251,21 @@
     return result;
   }
 
-  var QUICK_QUESTIONS = normalizeQuickQuestions(CONFIG.quickQuestions);
-
-  // Role tabs are an opt-in page feature: a page passing data-roles gets a role
-  // switcher above the default questions, pages that do not pass it keep the
-  // plain welcome screen. A role with an empty question list falls back to the
-  // bot's configured quick questions.
+  // Role tabs come from the saved bot configuration. The admin test page may
+  // send a draft through data-preview-roles; that draft overrides the saved
+  // groups even when it is empty. There is no page-level fallback: a bot with
+  // no groups keeps the plain welcome screen.
   var MAX_ROLES = 6;
 
   function normalizeRoles(raw) {
-    if (typeof raw !== "string" || !raw) return [];
-    var parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      return [];
+    var parsed = raw;
+    if (typeof raw === "string") {
+      if (!raw) return [];
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        return [];
+      }
     }
     if (!Array.isArray(parsed)) return [];
     var result = [];
@@ -274,7 +284,9 @@
     return result;
   }
 
-  var ROLES = normalizeRoles(scriptRoles);
+  var BOT_ROLES = normalizeRoles(CONFIG.roleGroups);
+  var PREVIEW_ROLES = normalizeRoles(scriptRoles);
+  var ROLES = scriptPreviewRoles ? PREVIEW_ROLES : BOT_ROLES;
 
   // Wizard previews must use the browser-visible backend URL. Behind a TLS
   // proxy the server's request URL can be HTTP even when widget.js uses HTTPS.
@@ -1132,7 +1144,6 @@
       els.welcome.style.display = "none";
     }
     els.messages.appendChild(el);
-    updateQuickQuestionsDock();
     updateRoleDock();
     if (!silent) scrollToBottom();
   }
@@ -1320,7 +1331,6 @@
     // Re-add welcome if no messages
     if (state.messages.length === 0) {
       els.messages.appendChild(createWelcomeEl());
-      updateQuickQuestionsDock();
       updateRoleDock();
       return;
     }
@@ -1328,7 +1338,6 @@
     for (var i = 0; i < state.messages.length; i++) {
       els.messages.appendChild(createMessageEl(state.messages[i]));
     }
-    updateQuickQuestionsDock();
     updateRoleDock();
     scrollToBottom();
   }
@@ -1347,29 +1356,6 @@
     }
   }
 
-  function createQuickQuestionButtons(mode, source) {
-    var questions = source || QUICK_QUESTIONS;
-    if (!questions.length) return null;
-    var wrap = document.createElement("div");
-    wrap.className = mode === "dock" ? "lb-quick-dock" : "lb-quick-questions";
-    wrap.setAttribute("role", "group");
-    wrap.setAttribute("aria-label", t("quickQuestions"));
-    for (var i = 0; i < questions.length; i++) {
-      (function (question) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "lb-quick-btn";
-        btn.textContent = question;
-        btn.title = question;
-        btn.addEventListener("click", function () {
-          fillInput(question);
-        });
-        wrap.appendChild(btn);
-      })(questions[i]);
-    }
-    return wrap;
-  }
-
   function findRole(roleId) {
     for (var i = 0; i < ROLES.length; i++) {
       if (ROLES[i].id === roleId) return ROLES[i];
@@ -1378,9 +1364,9 @@
   }
 
   function activeRoleQuestions() {
-    if (!ROLES.length) return QUICK_QUESTIONS;
+    if (!ROLES.length) return [];
     var role = findRole(state.activeRole);
-    return role && role.questions.length ? role.questions : QUICK_QUESTIONS;
+    return role && role.questions.length ? role.questions : [];
   }
 
   function selectRole(roleId) {
@@ -1459,10 +1445,6 @@
     return wrap;
   }
 
-  function updateQuickQuestionsDock() {
-    if (!els.quickDock) return;
-    els.quickDock.style.display = state.messages.length > 0 ? "flex" : "none";
-  }
 
   // ========== Role dock ==========
   // Once the conversation has messages the welcome block is gone, so the role
@@ -1682,7 +1664,11 @@
     logo.alt = "LangBot";
 
     var text = document.createElement("div");
-    text.textContent = scriptSubtitle || t("welcomeMessage");
+    // Priority: admin test draft -> saved bot welcome message -> standalone
+    // page subtitle -> widget i18n default.
+    text.textContent = scriptPreviewWelcome
+      ? scriptWelcome || ""
+      : CONFIG.welcomeMessage || scriptSubtitle || t("welcomeMessage");
 
     div.appendChild(logo);
     div.appendChild(text);
@@ -1694,9 +1680,6 @@
       if (els.roleQuestions) div.appendChild(els.roleQuestions);
       return div;
     }
-
-    var quick = createQuickQuestionButtons("welcome");
-    if (quick) div.appendChild(quick);
 
     return div;
   }
@@ -1762,7 +1745,15 @@
         wsConnect();
       });
       setTimeout(function () {
-        if (els.input) els.input.focus();
+        if (!els.input) return;
+        // Do not steal focus from a control the visitor already used inside
+        // the panel (for example opening the role dock right after launch).
+        var root = els.input.getRootNode ? els.input.getRootNode() : null;
+        var active = root && root.activeElement;
+        if (active && active !== els.input && els.panel.contains(active)) {
+          return;
+        }
+        els.input.focus();
       }, 300);
     } else {
       els.panel.classList.remove("lb-visible");
@@ -2115,16 +2106,7 @@
     footer.innerHTML = t("poweredBy");
     panel.appendChild(footer);
 
-    // Role mode keeps suggestions inside the welcome block, so no dock is
-    // created and updateQuickQuestionsDock() stays a no-op.
-    var quickDock = ROLES.length ? null : createQuickQuestionButtons("dock");
-    if (quickDock) {
-      els.quickDock = quickDock;
-      panel.appendChild(quickDock);
-    }
-
     panel.appendChild(inputArea);
-    updateQuickQuestionsDock();
     updateRoleDock();
 
     shadow.appendChild(panel);
