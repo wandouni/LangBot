@@ -9,6 +9,8 @@
 | Claude Code + Codex | cc-switch 统一管理             | `~/.claude.json#mcpServers`、`~/.codex/config.toml#[mcp_servers]` |
 | WorkBuddy           | 手动写文件（cc-switch 不支持） | `~/.workbuddy/mcp.json`                                             |
 
+> **不想自己配？** 把 [豆包Seedream生图MCP-同事提示词.md](./豆包Seedream生图MCP-同事提示词.md) 里对应客户端的那一段整段发给 AI，它会自己装包、写配置并真实出一张图验证。
+
 ---
 
 ## 第 0 步：用直通版（无需加白）
@@ -71,7 +73,12 @@ uvx --from https://github.com/wandouni/Seedream_MCP/releases/download/v4.2.0.pos
 
 两侧使用**同一份 JSON**，只有 `command` 一行不同。
 
-操作路径：左侧栏 **MCP** → 页头 **添加 MCP** → 抽屉内「粘贴配置」贴入 JSON → 勾选「写入到」**Claude Code** 与 **Codex** → 添加 → 回到矩阵把对应开关打开。
+操作路径（二选一）：
+
+- **已经用脚本或手写过配置**（推荐）：左侧栏 **MCP** → 点 **「从应用导入」** → 勾选 `seedream` 和 **Claude Code** / **Codex** → 确认。它会把 `~/.claude.json`、`~/.codex/config.toml` 里已有的条目读进 cc-switch。
+- **从零开始**：左侧栏 **MCP** → 页头 **添加 MCP** → 抽屉内「粘贴配置」贴入 JSON → 勾选「写入到」**Claude Code** 与 **Codex** → 添加 → 回到矩阵把对应开关打开。
+
+> 为什么一定要走 cc-switch：它把 MCP 存在 `~/.cc-switch/cc-switch.db` 的 `mcp_servers` 表里，切换 provider 时会用这张表重写两个配置文件。只改文件不告诉 cc-switch，切换一次就没了。
 
 **macOS**
 
@@ -135,7 +142,11 @@ cc-switch **不支持** WorkBuddy，需要手动编辑配置文件：
 - macOS：`"command": "/Users/<用户名>/.local/bin/uvx"`
 - Windows：`"command": "C:\\Users\\<用户名>\\.local\\bin\\uvx.exe"`
 
-保存 → 重启 WorkBuddy → 首次调用弹信任确认，点允许（记录在 `~/.workbuddy/mcp-approvals.json`）。
+保存 → 重启 WorkBuddy → 左侧 **「连接器」** 找到 `seedream`，**打开开关** → 首次调用弹信任确认，点允许（记录在 `~/.workbuddy/mcp-approvals.json`）。
+
+> 光写配置文件不够：WorkBuddy 不会自动启用新写入的 MCP，「连接器」里的开关不打开，对话中就看不到这 6 个工具。这是最容易漏的一步。
+
+> **WorkBuddy 自带图片模型**：启用 MCP 只是让它"多了一个可选工具"，助手仍可能用自带的生图应付。建议在设置里关掉自带生图，并要求它按完整工具名（`mcp__seedream__text_to_image`）调用。验收看产物：seedream 出的图一定落在 `<SEEDREAM_DATA_ROOT>/.seedream/images/<日期>/` 下，内置模型不会往这里写。
 
 也可以用 WorkBuddy 内置的 MCP 设置页添加，写入的是同一个文件，效果一致。
 

@@ -3,6 +3,7 @@
 > **本文档的读者是 AI Agent，不是人。**
 > 读到本文档即视为接到任务：把当前机器上的 Claude Code / Codex / WorkBuddy 配置好豆包 Seedream 生图 MCP，并验证到「能真实出图」为止。
 > 人类用户如果自己看：跳到 [§9.1 一键安装提示词](#91-粘贴给-ai-的一键安装提示词)，把那段话发给你的 AI 即可，不需要读完全文。
+> 给非技术同事直接复制、不依赖仓库的版本：[豆包Seedream生图MCP-同事提示词.md](./豆包Seedream生图MCP-同事提示词.md)。
 
 ---
 
@@ -161,14 +162,20 @@ ARK_API_KEY="$KEY" python3 scripts/setup_seedream_mcp.py
 
 cc-switch 的 MCP 矩阵行＝MCP、列＝应用（Claude Code / Codex），切换 provider 时会用 `~/.cc-switch/cc-switch.db` 的内容重写 `~/.claude.json` 与 `~/.codex/config.toml`。所以脚本写完可能被它覆盖。
 
-**动作**：脚本报告里出现 `warning`（检测到 cc-switch）时，不要自己改数据库。在交付报告里给用户这段操作，并明确说「不做这步，切换 provider 后配置会消失」：
+**动作**：脚本报告里出现 `warning`（检测到 cc-switch）时，不要自己改数据库（`mcp_servers` 表由 cc-switch 独占，外部写入会被它下次同步覆盖）。在交付报告里给用户这段操作，并明确说「不做这步，切换 provider 后配置会消失」：
 
-1. 打开 cc-switch → 左侧栏 **MCP** → **添加 MCP**
-2. 「粘贴配置」贴入 §5.1 的 JSON（Windows 换成绝对路径版）
-3. 勾选写入到 **Claude Code** 与 **Codex**
-4. 回到 MCP 矩阵，把 `seedream` 行对应两列开关打开
+1. 确认 `seedream` 已经写进 `~/.claude.json` 与 `~/.codex/config.toml`（脚本已完成）
+2. 打开 cc-switch → 左侧栏 **MCP** → 点 **「从应用导入」**
+3. 确认框里勾选 `seedream`、**Claude Code**、**Codex** → 确认导入
+4. 导入后 MCP 列表应出现 `seedream`，两个应用的开关为开启状态
 
-WorkBuddy 不在 cc-switch 管理范围，脚本已直接写好，无需 UI 操作。
+「从应用导入」只读用户级配置，读不到再用兜底路径：**添加 MCP → 粘贴配置**，贴入 §5.1 的 JSON（Windows 换成绝对路径版），勾选写入两个应用。
+
+cc-switch 也支持 `ccswitch://v1/import?resource=mcp&apps=claude,codex&config=<base64 的 {"mcpServers":{...}}>` 深度链接导入，但 Token 会进 URL（进程参数、剪贴板、历史），**不要用它传递含 Token 的配置**。
+
+WorkBuddy 不在 cc-switch 管理范围，脚本已直接写好配置文件，但**仍需用户在 GUI 里启用**：重启 WorkBuddy 后打开左侧「连接器」，找到 `seedream` 把开关打开。只写文件不启用，对话里看不到这 6 个工具，必须写进交付报告的「还需要你做的」。
+
+WorkBuddy 还自带图片模型：启用 MCP 只是让助手"多一个可选工具"，它仍可能用自带生图应付，而回复看起来完全正常。因此 WorkBuddy 的验证必须以**产物路径**为准——图片必须落在 `<SEEDREAM_DATA_ROOT>/.seedream/images/<日期>/` 下，并核对调用前后该目录文件数增加。若用户机器上能关闭自带生图，把这一步写进「还需要你做的」。
 
 ---
 
@@ -254,7 +261,8 @@ tail -20 ~/Pictures/Seedream/.seedream/logs/seedream_mcp.log
 | `handshake.ok=false`，`tools=[]` | uvx 路径错（尤其 GUI 用了裸 `uvx`） | 改绝对路径；确认 `uvx` 版本可执行 |
 | `tools` 有内容但不含 `text_to_image` | 装成了别的包/版本 | `args` 必须是 `["--from", "<wheel URL>", "seedream-image-mcp"]`；`--version` 应为 `4.2.0.post1` |
 | Codex 报 TOML 解析错误 | 文件里有重复段 | 跑脚本不加 `--force` 应先被拒；若已损坏，从 `.bak-*` 恢复或加 `--force` 让脚本去重 |
-| 工具列表里没有 `seedream` | 客户端没重启 / 配置写到了别的文件 | 重启客户端；核对 §5.3 路径 |
+| 工具列表里没有 `seedream` | 客户端没重启 / 配置写到了别的文件 / WorkBuddy「连接器」里没启用 | 重启客户端；核对 §5.3 路径；WorkBuddy 到「连接器」打开 `seedream` 开关 |
+| 工具都在、也出了图，但 `~/.seedream/images/` 下没有新文件 | WorkBuddy 用自带图片模型画的，没走 MCP | 关掉自带生图；要求按完整工具名调用（如 `mcp__seedream__text_to_image`）；以产物路径验收 |
 | 用户想把主模型改成生图模型 | 槽位不匹配 | 拒绝；主模型保持文本模型，生图只走 MCP |
 | 消息里出现 `model_no_authorization` 但主模型是文本 | 会话里有子模型/小模型被填成生图模型 | 检查 cc-switch provider 里的各类模型字段 |
 
@@ -297,7 +305,7 @@ ARK_API_KEY="$KEY" python3 scripts/setup_seedream_mcp.py --model-id doubao-seedr
 2. 网关 Token 从环境变量 ARK_API_KEY 读取；如果读不到，再从 ~/.claude/settings.json 的 env.ANTHROPIC_AUTH_TOKEN 读；都没有就问我。全程不要在命令行或回复里打印 Token。
 3. 确认后正式执行，把 Claude Code、Codex、WorkBuddy 三端都配上。
 4. 脚本退出码非 0 时，按文档 §3.3 和 §7 判断原因，告诉我具体错在哪一步、下一步该做什么，不要直接说"已配好"。
-5. 最后按文档 §10 的格式给我交付报告，并提醒我重启客户端。
+5. 最后按文档 §10 的格式给我交付报告，并提醒我重启客户端、以及到 WorkBuddy「连接器」里启用 seedream。
 ```
 
 ### 9.2 AI 必须向用户确认的最小问题集
@@ -414,13 +422,19 @@ WorkBuddy         ~/.workbuddy/mcp.json  <已写入 / 无变化 / 失败>
 备份文件：<路径 或 无>
 网关授权：<已登记该模型名 / 未登记：<具体报错>>
 
-你需要做的：
-1. 重启 <Claude Code / Codex / WorkBuddy>
-2. <若检测到 cc-switch：去 cc-switch 的 MCP 面板同步添加 seedream，否则切换 provider 后配置会被覆盖>
-3. 说一句「用 seedream 生成一张测试图」验证
+【还需要你做的】（只有用户能做，必须逐条列出，不得合并成一句，不得标「可选」）
+1. <若检测到 cc-switch：打开 cc-switch → 左侧 MCP → 「从应用导入」→ 勾选 seedream、Claude Code、Codex → 确认>
+2. 完全退出并重新打开 <Claude Code / Codex / WorkBuddy>（关闭进程，不是最小化）
+3. <配了 WorkBuddy 才写：>打开 WorkBuddy → 左侧「连接器」→ 找到 seedream → 打开开关（写进配置文件不等于启用，不开这里对话里看不到工具）
+4. 在客户端里说一句「用 seedream 生成一张测试图」验证
+
+【做完之后你会看到】
+<工具列表 6 个；画图返回本地路径；cc-switch 列表里出现 seedream 且开关打开；WorkBuddy「连接器」里 seedream 为启用状态>
 
 Token 未在任何回复、日志或仓库文件中出现。
 ```
+
+**硬性要求**：报告里「还需要你做的」不能省、不能弱化。用户看到的是这一段，不是上面的技术细节；漏掉 cc-switch 的那一步，用户会在下次切换 provider 时莫名其妙丢配置；漏掉 WorkBuddy「连接器」的那一步，用户重启完还是看不到工具，以为配失败了。凡是由用户完成的动作，必须写清「在哪点、点什么、勾什么、点完应该看到什么」。
 
 ---
 
