@@ -1,0 +1,6 @@
+# Local build and deploy artifacts
+.last-image
+.last-gateway-image
+.last-sqlbot-image
+.env
+dist/

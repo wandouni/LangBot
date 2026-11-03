@@ -1,0 +1,159 @@
+# Local production-like stack for the application center and SqlBot SSO.
+#
+#   ./deploy/local/deploy.sh          # rebuild LangBot from the working tree and restart it
+#   ./deploy/local/deploy.sh --all    # also (re)start gateway, SqlBot and plugin runtime
+#
+# Source code must reach the container through an image built by
+# build-image.sh. Never use `docker cp` to patch application files: those edits
+# live in the writable layer and disappear on the next container recreation.
+#
+#   http://<GATEWAY_LAN_IP>:5300/        -> LangBot
+#   http://<GATEWAY_LAN_IP>:5300/sqlbot/ -> SqlBot
+name: langbot-local
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  vocational-langbot-runtime:
+    image: ${PLUGIN_RUNTIME_IMAGE:?PLUGIN_RUNTIME_IMAGE must be set in .env}
+    container_name: vocational-langbot-runtime
+    command: ["uv", "run", "--no-sync", "-m", "langbot_plugin.cli.__init__", "rt"]
+    restart: unless-stopped
+    pull_policy: never
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ${LANGBOT_DATA_DIR:?LANGBOT_DATA_DIR must be set in .env}/plugins:/app/data/plugins
+      # Per-plugin dependency environments survive container recreation.
+      - ${LANGBOT_DATA_DIR}/plugin-runtime:/app/data/plugin-runtime
+    ports:
+      - "127.0.0.1:${PLUGIN_DEBUG_PORT:-5401}:5401"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5400/healthz', timeout=3).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    networks:
+      - langbot_network
+
+  vocational-langbot-core:
+    image: ${LANGBOT_IMAGE:?run build-image.sh first, or set LANGBOT_IMAGE in .env}
+    container_name: vocational-langbot-core
+    working_dir: /app
+    command: ["uv", "run", "--no-sync", "main.py"]
+    restart: unless-stopped
+    pull_policy: never
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # The name in data/docker/config.yaml is this service's DNS alias.
+      PLUGIN__RUNTIME_WS_URL: ws://vocational-langbot-runtime:5400/control/ws
+      BOX__ENABLED: "false"
+      BOX__LOCAL__DEFAULT_WORKSPACE: default
+      BOX__LOCAL__HOST_ROOT: /app/data/box
+      BOX__LOCAL__ALLOWED_MOUNT_ROOTS: /app/data/box
+      SKILLS__ROOT: /app/data/box/skills
+      # Application center. These mirror data/docker/config.yaml so the
+      # container stays correct even if that file is recreated from scratch.
+      SYSTEM__PORTAL__ENABLED: ${PORTAL_ENABLED:-true}
+      SYSTEM__PORTAL__SQLBOT_ENABLED: ${PORTAL_SQLBOT_ENABLED:-true}
+      SYSTEM__PORTAL__PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      API__WEBHOOK_PREFIX: ${LANGBOT_WEBHOOK_PREFIX:-}
+      SQLBOT__BASE_URL: http://sqlbot:8000
+      SQLBOT__CONTEXT_PATH: /sqlbot
+      SQLBOT__SSO__ENABLED: "true"
+      # Must match sqlbot.sso.shared_secret and LANGBOT_SSO_SHARED_SECRET.
+      SQLBOT__SSO__SHARED_SECRET: ${SQLBOT_SSO_SHARED_SECRET:?SQLBOT_SSO_SHARED_SECRET must be set in .env}
+    volumes:
+      # config.yaml, SQLite, Chroma, uploads and logs all live here.
+      - ${LANGBOT_DATA_DIR}:/app/data
+      - ${LANGBOT_DATA_DIR}/box:/app/data/box
+    ports:
+      # Loopback only: browsers go through portal_gateway.
+      - "127.0.0.1:${LANGBOT_DEBUG_PORT:-5302}:5300"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5300/healthz', timeout=3).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    logging: *default-logging
+    networks:
+      langbot_network:
+        aliases:
+          - langbot
+
+  sqlbot:
+    image: ${SQLBOT_IMAGE:?SQLBOT_IMAGE must be set in .env}
+    container_name: sqlbot
+    restart: unless-stopped
+    pull_policy: never
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      POSTGRES_DB: sqlbot
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: ${SQLBOT_POSTGRES_PASSWORD:?SQLBOT_POSTGRES_PASSWORD must be set in .env}
+      # The gateway forwards /sqlbot/ with the prefix intact.
+      CONTEXT_PATH: /sqlbot
+      LANGBOT_SSO_ENABLED: "true"
+      LANGBOT_SSO_SHARED_SECRET: ${SQLBOT_SSO_SHARED_SECRET}
+    volumes:
+      - ${SQLBOT_DATA_DIR:?SQLBOT_DATA_DIR must be set in .env}/sqlbot/excel:/opt/sqlbot/data/excel
+      - ${SQLBOT_DATA_DIR}/sqlbot/file:/opt/sqlbot/data/file
+      - ${SQLBOT_DATA_DIR}/sqlbot/images:/opt/sqlbot/images
+      - ${SQLBOT_DATA_DIR}/sqlbot/logs:/opt/sqlbot/app/logs
+      - ${SQLBOT_DATA_DIR}/postgresql:/var/lib/postgresql/data
+    ports:
+      # Host ports kept from the hand-run stack for local MCP/API debugging.
+      - "${SQLBOT_HTTP_PORT:-8010}:8000"
+      - "${SQLBOT_MCP_PORT:-8011}:8001"
+    healthcheck:
+      # The vendor healthcheck probes /sqlbot without a trailing slash and
+      # reports 401, so probe the SPA mount point instead.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/sqlbot/', timeout=5).getcode()==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    logging: *default-logging
+    networks:
+      langbot_network:
+        aliases:
+          - sqlbot
+
+  portal_gateway:
+    image: ${PORTAL_GATEWAY_IMAGE:?PORTAL_GATEWAY_IMAGE must be set in .env}
+    container_name: portal_gateway
+    restart: unless-stopped
+    pull_policy: never
+    depends_on:
+      vocational-langbot-core:
+        condition: service_healthy
+      sqlbot:
+        condition: service_healthy
+    ports:
+      # GATEWAY_LAN_IP must be a non-loopback address of this host; loopback
+      # is published separately below.
+      - "${GATEWAY_LAN_IP:?GATEWAY_LAN_IP must be set in .env}:${GATEWAY_HTTP_PORT:-5300}:80"
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-5300}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/gateway-healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - langbot_network
+
+networks:
+  langbot_network:
+    # Shared with the rest of the local environment; create once with:
+    #   docker network create vocational-langbot-net
+    external: true
+    name: vocational-langbot-net
