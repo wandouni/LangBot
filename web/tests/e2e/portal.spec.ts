@@ -173,7 +173,7 @@ test('portal sign out clears LangBot and SqlBot local state', async ({
   ).toEqual({ token: null, sqlbot: null });
 });
 
-test('SqlBot handoff logout clears both sessions and the query parameter', async ({
+test('forced logout clears both sessions and the query parameter', async ({
   page,
 }) => {
   await installPortalMocks(page);
