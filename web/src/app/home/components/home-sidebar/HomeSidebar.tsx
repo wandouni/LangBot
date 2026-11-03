@@ -71,13 +71,11 @@ import WorkspaceSwitcher, {
 const CloudPlansDialog = lazy(
   () => import('@/app/home/components/workspace-settings/CloudPlansDialog'),
 );
-import NewVersionDialog from '@/app/home/components/new-version-dialog/NewVersionDialog';
 import SettingsDialog, {
   SettingsSection,
   SETTINGS_ACTION_BY_SECTION,
   SETTINGS_SECTION_BY_ACTION,
 } from '@/app/home/components/settings-dialog/SettingsDialog';
-import { GitHubRelease } from '@/app/infra/http/CloudServiceClient';
 import { useAsyncTask, AsyncTaskStatus } from '@/hooks/useAsyncTask';
 import { toast } from 'sonner';
 import {
@@ -125,25 +123,6 @@ import {
 } from '@/app/home/components/workspace-quota/useWorkspaceQuotaStatus';
 import { WorkspaceQuotaTooltip } from '@/app/home/components/workspace-quota/WorkspaceQuotaTooltip';
 import { SidebarGuide } from './SidebarGuide';
-
-// Compare two version strings, returns true if v1 > v2
-function compareVersions(v1: string, v2: string): boolean {
-  const clean1 = v1.replace(/^v/, '');
-  const clean2 = v2.replace(/^v/, '');
-
-  const parts1 = clean1.split('.').map((p) => parseInt(p, 10) || 0);
-  const parts2 = clean2.split('.').map((p) => parseInt(p, 10) || 0);
-
-  const maxLen = Math.max(parts1.length, parts2.length);
-
-  for (let i = 0; i < maxLen; i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
-    if (p1 > p2) return true;
-    if (p1 < p2) return false;
-  }
-  return false;
-}
 
 // IDs of sidebar entries that have collapsible entity sub-items
 const ENTITY_CATEGORY_IDS = [
@@ -1871,11 +1850,6 @@ export default function HomeSidebar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>('models');
-  const [latestRelease, setLatestRelease] = useState<GitHubRelease | null>(
-    null,
-  );
-  const [hasNewVersion, setHasNewVersion] = useState(false);
-  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [cloudPlansOpen, setCloudPlansOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -1958,32 +1932,6 @@ export default function HomeSidebar({
           localStorage.setItem('userEmail', info.user);
         })
         .catch(() => {});
-    }
-
-    // Cloud edition is updated centrally by the operator, so end users should
-    // not see a "new version available" prompt in the sidebar. Skip the GitHub
-    // release check entirely for edition=cloud.
-    if (systemInfo?.edition !== 'cloud') {
-      getCloudServiceClientSync()
-        .getLangBotReleases()
-        .then((releases) => {
-          if (releases && releases.length > 0) {
-            const latestStable = releases.find(
-              (r) => !r.prerelease && !r.draft,
-            );
-            const latest = latestStable || releases[0];
-            setLatestRelease(latest);
-
-            const currentVersion = systemInfo?.version;
-            if (currentVersion && latest.tag_name) {
-              const isNewer = compareVersions(latest.tag_name, currentVersion);
-              setHasNewVersion(isNewer);
-            }
-          }
-        })
-        .catch((error) => {
-          console.error('Failed to fetch releases:', error);
-        });
     }
   }, []);
 
@@ -2102,31 +2050,6 @@ export default function HomeSidebar({
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate font-semibold">LangBot</span>
-                    <Badge
-                      variant="secondary"
-                      className={`shrink-0 px-1 py-0 h-3.5 text-[0.55rem] font-medium ${
-                        systemInfo?.edition === 'cloud'
-                          ? 'border-transparent bg-blue-500 text-white'
-                          : ''
-                      }`}
-                    >
-                      {systemInfo?.edition === 'cloud'
-                        ? t('sidebar.editionCloud')
-                        : t('sidebar.editionCommunity')}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-xs text-muted-foreground">
-                      {systemInfo?.version}
-                    </span>
-                    {hasNewVersion && (
-                      <Badge
-                        onClick={() => setVersionDialogOpen(true)}
-                        className="bg-red-500 hover:bg-red-600 text-white text-[0.55rem] px-1 py-0 h-3.5 cursor-pointer"
-                      >
-                        {t('plugins.new')}
-                      </Badge>
-                    )}
                   </div>
                 </div>
               </SidebarMenuButton>
@@ -2416,11 +2339,6 @@ export default function HomeSidebar({
         onOpenChange={handleSettingsOpenChange}
         section={settingsSection}
         onSectionChange={handleSettingsSectionChange}
-      />
-      <NewVersionDialog
-        open={versionDialogOpen}
-        onOpenChange={setVersionDialogOpen}
-        release={latestRelease}
       />
       <SidebarGuide />
     </>
