@@ -92,6 +92,7 @@ export enum DynamicFormItemType {
   SELECT_KNOWLEDGE_BASES = 'select-knowledge-bases',
   NUMBER = 'number',
   JSON = 'json',
+  QUICK_QUESTION_GROUPS = 'quick-question-groups',
 }
 
 export interface IFileConfig {

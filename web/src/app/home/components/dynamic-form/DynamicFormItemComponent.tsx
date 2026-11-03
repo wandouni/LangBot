@@ -6,6 +6,7 @@ import {
 } from '@/app/infra/entities/form/dynamic';
 import StructuredFieldEditor from './StructuredFieldEditor';
 import PresetSelect from './PresetSelect';
+import QuickQuestionGroupsEditor from './QuickQuestionGroupsEditor';
 import { isSimplePrompt } from './StructuredFieldValue';
 import { Input } from '@/components/ui/input';
 import {
@@ -496,6 +497,14 @@ export default function DynamicFormItemComponent({
 
     case DynamicFormItemType.JSON:
       return <StructuredFieldEditor field={field} />;
+
+    case DynamicFormItemType.QUICK_QUESTION_GROUPS:
+      return (
+        <QuickQuestionGroupsEditor
+          value={field.value}
+          onChange={field.onChange}
+        />
+      );
 
     case DynamicFormItemType.BOOLEAN:
       return (

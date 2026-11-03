@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能咨询机器人</title>
+  <!--
+    Generic standalone chat page, same structure as chat.html without a
+    school-specific brand.
+
+    It is the default target of the "Open test page" shortcut in the page bot
+    settings: the shortcut appends ?embed=<bot uuid>, so the page talks to the
+    bot being edited. Opening it without parameters falls back to the same
+    public consultation bot as chat.html.
+
+    Everything below can be overridden without editing this file:
+      ?embed=<bot uuid>   talk to a different page bot
+      ?title=<text>       header and tab title
+      ?theme=%23RRGGBB    accent color
+      ?config=<url>       load a JSON file with the same fields
+
+    accent is the embed widget's default blue (#2563eb), and logo is the
+    default LangBot logo served by /api/v1/embed/logo.
+  -->
+  <script type="application/json" id="chat-config">
+  {
+    "bot": "9da8c6a6-b4cc-4922-b23d-3fa015ed85e4",
+    "title": "智能咨询机器人",
+    "subtitle": "你好，请问想了解什么？可以咨询招生报名、专业设置、校园服务等公开事项。",
+    "accent": "#2563eb",
+    "accentHover": "#1d4ed8",
+    "logo": "/api/v1/embed/logo"
+  }
+  </script>
+  <script src="/chat-shell.js"></script>
+</head>
+<body></body>
+</html>

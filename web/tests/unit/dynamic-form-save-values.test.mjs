@@ -72,6 +72,54 @@ test('normalizes only single-line text fields in a dynamic form save snapshot', 
   });
 });
 
+test('keeps quick question groups as structured arrays', () => {
+  const { normalizeDynamicFormFieldValue, normalizeDynamicFormValuesForSave } =
+    loadNormalizer();
+  const groups = [
+    {
+      id: 'qg-1',
+      label: '考生与家长',
+      questions: ['如何报名？', '有哪些专业？'],
+    },
+  ];
+
+  assert.deepEqual(
+    normalizeDynamicFormFieldValue(
+      {
+        name: 'quick_question_groups',
+        type: 'quick-question-groups',
+        default: [],
+      },
+      groups,
+    ),
+    groups,
+  );
+  assert.deepEqual(
+    normalizeDynamicFormFieldValue(
+      {
+        name: 'quick_question_groups',
+        type: 'quick-question-groups',
+        default: undefined,
+      },
+      undefined,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    normalizeDynamicFormValuesForSave(
+      [
+        {
+          name: 'quick_question_groups',
+          type: 'quick-question-groups',
+          default: [],
+        },
+      ],
+      { quick_question_groups: groups },
+    ),
+    { quick_question_groups: groups },
+  );
+});
+
 test('normalizes missing dynamic form defaults into controlled values', () => {
   const { normalizeDynamicFormFieldValue } = loadNormalizer();
 

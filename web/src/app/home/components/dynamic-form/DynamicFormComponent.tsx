@@ -3,7 +3,12 @@ import {
   SYSTEM_FIELD_PREFIX,
   DynamicFormItemType,
 } from '@/app/infra/entities/form/dynamic';
-import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
+import {
+  useForm,
+  useFormContext,
+  useWatch,
+  type UseFormReturn,
+} from 'react-hook-form';
 import type { ControllerRenderProps } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isJsonValue, isPromptValue } from './StructuredFieldValue';
@@ -41,6 +46,20 @@ import {
   Download,
   ExternalLink,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  buildQuickQuestionPreviewHash,
+  buildWelcomePreviewHash,
+  buildStandaloneChatPageUrl,
+  type StandaloneChatPage,
+} from './standaloneChatPages';
 import { copyToClipboard } from '@/app/utils/clipboard';
 import {
   Tooltip,
@@ -137,6 +156,14 @@ function getValueSchema(spec: DynamicFormValueSpec) {
       });
     case DynamicFormItemType.JSON:
       return z.custom(isJsonValue);
+    case DynamicFormItemType.QUICK_QUESTION_GROUPS:
+      return z.array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          questions: z.array(z.string()),
+        }),
+      );
     case DynamicFormItemType.PROMPT_EDITOR:
       return z.custom(isPromptValue);
     default:
@@ -151,17 +178,40 @@ function EmbedCodeField({
   label,
   description,
   snippet,
+  botUuid,
 }: {
   label: string;
   description?: string;
   snippet: string;
+  botUuid: string;
 }) {
+  const { t } = useTranslation();
+  const { getValues } = useFormContext();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     copyToClipboard(snippet).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const openTestPage = (page: StandaloneChatPage) => {
+    const url = new URL(
+      buildStandaloneChatPageUrl(window.location.origin, page, botUuid),
+    );
+    // The widget script is cached for five minutes. A fresh query parameter
+    // makes the test page pick up quick-question changes immediately instead
+    // of waiting for the old cache entry.
+    url.searchParams.set('v', Date.now().toString());
+    // Preview the current form draft, including edits that have not been
+    // saved yet. The hash never reaches the server, so a full six-group draft
+    // cannot overflow a request header.
+    const previewParams = [
+      buildQuickQuestionPreviewHash(getValues('quick_question_groups')),
+      buildWelcomePreviewHash(getValues('welcome_message')),
+    ].filter(Boolean);
+    if (previewParams.length) url.hash = previewParams.join('&');
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -172,7 +222,7 @@ function EmbedCodeField({
           {description}
         </p>
       )}
-      <div className="flex min-w-0 max-w-full items-center gap-2">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
         <pre className="min-w-0 max-w-full flex-1 overflow-x-auto rounded-md bg-muted p-3 text-sm font-mono select-all">
           <code>{snippet}</code>
         </pre>
@@ -182,6 +232,7 @@ function EmbedCodeField({
           size="icon"
           className="shrink-0"
           onClick={handleCopy}
+          title={t('common.copy')}
         >
           {copied ? (
             <Check className="h-4 w-4 text-green-600" />
@@ -189,6 +240,35 @@ function EmbedCodeField({
             <Copy className="size-4" />
           )}
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+            >
+              <ExternalLink className="size-4" />
+              {t('bots.testPageOpen')}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>{t('bots.testPageTitle')}</DropdownMenuLabel>
+            <p className="px-2 pb-2 text-xs text-muted-foreground">
+              {t('bots.testPageHint')}
+            </p>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => openTestPage('chat.html')}>
+              {t('bots.testPageCollege')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openTestPage('chat-jishi.html')}>
+              {t('bots.testPageJishi')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openTestPage('default.html')}>
+              {t('bots.testPageDefault')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
@@ -929,6 +1009,7 @@ function DynamicFormFieldList({
                   : undefined
               }
               snippet={embedSnippet}
+              botUuid={botUuid}
             />
           );
         }

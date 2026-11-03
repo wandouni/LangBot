@@ -509,6 +509,12 @@ const enUS = {
     sqlbotUnavailable: 'SqlBot is unavailable right now. Please try again.',
     backToApps: 'Application center',
   },
+  quickQuestionGroups: {
+    hint: 'Write one group name per line, then one question per line. Separate groups with a blank line. Up to 6 groups, 12 questions per group, 200 characters per question. Leave empty to configure no groups.',
+    placeholder:
+      'Prospective students & parents\nWhich programs are offered in 2026?\nHow do I apply?\n\nCurrent students\nHow many people share a dorm room?',
+    editorLabel: 'Quick question groups',
+  },
   common: {
     failureReasonNotRecorded:
       'The failure reason was not recorded. Check the bot logs or retry to capture more details.',
@@ -945,6 +951,13 @@ const enUS = {
     },
   },
   bots: {
+    testPageOpen: 'Test page',
+    testPageTitle: 'Open a test chat page',
+    testPageHint:
+      'Opens in a new window and previews your current edits without saving first.',
+    testPageCollege: 'Vocational college page',
+    testPageJishi: 'Technician college page',
+    testPageDefault: 'Default page',
     pluginSubscriptions: {
       incompleteEvents:
         'This bot only supports some of the subscribed events ({{events}}). The processor may not behave as intended in all cases.',

@@ -12,6 +12,7 @@ const ARRAY_FIELD_TYPES = new Set([
   'resources-selector',
   'rich-tools-selector',
   'tools-selector',
+  'quick-question-groups',
 ]);
 
 const STRING_FIELD_TYPES = new Set([

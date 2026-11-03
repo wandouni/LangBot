@@ -13,8 +13,9 @@
       ?theme=%23RRGGBB    accent color
       ?config=<url>       load a JSON file with the same fields
 
-    roles[].questions: an empty list falls back to the bot's quick questions
-    configured in the admin console.
+    Quick question tabs come only from the bot's saved "quick question
+    groups" configuration. Pages no longer define fallback roles; a bot with
+    no groups shows the plain welcome screen.
   -->
   <script type="application/json" id="chat-config">
   {
@@ -24,69 +25,7 @@
     "accent": "#72030C",
     "accentHover": "#932020",
     "accentBorder": "#E0BFBC",
-    "logo": "/brand/lingnan-logo-symbol.png",
-    "roles": [
-      {
-        "id": "prospective-student-parent",
-        "label": "考生与家长",
-        "questions": []
-      },
-      {
-        "id": "internal-teacher",
-        "label": "校内教师",
-        "questions": [
-          "在哪里查看学校公开校历？",
-          "学校有哪些公开教研活动？",
-          "教师培训信息在哪里查询？",
-          "如何了解对外交流合作项目？",
-          "校内个人业务应从哪个正式入口办理？"
-        ]
-      },
-      {
-        "id": "external-teacher",
-        "label": "校外教师",
-        "questions": [
-          "如何咨询访学交流？",
-          "如何了解公开教研活动？",
-          "教师培训有哪些报名渠道？",
-          "校际合作应联系哪个部门？",
-          "来校学术交流需要办理哪些手续？"
-        ]
-      },
-      {
-        "id": "alumni",
-        "label": "校友",
-        "questions": [
-          "如何申请成绩单？",
-          "如何办理学历或毕业证明？",
-          "毕业生档案问题应联系哪个部门？",
-          "校友返校需要预约吗？",
-          "在哪里了解校友活动？"
-        ]
-      },
-      {
-        "id": "campus-visitor",
-        "label": "来校访客",
-        "questions": [
-          "学校各校区的地址是什么？",
-          "来校有哪些公共交通方式？",
-          "访客入校需要预约吗？",
-          "校园参观的开放时间是什么？",
-          "来校停车需要注意什么？"
-        ]
-      },
-      {
-        "id": "other",
-        "label": "其他",
-        "questions": [
-          "学校有哪些对外公开服务？",
-          "企业合作应联系哪个部门？",
-          "如何找到学校官方联系方式？",
-          "在哪里查看学校最新公告？",
-          "学校各部门的办公电话是多少？"
-        ]
-      }
-    ]
+    "logo": "/brand/lingnan-logo-symbol.png"
   }
   </script>
   <script src="/chat-shell.js"></script>

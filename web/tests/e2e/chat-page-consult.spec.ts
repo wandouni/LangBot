@@ -11,27 +11,109 @@ const WIDGET_TEMPLATE = fs.readFileSync(
   'utf8',
 );
 
-const QUICK_QUESTIONS = ['2026 年招生有哪些专业？', '如何报名？'];
+type QuickQuestionGroup = {
+  id: string;
+  label: string;
+  questions: string[];
+};
 
-function widgetSource(origin: string, quickQuestions: string[]) {
+const COLLEGE_ROLE_GROUPS: QuickQuestionGroup[] = [
+  { id: 'prospective-student-parent', label: '考生与家长', questions: [] },
+  {
+    id: 'internal-teacher',
+    label: '校内教师',
+    questions: [
+      '在哪里查看学校公开校历？',
+      '学校有哪些公开教研活动？',
+      '教师培训信息在哪里查询？',
+      '如何了解对外交流合作项目？',
+      '校内个人业务应从哪个正式入口办理？',
+    ],
+  },
+  {
+    id: 'external-teacher',
+    label: '校外教师',
+    questions: [
+      '如何咨询访学交流？',
+      '如何了解公开教研活动？',
+      '教师培训有哪些报名渠道？',
+      '校际合作应联系哪个部门？',
+      '来校学术交流需要办理哪些手续？',
+    ],
+  },
+  { id: 'alumni', label: '校友', questions: ['如何申请成绩单？'] },
+  {
+    id: 'campus-visitor',
+    label: '来校访客',
+    questions: ['学校各校区的地址是什么？'],
+  },
+  { id: 'other', label: '其他', questions: ['学校有哪些对外公开服务？'] },
+];
+
+const JISHI_ROLE_GROUPS: QuickQuestionGroup[] = [
+  {
+    id: 'prospective-student-parent',
+    label: '考生与家长',
+    questions: [
+      '学院招收初中毕业生还是高中毕业生？',
+      '学院有哪些招生专业？',
+      '报名需要什么条件？',
+      '学费和住宿费多少？',
+      '有哪些奖助学金？',
+      '怎么联系招生办？',
+    ],
+  },
+  {
+    id: 'internal-teacher',
+    label: '校内教师',
+    questions: ['公开校历在哪里查看？'],
+  },
+  {
+    id: 'partner-company',
+    label: '合作企业',
+    questions: ['如何开展校企合作？'],
+  },
+  { id: 'alumni', label: '校友', questions: ['如何补办毕业证明？'] },
+  {
+    id: 'campus-visitor',
+    label: '来校访客',
+    questions: ['学院各校区地址是什么？'],
+  },
+  { id: 'other', label: '其他', questions: ['学院有哪些公开服务？'] },
+];
+
+function previewUrl(
+  path: string,
+  groups: QuickQuestionGroup[],
+  welcome?: string,
+) {
+  const params = [`preview=${encodeURIComponent(JSON.stringify(groups))}`];
+  if (welcome !== undefined) {
+    params.push(`previewWelcome=${encodeURIComponent(welcome)}`);
+  }
+  return `${path}#${params.join('&')}`;
+}
+
+function widgetSource(origin: string, roleGroups: QuickQuestionGroup[] = []) {
   return WIDGET_TEMPLATE.replaceAll('__LANGBOT_LOCALE__', 'zh_Hans')
     .replaceAll('__LANGBOT_BOT_UUID__', 'bot-1')
     .replaceAll('__LANGBOT_BASE_URL__', origin)
     .replaceAll('__LANGBOT_TURNSTILE_SITE_KEY__', '')
     .replaceAll('__LANGBOT_BUBBLE_ICON__', 'chat')
-    .replaceAll(
-      '"__LANGBOT_QUICK_QUESTIONS__"',
-      JSON.stringify(quickQuestions),
-    );
+    .replaceAll('"__LANGBOT_ROLE_GROUPS__"', JSON.stringify(roleGroups))
+    .replaceAll('"__LANGBOT_WELCOME_MESSAGE__"', JSON.stringify(''));
 }
 
-async function mockChatBackend(page: Page, quickQuestions: string[] = []) {
+async function mockChatBackend(
+  page: Page,
+  roleGroups: QuickQuestionGroup[] = [],
+) {
   await page.route('**/api/v1/embed/*/widget.js*', async (route) => {
     const origin = new URL(route.request().url()).origin;
     await route.fulfill({
       status: 200,
       contentType: 'application/javascript',
-      body: widgetSource(origin, quickQuestions),
+      body: widgetSource(origin, roleGroups),
     });
   });
   await page.route('**/api/v1/embed/*/messages/**', (route) =>
@@ -78,16 +160,28 @@ async function sendChatMessage(page: Page, text: string) {
   await send.click();
 }
 
-test('chat.html renders the six role tabs with the visitor role selected', async ({
+test('chat.html renders no suggestions without saved groups', async ({
   page,
 }) => {
-  await mockChatBackend(page, QUICK_QUESTIONS);
+  await mockChatBackend(page);
   await page.goto('/chat.html');
 
   await expect(page.locator('#langbot-widget-root')).toBeAttached();
   await expect(page.locator('.lb-panel')).toHaveClass(/lb-visible/);
   // Standalone pages hide the widget's "Powered by LangBot" line.
   await expect(page.locator('.lb-footer')).toBeHidden();
+
+  // There is no page-level fallback anymore.
+  await expect(page.locator('.lb-role-tab')).toHaveCount(0);
+  await expect(page.locator('.lb-role-question')).toHaveCount(0);
+  await expect(page.locator('.lb-quick-btn')).toHaveCount(0);
+
+  await expect.poll(() => headerBackground(page)).toBe('rgb(114, 3, 12)');
+});
+
+test('the preview hash renders the unsaved draft roles', async ({ page }) => {
+  await mockChatBackend(page);
+  await page.goto(previewUrl('/chat.html', COLLEGE_ROLE_GROUPS));
 
   const tabs = page.locator('.lb-role-tab');
   await expect(tabs).toHaveCount(6);
@@ -101,19 +195,26 @@ test('chat.html renders the six role tabs with the visitor role selected', async
   ]);
   await expect(tabs.first()).toHaveClass(/lb-role-active/);
 
-  // An empty role question list falls back to the bot's quick questions.
-  const questions = page.locator('.lb-role-question');
-  await expect(questions).toHaveCount(QUICK_QUESTIONS.length);
-  await expect(questions.first()).toContainText(QUICK_QUESTIONS[0]);
+  // The first draft group is intentionally empty.
+  await expect(page.locator('.lb-role-question')).toHaveCount(0);
+});
 
-  await expect.poll(() => headerBackground(page)).toBe('rgb(114, 3, 12)');
+test('the preview hash renders the unsaved welcome message', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto(previewUrl('/chat.html', [], '草稿欢迎语：无需保存即可预览'));
+
+  await expect(page.locator('.lb-welcome')).toContainText(
+    '草稿欢迎语：无需保存即可预览',
+  );
 });
 
 test('switching roles swaps the suggestions and fills the composer', async ({
   page,
 }) => {
   await mockChatBackend(page);
-  await page.goto('/chat.html');
+  await page.goto(previewUrl('/chat.html', COLLEGE_ROLE_GROUPS));
 
   const tabs = page.locator('.lb-role-tab');
   await expect(tabs).toHaveCount(6);
@@ -132,9 +233,48 @@ test('switching roles swaps the suggestions and fills the composer', async ({
   );
 });
 
+test('saved bot quick question groups render their tabs', async ({ page }) => {
+  const groups: QuickQuestionGroup[] = [
+    {
+      id: 'g1',
+      label: '后台分类一',
+      questions: ['后台问题一', '后台问题二'],
+    },
+    { id: 'g2', label: '后台分类二', questions: ['后台问题三'] },
+  ];
+  await mockChatBackend(page, groups);
+  await page.goto('/chat-jishi.html');
+
+  const tabs = page.locator('.lb-role-tab');
+  await expect(tabs).toHaveCount(2);
+  await expect(tabs).toHaveText(['后台分类一', '后台分类二']);
+
+  const questions = page.locator('.lb-role-question');
+  await expect(questions).toHaveCount(2);
+  await expect(questions.first()).toContainText('后台问题一');
+
+  await tabs.filter({ hasText: '后台分类二' }).click();
+  await expect(page.locator('.lb-role-tab.lb-role-active')).toHaveText(
+    '后台分类二',
+  );
+  await expect(page.locator('.lb-role-question')).toHaveCount(1);
+  await expect(page.locator('.lb-role-question').first()).toContainText(
+    '后台问题三',
+  );
+});
+
+test('an empty bot group renders no suggestions', async ({ page }) => {
+  await mockChatBackend(page, [{ id: 'g1', label: '空分类', questions: [] }]);
+  await page.goto('/chat-jishi.html');
+
+  await expect(page.locator('.lb-role-tab')).toHaveCount(1);
+  await expect(page.locator('.lb-role-tab')).toHaveText('空分类');
+  await expect(page.locator('.lb-role-question')).toHaveCount(0);
+});
+
 test('resetting the conversation keeps the selected role', async ({ page }) => {
   await mockChatBackend(page);
-  await page.goto('/chat.html');
+  await page.goto(previewUrl('/chat.html', COLLEGE_ROLE_GROUPS));
 
   await page.locator('.lb-role-tab').filter({ hasText: '校内教师' }).click();
   await expect(page.locator('.lb-role-tab.lb-role-active')).toHaveText(
@@ -158,8 +298,15 @@ test('resetting the conversation keeps the selected role', async ({ page }) => {
 test('the role dock previews questions and expands into tabbed lists', async ({
   page,
 }) => {
-  await mockChatBackend(page, QUICK_QUESTIONS);
-  await page.goto('/chat.html');
+  await mockChatBackend(page);
+  await page.goto(previewUrl('/chat.html', COLLEGE_ROLE_GROUPS));
+
+  // Select a role with its own questions; the visitor role is intentionally
+  // empty and no longer borrows questions from anywhere else.
+  await page.locator('.lb-role-tab').filter({ hasText: '校内教师' }).click();
+  await expect(page.locator('.lb-role-tab.lb-role-active')).toHaveText(
+    '校内教师',
+  );
 
   // Closed until the conversation has at least one message.
   const dock = page.locator('.lb-role-dock');
@@ -170,11 +317,9 @@ test('the role dock previews questions and expands into tabbed lists', async ({
   await expect(page.locator('.lb-welcome')).toBeHidden();
   await expect(dock).toBeVisible();
 
-  // The first role has no questions of its own, so the preview falls back to
-  // the bot's quick questions.
   const preview = page.locator('.lb-role-dock-preview-btn');
-  await expect(preview).toHaveCount(QUICK_QUESTIONS.length);
-  await expect(preview.first()).toHaveText(QUICK_QUESTIONS[0]);
+  await expect(preview).toHaveCount(3);
+  await expect(preview.first()).toHaveText('在哪里查看学校公开校历？');
 
   const toggle = page.locator('.lb-role-dock-toggle');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -188,18 +333,19 @@ test('the role dock previews questions and expands into tabbed lists', async ({
   const tabs = panel.locator('.lb-role-tab');
   await expect(tabs).toHaveCount(6);
   await expect(panel.locator('.lb-role-tab.lb-role-active')).toHaveText(
-    '考生与家长',
+    '校内教师',
   );
+  await expect(panel.locator('.lb-role-question')).toHaveCount(5);
 
   // Switching roles inside the dock refreshes the preview and the full list
   // without dropping the messages already on screen.
-  await tabs.filter({ hasText: '校内教师' }).click();
+  await tabs.filter({ hasText: '校外教师' }).click();
   await expect(panel.locator('.lb-role-tab.lb-role-active')).toHaveText(
-    '校内教师',
+    '校外教师',
   );
   await expect(page.locator('.lb-role-dock-preview-btn')).toHaveCount(3);
   await expect(page.locator('.lb-role-dock-preview-btn').first()).toHaveText(
-    '在哪里查看学校公开校历？',
+    '如何咨询访学交流？',
   );
   await expect(panel.locator('.lb-role-question')).toHaveCount(5);
   await expect(page.locator('.lb-msg-user')).toHaveCount(1);
@@ -208,16 +354,14 @@ test('the role dock previews questions and expands into tabbed lists', async ({
   await panel.locator('.lb-role-question').nth(1).click();
   await expect(panel).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('.lb-input')).toHaveValue(
-    '学校有哪些公开教研活动？',
-  );
+  await expect(page.locator('.lb-input')).toHaveValue('如何了解公开教研活动？');
 });
 
 test('the technician college dock shows role questions and closes on Escape', async ({
   page,
 }) => {
   await mockChatBackend(page);
-  await page.goto('/chat-jishi.html');
+  await page.goto(previewUrl('/chat-jishi.html', JISHI_ROLE_GROUPS));
 
   await sendChatMessage(page, '你好');
 
@@ -244,9 +388,18 @@ test('chat-jishi.html uses the technician college accent', async ({ page }) => {
   await mockChatBackend(page);
   await page.goto('/chat-jishi.html');
 
-  await expect(page.locator('.lb-role-tab')).toHaveCount(6);
-  await expect(page.locator('.lb-role-tab').first()).toHaveText('考生与家长');
   await expect.poll(() => headerBackground(page)).toBe('rgb(15, 111, 168)');
+});
+
+test('default.html uses the default robot logo and blue', async ({ page }) => {
+  await mockChatBackend(page);
+  await page.goto('/default.html');
+
+  await expect(page.locator('.lb-welcome-logo')).toHaveAttribute(
+    'src',
+    /\/api\/v1\/embed\/logo$/,
+  );
+  await expect.poll(() => headerBackground(page)).toBe('rgb(37, 99, 235)');
 });
 
 test('URL parameters override the inline page config', async ({ page }) => {

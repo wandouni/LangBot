@@ -504,6 +504,12 @@ const viVN = {
     sqlbotUnavailable: 'SqlBot hiện không khả dụng. Vui lòng thử lại.',
     backToApps: 'Trung tâm ứng dụng',
   },
+  quickQuestionGroups: {
+    hint: 'Mỗi dòng ghi một tên nhóm, bên dưới mỗi dòng ghi một câu hỏi. Dùng dòng trống để phân cách các nhóm. Tối đa 6 nhóm, 12 câu mỗi nhóm và 200 ký tự mỗi câu. Để trống nếu không cấu hình nhóm nào.',
+    placeholder:
+      'Thí sinh và phụ huynh\nNăm 2026 có những ngành nào?\nLàm sao để đăng ký?\n\nSinh viên hiện tại\nPhòng ký túc xá ở bao nhiêu người?',
+    editorLabel: 'Nhóm câu hỏi nhanh',
+  },
   common: {
     failureReasonNotRecorded:
       'Chưa lưu nguyên nhân lỗi. Hãy kiểm tra nhật ký bot hoặc gửi lại tin nhắn để biết thêm chi tiết.',
@@ -942,6 +948,13 @@ const viVN = {
     },
   },
   bots: {
+    testPageOpen: 'Trang thử nghiệm',
+    testPageTitle: 'Mở trang trò chuyện thử nghiệm',
+    testPageHint:
+      'Mở trong cửa sổ mới và xem trước nội dung đang chỉnh sửa mà không cần lưu trước.',
+    testPageCollege: 'Trang trường cao đẳng nghề',
+    testPageJishi: 'Trang trường trung cấp kỹ thuật',
+    testPageDefault: 'Trang mặc định',
     pluginSubscriptions: {
       incompleteEvents:
         'Bot hiện chỉ hỗ trợ một số sự kiện mà bộ xử lý theo dõi ({{events}}). Bộ xử lý có thể không hoạt động đầy đủ trong mọi trường hợp.',

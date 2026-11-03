@@ -476,6 +476,12 @@ const zhHant = {
     sqlbotUnavailable: 'SqlBot 暫時無法使用，請稍後再試。',
     backToApps: '應用中心',
   },
+  quickQuestionGroups: {
+    hint: '每個分類名稱單獨一行，下面每行寫一個問題，空一行分隔下一個分類。最多 6 個分類，每類最多 12 個問題，每題最多 200 個字元。留空表示不設定分類。',
+    placeholder:
+      '考生與家長\n學校今年開設哪些專業？\n學費多少？\n\n在校學生\n宿舍幾人一間？',
+    editorLabel: '快捷提問分類',
+  },
   common: {
     failureReasonNotRecorded:
       '這筆歷史記錄未儲存失敗原因，請查看機器人日誌，或重新傳送訊息取得詳細錯誤。',
@@ -883,6 +889,12 @@ const zhHant = {
     },
   },
   bots: {
+    testPageOpen: '測試頁面',
+    testPageTitle: '開啟測試諮詢頁',
+    testPageHint: '將在新視窗中開啟，並預覽目前編輯內容；無須先儲存。',
+    testPageCollege: '職業技術學院頁面',
+    testPageJishi: '技師學院頁面',
+    testPageDefault: '預設頁面',
     pluginSubscriptions: {
       incompleteEvents:
         '目前機器人僅支援部分事件（{{events}}），處理器表現可能不完整。',

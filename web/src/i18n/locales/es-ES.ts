@@ -510,6 +510,12 @@ const esES = {
       'SqlBot no está disponible en este momento. Inténtalo de nuevo.',
     backToApps: 'Centro de aplicaciones',
   },
+  quickQuestionGroups: {
+    hint: 'Escribe un nombre de grupo por línea y, debajo, una pregunta por línea. Separa los grupos con una línea en blanco. Máximo 6 grupos, 12 preguntas por grupo y 200 caracteres por pregunta. Déjalo vacío para no configurar grupos.',
+    placeholder:
+      'Aspirantes y familias\n¿Qué programas se ofrecen en 2026?\n¿Cómo me inscribo?\n\nEstudiantes actuales\n¿Cuántas personas comparten habitación?',
+    editorLabel: 'Grupos de preguntas rápidas',
+  },
   common: {
     failureReasonNotRecorded:
       'No se registró el motivo del fallo. Consulta los registros del bot o vuelve a enviar el mensaje para obtener más detalles.',
@@ -961,6 +967,13 @@ const esES = {
     },
   },
   bots: {
+    testPageOpen: 'Página de prueba',
+    testPageTitle: 'Abrir una página de chat de prueba',
+    testPageHint:
+      'Se abre en una ventana nueva y muestra una vista previa de los cambios actuales sin guardarlos primero.',
+    testPageCollege: 'Página de la escuela vocacional',
+    testPageJishi: 'Página de la escuela de técnicos',
+    testPageDefault: 'Página predeterminada',
     pluginSubscriptions: {
       incompleteEvents:
         'Este bot solo admite algunos de los eventos suscritos ({{events}}). El procesador podría no comportarse como se espera en todos los casos.',

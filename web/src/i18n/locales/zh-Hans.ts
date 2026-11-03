@@ -481,6 +481,12 @@ const zhHans = {
     sqlbotUnavailable: 'SqlBot 暂时不可用，请稍后再试。',
     backToApps: '应用中心',
   },
+  quickQuestionGroups: {
+    hint: '每个分类名单独一行，下面每行写一个问题，空一行分隔下一个分类。最多 6 个分类，每类最多 12 个问题，每题最多 200 个字符。留空表示不配置分类。',
+    placeholder:
+      '考生与家长\n学校今年开设哪些专业？\n学费多少？\n\n在校学生\n宿舍几人间？',
+    editorLabel: '快捷提问分类',
+  },
   common: {
     failureReasonNotRecorded:
       '这条历史记录未保存失败原因，请查看机器人日志，或重新发送消息获取详细错误。',
@@ -887,6 +893,12 @@ const zhHans = {
     },
   },
   bots: {
+    testPageOpen: '测试页面',
+    testPageTitle: '打开测试咨询页',
+    testPageHint: '将在新窗口中打开，并预览当前编辑内容；无需先保存。',
+    testPageCollege: '职业技术学院页面',
+    testPageJishi: '技师学院页面',
+    testPageDefault: '默认页面',
     pluginSubscriptions: {
       incompleteEvents:
         '当前机器人仅支持部分事件（{{events}}），处理器表现可能不完整。',

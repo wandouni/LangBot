@@ -508,6 +508,12 @@ const jaJP = {
       'SqlBot は現在利用できません。しばらくしてから再度お試しください。',
     backToApps: 'アプリセンター',
   },
+  quickQuestionGroups: {
+    hint: 'グループ名を1行に1つ、その下に質問を1行に1つ入力します。空行で次のグループを区切ります。最大6グループ、各グループ12件、1件200文字までです。空欄の場合はグループを設定しません。',
+    placeholder:
+      '受験生と保護者\n2026年度はどのような学科がありますか？\n出願方法を教えてください。\n\n在校生\n寮は何人部屋ですか？',
+    editorLabel: '質問候補のグループ',
+  },
   common: {
     failureReasonNotRecorded:
       'この記録には失敗の理由が保存されていません。ボットのログを確認するか、再送信して詳細を確認してください。',
@@ -950,6 +956,13 @@ const jaJP = {
     },
   },
   bots: {
+    testPageOpen: 'テストページ',
+    testPageTitle: 'テストチャットページを開く',
+    testPageHint:
+      '新しいウィンドウで開き、保存前の編集中の内容をプレビューします。',
+    testPageCollege: '職業技術学院ページ',
+    testPageJishi: '技師学院ページ',
+    testPageDefault: 'デフォルトページ',
     pluginSubscriptions: {
       incompleteEvents:
         'このボットは監視対象の一部のイベント（{{events}}）にのみ対応しています。プロセッサーが完全には動作しない可能性があります。',
