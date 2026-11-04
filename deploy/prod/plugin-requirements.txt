@@ -4,5 +4,15 @@
 # Add one line per plugin dependency before building the wheelhouse. Pinned
 # versions are recommended so the same wheelhouse can be rebuilt reliably.
 #
-# Example: the SQLBot query plugin (vocational-data-query) needs httpx.
+# SQLBot query plugin (vocational-data-query) and the shared-runtime control
+# client both need httpx.
 httpx>=0.28
+# LocalAgent
+langbot-plugin==0.7.16
+pydantic>=2.0.0
+# LangRAG
+PyPDF2>=3.0.0
+python-docx>=0.8.11
+chardet>=5.0.0
+markdown>=3.4.0
+beautifulsoup4>=4.11.0
