@@ -9,6 +9,7 @@ import pytest
 from langbot.pkg.api.http.context import ExecutionContext
 from langbot.pkg.plugin import connector as connector_module
 from langbot.pkg.plugin.connector import PluginRuntimeConnector, PluginRuntimeNotConnectedError
+from langbot.pkg.workspace.policy import PersonalWorkspacePolicy
 from langbot_plugin.runtime.security import (
     PLUGIN_RUNTIME_CONTROL_TOKEN_ENV,
     PLUGIN_RUNTIME_CONTROL_TOKEN_HEADER,
@@ -302,7 +303,7 @@ async def test_enabled_connector_reports_not_connected_after_workspace_validatio
 async def test_oss_connector_resolves_singleton_only_for_legacy_callers():
     connector = make_connector()
     connector.ap.workspace_service = SimpleNamespace(
-        get_local_execution_binding=AsyncMock(
+        get_default_execution_binding=AsyncMock(
             return_value=SimpleNamespace(
                 instance_uuid='instance-a',
                 workspace_uuid='workspace-a',
@@ -460,3 +461,43 @@ async def test_explicit_cloud_binding_is_revalidated_against_projection():
         expected_generation=7,
     )
     connector._synchronize_workspace.assert_awaited_once_with(configured)
+
+
+def _make_personal_connector(monkeypatch, *, configured='auto', token=None):
+    app = make_connector().ap
+    app.instance_config.data['plugin']['runtime_profile'] = configured
+    app.workspace_service = SimpleNamespace(policy=PersonalWorkspacePolicy())
+    monkeypatch.setattr(connector_module.platform, 'get_platform', lambda: 'docker')
+    monkeypatch.setattr(
+        connector_module.platform,
+        'use_websocket_to_connect_plugin_runtime',
+        lambda: True,
+    )
+    if token is None:
+        monkeypatch.delenv(PLUGIN_RUNTIME_CONTROL_TOKEN_ENV, raising=False)
+    else:
+        monkeypatch.setenv(PLUGIN_RUNTIME_CONTROL_TOKEN_ENV, token)
+    return PluginRuntimeConnector(app, AsyncMock())
+
+
+def test_personal_workspace_with_control_token_selects_shared_profile(monkeypatch):
+    connector = _make_personal_connector(monkeypatch, token='shared-secret')
+
+    assert connector.runtime_profile == 'shared'
+
+
+def test_personal_workspace_without_control_token_falls_back_with_warning(monkeypatch):
+    connector = _make_personal_connector(monkeypatch)
+
+    assert connector.runtime_profile == 'oss_dev'
+    connector.ap.logger.warning.assert_called_once()
+
+
+def test_explicit_shared_profile_requires_control_token(monkeypatch):
+    with pytest.raises(PluginRuntimeNotConnectedError, match=PLUGIN_RUNTIME_CONTROL_TOKEN_ENV):
+        _make_personal_connector(monkeypatch, configured='shared')
+
+
+def test_unknown_runtime_profile_is_rejected(monkeypatch):
+    with pytest.raises(ValueError, match='Unsupported plugin.runtime_profile'):
+        _make_personal_connector(monkeypatch, configured='mystery')

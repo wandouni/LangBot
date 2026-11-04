@@ -295,7 +295,7 @@ async def test_oss_upgrade_keeps_legacy_data_plugins_when_no_lbpkg_was_backfille
     app = SimpleNamespace(
         instance_config=SimpleNamespace(data={'plugin': {'enable': True}}),
         deployment=SimpleNamespace(mode='oss'),
-        workspace_service=SimpleNamespace(get_local_execution_binding=AsyncMock(return_value=binding)),
+        workspace_service=SimpleNamespace(get_default_execution_binding=AsyncMock(return_value=binding)),
         persistence_mgr=SimpleNamespace(tenant_uow=None),
         logger=Mock(),
     )

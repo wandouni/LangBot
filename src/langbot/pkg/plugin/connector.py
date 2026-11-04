@@ -230,9 +230,7 @@ class PluginRuntimeConnector(ManagedRuntimeConnector):
         super().__init__(ap)
         self.runtime_disconnect_callback = runtime_disconnect_callback
         self.is_enable_plugin = self.ap.instance_config.data.get('plugin', {}).get('enable', True)
-        self.runtime_profile: typing.Literal['oss_dev', 'shared'] = (
-            'shared' if getattr(getattr(ap, 'deployment', None), 'mode', 'oss') == 'cloud' else 'oss_dev'
-        )
+        self.runtime_profile: typing.Literal['oss_dev', 'shared'] = self._resolve_runtime_profile()
         self._align_plugin_file_transfer_root()
         self.runtime_identity: RuntimeIdentity | None = None
         self._runtime_id = self._build_runtime_id()
@@ -258,6 +256,55 @@ class PluginRuntimeConnector(ManagedRuntimeConnector):
             'failed_installations': 0,
             'missing_artifacts': 0,
         }
+
+    def _resolve_runtime_profile(self) -> typing.Literal['oss_dev', 'shared']:
+        """Choose the SDK runtime profile for this deployment.
+
+        ``shared`` is required whenever Core must reconcile more than one
+        Workspace. OSS personal Workspaces therefore use it too, but only when
+        an external WebSocket Runtime and the shared control token are
+        configured. Missing token falls back to ``oss_dev`` with a warning so
+        Default-Workspace plugins keep working after an upgrade; an explicit
+        ``plugin.runtime_profile: shared`` still fails closed.
+        """
+
+        plugin_config = self.ap.instance_config.data.get('plugin', {}) or {}
+        configured = str(plugin_config.get('runtime_profile', 'auto') or 'auto').strip().lower()
+        if configured not in {'auto', 'oss_dev', 'shared'}:
+            raise ValueError(f'Unsupported plugin.runtime_profile: {configured!r}')
+        deployment = getattr(self.ap, 'deployment', None)
+        is_cloud = getattr(deployment, 'mode', 'oss') == 'cloud'
+        control_token = str(os.environ.get(PLUGIN_RUNTIME_CONTROL_TOKEN_ENV) or '').strip()
+
+        if configured == 'shared':
+            if not control_token:
+                raise PluginRuntimeNotConnectedError(
+                    f'{PLUGIN_RUNTIME_CONTROL_TOKEN_ENV} must be configured with a strong shared secret '
+                    'for an explicit shared Plugin Runtime profile'
+                )
+            return 'shared'
+        if configured == 'oss_dev':
+            return 'oss_dev'
+
+        if is_cloud:
+            return 'shared'
+
+        policy = getattr(getattr(self.ap, 'workspace_service', None), 'policy', None)
+        personal_enabled = bool(getattr(policy, 'personal_workspace_enabled', False))
+        external_ws = (
+            platform.get_platform() == 'docker' or platform.use_websocket_to_connect_plugin_runtime()
+        )
+        if personal_enabled and external_ws and control_token:
+            return 'shared'
+
+        logger = getattr(self.ap, 'logger', None)
+        if personal_enabled and external_ws and logger is not None:
+            logger.warning(
+                'Personal Workspaces need the shared plugin runtime profile, but %s is not set; '
+                'falling back to oss_dev. Plugins remain available only in the Default Workspace.',
+                PLUGIN_RUNTIME_CONTROL_TOKEN_ENV,
+            )
+        return 'oss_dev'
 
     def _align_plugin_file_transfer_root(self) -> None:
         """Use the Runtime's plugin file-transfer root when running shared.
@@ -398,10 +445,30 @@ class PluginRuntimeConnector(ManagedRuntimeConnector):
             artifact_digest=setting.artifact_digest,
         )
 
-    def _execution_mode_from_setting(self, setting: persistence_plugin.PluginSetting) -> PluginExecutionMode:
-        if getattr(getattr(self.ap, 'deployment', None), 'mode', 'oss') != 'cloud':
+    def _execution_mode_for_artifact(
+        self,
+        *,
+        artifact_digest: str | None,
+        install_info: object,
+    ) -> PluginExecutionMode:
+        # The legacy single-Workspace Runtime cannot host shared workers, even
+        # for a certified artifact. The shared profile derives placement from
+        # the persisted certification facts.
+        profile = getattr(self, 'runtime_profile', None)
+        if profile is None:
+            # Lightweight test doubles may not run __init__.
+            profile = 'shared' if getattr(getattr(self.ap, 'deployment', None), 'mode', 'oss') == 'cloud' else 'oss_dev'
+        if profile == 'oss_dev':
+            return PluginExecutionMode.DEDICATED
+        if not isinstance(artifact_digest, str):
             return PluginExecutionMode.DEDICATED
         return execution_mode_for_persisted_installation(
+            artifact_digest=artifact_digest,
+            install_info=install_info,
+        )
+
+    def _execution_mode_from_setting(self, setting: persistence_plugin.PluginSetting) -> PluginExecutionMode:
+        return self._execution_mode_for_artifact(
             artifact_digest=setting.artifact_digest,
             install_info=setting.install_info,
         )
@@ -820,7 +887,9 @@ class PluginRuntimeConnector(ManagedRuntimeConnector):
             return
 
         if self.runtime_profile == 'oss_dev':
-            local_binding = await workspace_service.get_local_execution_binding()
+            # Instance-level compatibility stays pinned to the Default
+            # Workspace; personal Workspaces require the shared profile.
+            local_binding = await workspace_service.get_default_execution_binding()
             execution_context = self._execution_from_binding(local_binding)
             bridge = self._legacy_oss_bridge_binding(execution_context)
             # One fully-bound action releases the SDK's deliberately retained
@@ -979,7 +1048,7 @@ class PluginRuntimeConnector(ManagedRuntimeConnector):
             return current
         if self.runtime_profile != 'oss_dev':
             raise WorkspaceNotFoundError('Plugin resource not found')
-        binding = await self.ap.workspace_service.get_local_execution_binding()
+        binding = await self.ap.workspace_service.get_default_execution_binding()
         current = self._execution_from_binding(binding)
         self._execution_context.set(current)
         await self._synchronize_workspace(current)

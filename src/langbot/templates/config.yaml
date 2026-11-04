@@ -357,6 +357,15 @@ plugin:
     # Maximum time for the Runtime transport, handshake, and desired-state replay.
     connect_timeout_seconds: 180.0
     runtime_ws_url: 'ws://langbot_plugin_runtime:5400/control/ws'
+    # Runtime profile: auto | oss_dev | shared.
+    # auto keeps every Workspace reachable when the deployment supports it:
+    # Cloud always uses shared; OSS switches to shared only when personal
+    # Workspaces are enabled, the Runtime is external WebSocket, and
+    # LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN is set on both Core and Runtime.
+    # Without the token OSS falls back to oss_dev and plugins stay available
+    # only in the Default Workspace. Setting shared explicitly fails closed
+    # when the token is missing; oss_dev keeps the legacy single-Workspace path.
+    runtime_profile: auto
     enable_marketplace: true
     display_plugin_debug_url: 'ws://localhost:5401/plugin/debug/ws'
     certification:

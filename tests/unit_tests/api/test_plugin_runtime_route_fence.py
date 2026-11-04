@@ -98,7 +98,7 @@ async def test_public_plugin_asset_uses_trusted_oss_singleton_binding(plugin_rou
         plugin_connector=connector,
         workspace_service=SimpleNamespace(
             policy=SimpleNamespace(multi_workspace_enabled=False),
-            get_local_execution_binding=AsyncMock(return_value=binding),
+            get_default_execution_binding=AsyncMock(return_value=binding),
         ),
     )
 

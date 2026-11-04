@@ -751,6 +751,9 @@ class TestSetPluginConfig:
         get_connector_module()
         connector = create_mock_connector()
         connector.ap.deployment.mode = 'cloud'
+        # The profile is resolved once in __init__; mirror what Cloud bootstrap
+        # would have produced before the deployment mode was flipped here.
+        connector.runtime_profile = 'shared'
 
         configure_handler(connector, AsyncMock())
         connector.handler.register_installation_binding = Mock()
