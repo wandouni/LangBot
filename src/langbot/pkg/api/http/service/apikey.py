@@ -158,7 +158,7 @@ class ApiKeyService:
             workspace_service = getattr(self.ap, 'workspace_service', None)
             if workspace_service is None or workspace_service.policy.multi_workspace_enabled:
                 return None
-            binding = await workspace_service.get_local_execution_binding()
+            binding = await workspace_service.get_default_execution_binding()
             return ApiKeyIdentity(
                 instance_uuid=binding.instance_uuid,
                 workspace_uuid=binding.workspace_uuid,

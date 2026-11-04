@@ -5,6 +5,7 @@ import quart
 
 from ...authz import Permission
 from ...context import RequestContext
+from .....workspace.errors import WorkspaceNotFoundError
 from .. import group
 
 
@@ -14,9 +15,13 @@ class LogsRouterGroup(group.RouterGroup):
         @self.route('', methods=['GET'], permission=Permission.AUDIT_VIEW)
         async def _(request_context: RequestContext) -> str:
             # The process log is instance-global.  It is safe to expose only in
-            # the OSS singleton Workspace; SaaS must use Workspace-scoped
+            # the Default Workspace, never to a personal Workspace that merely
+            # holds an audit permission.  SaaS must use Workspace-scoped
             # observability records instead of leaking another tenant's lines.
-            await self.ap.workspace_service.get_local_execution_binding(
+            default_workspace = await self.ap.workspace_service.get_default_workspace()
+            if request_context.workspace_uuid != default_workspace.uuid:
+                raise WorkspaceNotFoundError('Logs are unavailable for this Workspace')
+            await self.ap.workspace_service.get_execution_binding(
                 request_context.workspace_uuid,
                 expected_generation=request_context.placement_generation,
             )

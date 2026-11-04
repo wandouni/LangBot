@@ -31,6 +31,7 @@ async def test_background_migration_propagates_generation_change_before_runtime_
     router.ap = SimpleNamespace(
         plugin_connector=connector,
         workspace_service=SimpleNamespace(
+            get_default_workspace=AsyncMock(return_value=SimpleNamespace(uuid=CONTEXT.workspace_uuid)),
             get_local_execution_binding=AsyncMock(return_value=CONTEXT),
         ),
         logger=Mock(),
@@ -56,6 +57,7 @@ async def test_cloud_migration_is_rejected_before_legacy_table_access():
     router = object.__new__(KnowledgeMigrationRouterGroup)
     router.ap = SimpleNamespace(
         workspace_service=SimpleNamespace(
+            get_default_workspace=AsyncMock(return_value=SimpleNamespace(uuid=CONTEXT.workspace_uuid)),
             get_local_execution_binding=AsyncMock(side_effect=WorkspaceInvariantError('not an OSS local workspace')),
         ),
         plugin_connector=SimpleNamespace(require_workspace_context=AsyncMock()),
@@ -132,6 +134,7 @@ async def test_legacy_restore_emits_only_scoped_structured_statements():
     router = object.__new__(KnowledgeMigrationRouterGroup)
     router.ap = SimpleNamespace(
         workspace_service=SimpleNamespace(
+            get_default_workspace=AsyncMock(return_value=SimpleNamespace(uuid=CONTEXT.workspace_uuid)),
             get_local_execution_binding=AsyncMock(return_value=CONTEXT),
         ),
         plugin_connector=connector,
@@ -256,7 +259,8 @@ async def test_legacy_restore_accepts_sqlite_string_dates_and_text_json_columns(
             router = object.__new__(KnowledgeMigrationRouterGroup)
             router.ap = SimpleNamespace(
                 workspace_service=SimpleNamespace(
-                    get_local_execution_binding=AsyncMock(return_value=CONTEXT),
+                    get_default_workspace=AsyncMock(return_value=SimpleNamespace(uuid=CONTEXT.workspace_uuid)),
+            get_local_execution_binding=AsyncMock(return_value=CONTEXT),
                 ),
                 plugin_connector=connector,
                 persistence_mgr=SimpleNamespace(

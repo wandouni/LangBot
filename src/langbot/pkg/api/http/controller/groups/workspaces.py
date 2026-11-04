@@ -115,6 +115,8 @@ class WorkspacesRouterGroup(group.RouterGroup):
 
             accesses = await self.ap.workspace_collaboration_service.list_account_workspaces(account.uuid)
             resolver = getattr(self.ap, 'entitlement_resolver', None)
+            workspace_policy = getattr(self.ap.workspace_service, 'policy', None)
+            members_enabled = getattr(workspace_policy, 'members_enabled', True)
             workspaces: list[dict[str, typing.Any]] = []
             for access in accesses:
                 plan_name: str | None = None
@@ -132,7 +134,12 @@ class WorkspacesRouterGroup(group.RouterGroup):
                             display_name=account.user,
                             email=account.normalized_email,
                         ),
-                        'permissions': sorted(permissions_for_role(access.membership.role)),
+                        'permissions': sorted(
+                            permissions_for_role(
+                                access.membership.role,
+                                members_enabled=members_enabled,
+                            )
+                        ),
                         'placement_generation': access.execution.placement_generation,
                         'plan_name': plan_name,
                     }
@@ -151,6 +158,12 @@ class WorkspacesRouterGroup(group.RouterGroup):
                     409,
                     'control_plane_required',
                     'Cloud Workspaces are created by the SaaS control plane',
+                )
+            if getattr(self.ap.workspace_service.policy, 'personal_workspace_enabled', False):
+                return self.http_status(
+                    403,
+                    'edition_limit',
+                    'Workspaces are provisioned automatically for each account',
                 )
             return self.http_status(403, 'edition_limit', 'This edition supports one Workspace per instance')
 

@@ -27,8 +27,12 @@ from langbot.pkg.workspace import (
     WorkspaceOwnerAlreadyExistsError,
     WorkspaceService,
 )
-from langbot.pkg.workspace.identity import workspace_uuid_from_instance_id
-from langbot.pkg.workspace.policy import CloudWorkspacePolicy
+from langbot.pkg.workspace.identity import (
+    personal_workspace_slug,
+    personal_workspace_uuid,
+    workspace_uuid_from_instance_id,
+)
+from langbot.pkg.workspace.policy import CloudWorkspacePolicy, PersonalWorkspacePolicy
 
 
 pytestmark = pytest.mark.asyncio
@@ -44,6 +48,24 @@ async def workspace_test_context(tmp_path):
     application = SimpleNamespace(persistence_mgr=persistence_mgr)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     service = WorkspaceService(application, instance_uuid='instance_service_test')
+    yield service, session_factory
+    await engine.dispose()
+
+
+@pytest.fixture
+async def personal_workspace_context(tmp_path):
+    engine = create_async_engine(f'sqlite+aiosqlite:///{tmp_path / "personal-workspace.db"}')
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    persistence_mgr = SimpleNamespace(get_db_engine=lambda: engine)
+    application = SimpleNamespace(persistence_mgr=persistence_mgr)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    service = WorkspaceService(
+        application,
+        policy=PersonalWorkspacePolicy(),
+        instance_uuid='instance-personal-test',
+    )
     yield service, session_factory
     await engine.dispose()
 
@@ -440,3 +462,99 @@ async def test_startup_binding_snapshot_avoids_repeated_discovery():
     service.release_startup_execution_bindings()
     assert await service.list_active_execution_bindings() == [binding]
     assert service._discover_active_execution_bindings.await_count == 2
+
+
+async def test_personal_workspaces_isolate_accounts_and_keep_default_stable(personal_workspace_context):
+    service, session_factory = personal_workspace_context
+
+    async with session_factory.begin() as session:
+        admin_uuid = await _insert_account(session, 'admin@example.com')
+        operator_uuid = await _insert_account(session, '204618@example.com')
+        default = await service.ensure_default_workspace(session=session)
+        await service.claim_initial_owner(admin_uuid, session=session)
+
+        admin_workspace, admin_membership = await service.ensure_personal_workspace(admin_uuid, session=session)
+        operator_workspace, operator_membership = await service.ensure_personal_workspace(
+            operator_uuid,
+            '204618',
+            session=session,
+        )
+        repeated_workspace, repeated_membership = await service.ensure_personal_workspace(
+            operator_uuid,
+            '204618',
+            session=session,
+        )
+
+    # The Default owner keeps the historical Workspace; a new account gets a
+    # private one that is never the Default.
+    assert admin_workspace.uuid == default.uuid
+    assert admin_membership.role == 'owner'
+    assert operator_workspace.uuid == personal_workspace_uuid('instance-personal-test', operator_uuid)
+    assert operator_workspace.slug == personal_workspace_slug(operator_uuid)
+    assert operator_workspace.type == 'personal'
+    assert operator_workspace.created_by_account_uuid == operator_uuid
+    assert operator_workspace.uuid != default.uuid
+    assert operator_membership.role == 'owner'
+    assert operator_membership.status == 'active'
+    # Idempotent: a second call returns the same Workspace and membership.
+    assert repeated_workspace.uuid == operator_workspace.uuid
+    assert repeated_membership.uuid == operator_membership.uuid
+
+    async with session_factory() as session:
+        operator_memberships = (
+            await session.execute(
+                sqlalchemy.select(WorkspaceMembership).where(WorkspaceMembership.account_uuid == operator_uuid)
+            )
+        ).scalars().all()
+        assert [(item.workspace_uuid, item.status) for item in operator_memberships] == [
+            (operator_workspace.uuid, 'active')
+        ]
+        execution_state = await session.scalar(
+            sqlalchemy.select(WorkspaceExecutionState).where(
+                WorkspaceExecutionState.workspace_uuid == operator_workspace.uuid
+            )
+        )
+        assert execution_state is not None
+        assert execution_state.state == 'active'
+        assert execution_state.active_generation == 1
+
+    # No-argument bindings stay on the Default Workspace even though several
+    # local Workspaces now exist.
+    resolved_default = await service.get_default_workspace()
+    assert resolved_default.uuid == default.uuid
+    default_binding = await service.get_execution_binding()
+    assert default_binding.workspace_uuid == default.uuid
+    operator_binding = await service.get_execution_binding(operator_workspace.uuid)
+    assert operator_binding.workspace_uuid == operator_workspace.uuid
+
+    # Startup repair must tolerate personal Workspaces and keep Default intact.
+    repaired_default = await service.ensure_default_workspace()
+    assert repaired_default.uuid == default.uuid
+
+
+async def test_personal_workspace_creation_is_rejected_on_postgresql(personal_workspace_context, monkeypatch):
+    service, session_factory = personal_workspace_context
+
+    async with session_factory.begin() as session:
+        account_uuid = await _insert_account(session, 'pg@example.com')
+
+    monkeypatch.setattr(service, '_dialect_name', lambda: 'postgresql')
+
+    with pytest.raises(WorkspaceInvariantError, match='Personal Workspaces require SQLite'):
+        await service.ensure_personal_workspace(account_uuid)
+
+
+async def test_postgresql_layout_validation_rejects_multiple_local_workspaces(
+    personal_workspace_context, monkeypatch
+):
+    service, session_factory = personal_workspace_context
+
+    async with session_factory.begin() as session:
+        account_uuid = await _insert_account(session, 'pg-layout@example.com')
+        await service.ensure_default_workspace(session=session)
+        await service.ensure_personal_workspace(account_uuid, session=session)
+
+    monkeypatch.setattr(service, '_dialect_name', lambda: 'postgresql')
+
+    with pytest.raises(WorkspaceInvariantError, match='supports exactly one'):
+        await service.validate_workspace_layout()

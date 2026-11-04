@@ -10,7 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, runtime_checkable
 
-from ..workspace.policy import CloudWorkspacePolicy, SingleWorkspacePolicy
+from ..workspace.policy import CloudWorkspacePolicy, PersonalWorkspacePolicy, SingleWorkspacePolicy
 from .directory import DirectoryProjectionProvider, directory_projection_limits_from_config
 from .entitlements import EntitlementProvider, OpenSourceEntitlementProvider
 from .model_catalog import CloudModelCatalogProvider
@@ -45,7 +45,9 @@ class OpenSourceDeployment:
     """Default deployment selected when no closed bootstrap is installed."""
 
     mode: str = 'oss'
-    workspace_policy: SingleWorkspacePolicy = dataclasses.field(default_factory=SingleWorkspacePolicy)
+    workspace_policy: PersonalWorkspacePolicy | SingleWorkspacePolicy = dataclasses.field(
+        default_factory=PersonalWorkspacePolicy
+    )
     entitlement_provider: OpenSourceEntitlementProvider = dataclasses.field(
         default_factory=OpenSourceEntitlementProvider
     )
@@ -60,7 +62,22 @@ class OpenSourceDeployment:
         return False
 
     def validate_instance_config(self, config: dict[str, Any]) -> None:
-        del config
+        """Reject configurations that cannot safely host multiple local Workspaces.
+
+        The OSS PostgreSQL path pins every unscoped transaction to one
+        ``langbot.workspace_uuid``. Several local Workspaces on that path would
+        silently read and write each other's rows, so personal Workspaces are
+        only admitted on SQLite.
+        """
+
+        if not getattr(self.workspace_policy, 'personal_workspace_enabled', False):
+            return
+        database_use = config.get('database', {}).get('use', 'sqlite')
+        if database_use != 'sqlite':
+            raise CloudBootstrapError(
+                'Personal Workspaces require database.use=sqlite in this OSS build; '
+                'PostgreSQL OSS pins every transaction to a single Workspace'
+            )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

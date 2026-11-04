@@ -25,11 +25,12 @@ from langbot.pkg.workspace.collaboration import (
     InvitationUsedError,
     LastOwnerError,
     MembershipPermissionError,
+    SharingDisabledError,
     WorkspaceCollaborationService,
 )
 from langbot.pkg.workspace.errors import WorkspaceNotFoundError
 from langbot.pkg.workspace.service import WorkspaceService
-from langbot.pkg.workspace.policy import CloudWorkspacePolicy
+from langbot.pkg.workspace.policy import CloudWorkspacePolicy, PersonalWorkspacePolicy
 
 
 pytestmark = pytest.mark.asyncio
@@ -375,3 +376,128 @@ async def test_invitation_lock_registry_keeps_waiters_serialized(collaboration_c
 
     assert order == ['first', 'second']
     assert service._invitation_locks == {}
+
+
+@pytest.fixture
+async def personal_collaboration_context(tmp_path):
+    engine = create_async_engine(f'sqlite+aiosqlite:///{tmp_path / "personal-collaboration.db"}')
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    persistence_mgr = SimpleNamespace(get_db_engine=lambda: engine)
+    application = SimpleNamespace(persistence_mgr=persistence_mgr)
+    workspace_service = WorkspaceService(
+        application,
+        policy=PersonalWorkspacePolicy(),
+        instance_uuid='instance-personal-collaboration-test',
+    )
+    service = WorkspaceCollaborationService(application, workspace_service)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with session_factory.begin() as session:
+        admin = User(
+            uuid=str(uuid.uuid4()),
+            user='admin@example.com',
+            normalized_email='admin@example.com',
+            password='admin-hash',
+            account_type='local',
+        )
+        operator = User(
+            uuid=str(uuid.uuid4()),
+            user='operator@example.com',
+            normalized_email='operator@example.com',
+            password='operator-hash',
+            account_type='local',
+        )
+        session.add_all([admin, operator])
+        await session.flush()
+        default_workspace = await workspace_service.ensure_default_workspace(session=session)
+        # The administrator is the historical Default owner and keeps that
+        # single active membership; only new accounts receive a personal one.
+        admin_membership = await workspace_service.claim_initial_owner(admin.uuid, session=session)
+        personal_workspace, operator_membership = await workspace_service.ensure_personal_workspace(
+            operator.uuid,
+            session=session,
+        )
+
+    yield (
+        service,
+        workspace_service,
+        session_factory,
+        admin,
+        operator,
+        default_workspace,
+        admin_membership,
+        personal_workspace,
+        operator_membership,
+    )
+    await engine.dispose()
+
+
+async def test_personal_policy_resolves_each_accounts_own_workspace(personal_collaboration_context):
+    (
+        service,
+        _workspace_service,
+        _session_factory,
+        admin,
+        operator,
+        default_workspace,
+        admin_membership,
+        personal_workspace,
+        operator_membership,
+    ) = personal_collaboration_context
+
+    admin_access = await service.resolve_account_workspace(admin.uuid, None)
+    assert admin_access.workspace.uuid == default_workspace.uuid
+    assert admin_access.membership.uuid == admin_membership.uuid
+
+    operator_access = await service.resolve_account_workspace(operator.uuid, None)
+    assert operator_access.workspace.uuid == personal_workspace.uuid
+    assert operator_access.membership.uuid == operator_membership.uuid
+    assert operator_access.execution.workspace_uuid == personal_workspace.uuid
+
+    # An explicit selector cannot cross the membership boundary; the failure
+    # hides whether the other Workspace exists.
+    with pytest.raises(WorkspaceNotFoundError):
+        await service.resolve_account_workspace(operator.uuid, default_workspace.uuid)
+    with pytest.raises(WorkspaceNotFoundError):
+        await service.resolve_account_workspace(admin.uuid, personal_workspace.uuid)
+
+
+async def test_personal_policy_requires_exactly_one_active_membership(personal_collaboration_context):
+    service, _workspace_service, session_factory, _admin, operator, _default, *_ = personal_collaboration_context
+
+    # Mark the personal Workspace membership inactive: zero active memberships
+    # must not fall back to the Default Workspace.
+    async with session_factory.begin() as session:
+        membership = await session.scalar(
+            sqlalchemy.select(WorkspaceMembership).where(WorkspaceMembership.account_uuid == operator.uuid)
+        )
+        membership.status = 'removed'
+
+    with pytest.raises(WorkspaceNotFoundError):
+        await service.resolve_account_workspace(operator.uuid, None)
+
+
+async def test_personal_policy_disables_invitations_and_acceptance(personal_collaboration_context):
+    (
+        service,
+        _workspace_service,
+        _session_factory,
+        _admin,
+        _operator,
+        _default_workspace,
+        admin_membership,
+        personal_workspace,
+        _operator_membership,
+    ) = personal_collaboration_context
+
+    with pytest.raises(SharingDisabledError):
+        await service.create_invitation(
+            personal_workspace.uuid,
+            admin_membership,
+            'invitee@example.com',
+            'developer',
+        )
+    with pytest.raises(SharingDisabledError):
+        await service.accept_invitation('lbi_not-a-real-token', 'account-uuid')

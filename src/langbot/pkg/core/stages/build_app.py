@@ -194,8 +194,10 @@ class BuildAppStage(stage.BootingStage):
             policy=workspace_policy,
         )
         if not workspace_policy.multi_workspace_enabled:
-            await workspace_service_inst.ensure_singleton_workspace()
+            await workspace_service_inst.ensure_default_workspace()
+            await workspace_service_inst.validate_workspace_layout()
         ap.workspace_service = workspace_service_inst
+        ap.workspace_policy = workspace_policy
         if workspace_policy.multi_workspace_enabled:
             # Directory refresh starts in Application.run(), after this serial
             # build graph. Share one validated immutable binding snapshot
@@ -239,7 +241,7 @@ class BuildAppStage(stage.BootingStage):
         async def resolve_singleton_execution_context() -> ExecutionContext:
             if workspace_policy.multi_workspace_enabled:
                 raise WorkspaceRequiredError('Cloud runtime work requires an explicit Workspace context')
-            binding = await workspace_service_inst.get_local_execution_binding()
+            binding = await workspace_service_inst.get_default_execution_binding()
             return ExecutionContext(
                 instance_uuid=binding.instance_uuid,
                 workspace_uuid=binding.workspace_uuid,

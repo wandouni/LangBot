@@ -26,7 +26,7 @@ from ..entity.persistence.workspace import (
 )
 from .entities import WorkspaceExecutionBinding
 from .errors import WorkspaceExecutionUnavailableError, WorkspaceInvariantError, WorkspaceNotFoundError
-from .policy import CloudWorkspacePolicy, SingleWorkspacePolicy
+from .policy import CloudWorkspacePolicy, PersonalWorkspacePolicy, SingleWorkspacePolicy
 from .service import WorkspaceService
 
 if typing.TYPE_CHECKING:
@@ -77,6 +77,12 @@ class InvitationRoleError(InvitationError):
 
 class AlreadyMemberError(InvitationError):
     code = 'already_a_member'
+
+
+class SharingDisabledError(WorkspaceCollaborationError):
+    """Raised when the edition permanently disables Workspace sharing."""
+
+    code = 'sharing_disabled'
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -133,7 +139,7 @@ class WorkspaceCollaborationService:
         ap: Application,
         workspace_service: WorkspaceService,
         *,
-        policy: SingleWorkspacePolicy | CloudWorkspacePolicy | None = None,
+        policy: PersonalWorkspacePolicy | SingleWorkspacePolicy | CloudWorkspacePolicy | None = None,
     ) -> None:
         self.ap = ap
         self.workspace_service = workspace_service
@@ -173,6 +179,16 @@ class WorkspaceCollaborationService:
             if workspace_uuid is None:
                 if self.policy.multi_workspace_enabled:
                     raise WorkspaceNotFoundError('A Workspace selector is required')
+                if getattr(self.policy, 'personal_workspace_enabled', False):
+                    workspace, membership = await self._resolve_personal_workspace(
+                        active_session,
+                        account_uuid,
+                    )
+                    execution = await self.workspace_service.get_execution_binding(
+                        workspace.uuid,
+                        session=active_session,
+                    )
+                    return ResolvedWorkspaceAccess(workspace, membership, execution)
                 workspace = await self.workspace_service.get_singleton_workspace(session=active_session)
             else:
                 workspace = await active_session.get(Workspace, workspace_uuid)
@@ -282,6 +298,7 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> list[WorkspaceMemberView]:
+        self._require_sharing_enabled()
         if session is None:
             current_session = getattr(self.ap.persistence_mgr, 'current_session', lambda: None)()
             tenant_uow: typing.Any = getattr(self.ap.persistence_mgr, 'tenant_uow', None)
@@ -323,6 +340,8 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> list[WorkspaceInvitation]:
+        self._require_sharing_enabled()
+
         async def operation(active_session: AsyncSession) -> list[WorkspaceInvitation]:
             await self._require_active_workspace(active_session, workspace_uuid)
             persisted_actor = await self._load_actor(active_session, workspace_uuid, actor)
@@ -350,6 +369,7 @@ class WorkspaceCollaborationService:
         expires_in: datetime.timedelta = datetime.timedelta(days=7),
         session: AsyncSession | None = None,
     ) -> CreatedInvitation:
+        self._require_sharing_enabled()
         if role not in {
             MembershipRole.ADMIN.value,
             MembershipRole.DEVELOPER.value,
@@ -417,6 +437,7 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> tuple[WorkspaceInvitation, Workspace]:
+        self._require_sharing_enabled()
         if session is None:
             scoped_session = getattr(self.ap.persistence_mgr, 'current_session', lambda: None)()
             invitation_uow = getattr(self.ap.persistence_mgr, 'invitation_discovery_uow', None)
@@ -446,6 +467,7 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> WorkspaceMembership:
+        self._require_sharing_enabled()
         if session is None:
             scoped_session = getattr(self.ap.persistence_mgr, 'current_session', lambda: None)()
             invitation_uow = getattr(self.ap.persistence_mgr, 'invitation_discovery_uow', None)
@@ -535,6 +557,8 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> WorkspaceInvitation:
+        self._require_sharing_enabled()
+
         async def operation(active_session: AsyncSession) -> WorkspaceInvitation:
             await self._require_active_workspace(active_session, workspace_uuid)
             persisted_actor = await self._load_actor(active_session, workspace_uuid, actor, for_update=True)
@@ -612,6 +636,7 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> WorkspaceMembership:
+        self._require_sharing_enabled()
         if role not in {item.value for item in MembershipRole}:
             raise MembershipPermissionError('Unknown Workspace role')
         if role == MembershipRole.OWNER.value:
@@ -643,6 +668,8 @@ class WorkspaceCollaborationService:
         *,
         session: AsyncSession | None = None,
     ) -> WorkspaceMembership:
+        self._require_sharing_enabled()
+
         async def operation(active_session: AsyncSession) -> WorkspaceMembership:
             await self._require_active_workspace(active_session, workspace_uuid)
             persisted_actor = await self._load_actor(active_session, workspace_uuid, actor, for_update=True)
@@ -660,6 +687,37 @@ class WorkspaceCollaborationService:
             return target
 
         return await self._run(operation, session=session)
+
+    async def _resolve_personal_workspace(
+        self,
+        session: AsyncSession,
+        account_uuid: str,
+    ) -> tuple[Workspace, WorkspaceMembership]:
+        """Resolve the account's single active Workspace without a selector."""
+
+        statement = (
+            sqlalchemy.select(Workspace, WorkspaceMembership)
+            .join(WorkspaceMembership, WorkspaceMembership.workspace_uuid == Workspace.uuid)
+            .where(
+                WorkspaceMembership.account_uuid == account_uuid,
+                WorkspaceMembership.status == MembershipStatus.ACTIVE.value,
+                Workspace.instance_uuid == self.workspace_service.instance_uuid,
+                Workspace.status == WorkspaceStatus.ACTIVE.value,
+            )
+            .order_by(Workspace.created_at, Workspace.uuid)
+        )
+        rows = (await session.execute(statement)).all()
+        if len(rows) != 1:
+            raise WorkspaceNotFoundError('Workspace not found')
+        workspace, membership = rows[0]
+        return workspace, membership
+
+    def _require_sharing_enabled(self) -> None:
+        # Only ``members_enabled`` gates collaboration. Cloud keeps
+        # ``invitations_enabled=False`` while still serving control-plane
+        # managed invitations, so that flag is advisory rather than a guard.
+        if not self.policy.members_enabled:
+            raise SharingDisabledError('Workspace sharing is disabled in this edition')
 
     async def _get_invitation_by_token(
         self,

@@ -71,18 +71,34 @@ async def test_single_owner_migration_demotes_historical_extra_owner_and_install
         await run_alembic_upgrade(engine, 'head')
 
         async with engine.connect() as connection:
-            roles = dict(
-                (
-                    await connection.execute(
-                        sa.text(
-                            'SELECT account_uuid, role FROM workspace_memberships '
-                            'WHERE workspace_uuid = :workspace_uuid ORDER BY account_uuid'
-                        ),
-                        {'workspace_uuid': workspace_uuid},
-                    )
-                ).all()
-            )
-            assert roles == {creator_uuid: 'owner', promoted_uuid: 'admin'}
+            rows = (
+                await connection.execute(
+                    sa.text(
+                        'SELECT account_uuid, role, status FROM workspace_memberships '
+                        'WHERE workspace_uuid = :workspace_uuid ORDER BY account_uuid'
+                    ),
+                    {'workspace_uuid': workspace_uuid},
+                )
+            ).all()
+            # Per-account isolation keeps only the historical owner in the
+            # Default Workspace; everyone else is moved out, not demoted.
+            assert rows == [(creator_uuid, 'owner', 'active'), (promoted_uuid, 'admin', 'removed')]
+            personal_uuid = (
+                await connection.execute(
+                    sa.text("SELECT uuid FROM workspaces WHERE type = 'personal' AND created_by_account_uuid = :account"),
+                    {'account': promoted_uuid},
+                )
+            ).scalar_one()
+            personal_role = (
+                await connection.execute(
+                    sa.text(
+                        'SELECT role, status FROM workspace_memberships '
+                        'WHERE workspace_uuid = :workspace_uuid AND account_uuid = :account'
+                    ),
+                    {'workspace_uuid': personal_uuid, 'account': promoted_uuid},
+                )
+            ).one()
+            assert personal_role == ('owner', 'active')
             indexes = await connection.run_sync(
                 lambda sync_connection: {
                     index['name'] for index in sa.inspect(sync_connection).get_indexes('workspace_memberships')
@@ -90,11 +106,21 @@ async def test_single_owner_migration_demotes_historical_extra_owner_and_install
             )
             assert 'uq_workspace_memberships_one_active_owner' in indexes
 
+        # The partial unique index still rejects a second active owner in any
+        # Workspace, including a personal one.
         with pytest.raises(sa.exc.IntegrityError):
             async with engine.begin() as connection:
                 await connection.execute(
-                    sa.text("UPDATE workspace_memberships SET role = 'owner' WHERE account_uuid = :account_uuid"),
-                    {'account_uuid': promoted_uuid},
+                    sa.text(
+                        'INSERT INTO workspace_memberships '
+                        '(uuid, workspace_uuid, account_uuid, role, status) '
+                        'VALUES (:uuid, :workspace_uuid, :account_uuid, \'owner\', \'active\')'
+                    ),
+                    {
+                        'uuid': '00000000-0000-4000-8000-000000000300',
+                        'workspace_uuid': personal_uuid,
+                        'account_uuid': creator_uuid,
+                    },
                 )
     finally:
         await engine.dispose()

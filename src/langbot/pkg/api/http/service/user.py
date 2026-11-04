@@ -33,12 +33,13 @@ from ....entity.persistence.workspace import (
     MembershipRole,
     MembershipSource,
     MembershipStatus,
+    Workspace,
     WorkspaceMembership,
 )
 from ....utils import constants
 from ....entity.errors import account as account_errors
 from ....workspace.collaboration import normalize_email
-from ....workspace.errors import WorkspaceNotFoundError
+from ....workspace.errors import WorkspaceInvariantError, WorkspaceNotFoundError
 from ....utils import bounded_executor
 
 if typing.TYPE_CHECKING:
@@ -265,6 +266,10 @@ class UserService:
         access = accesses[0]
         if access.membership.role != MembershipRole.OWNER.value:
             return
+        # The compatibility provider only exists in the instance Default
+        # Workspace; personal Workspaces configure their own providers.
+        if access.workspace.slug != 'default':
+            return
         # A missing compatibility provider row is a model-routing problem, not an
         # authentication one. Letting provider_service raise here aborted the whole
         # Space OAuth callback after the Account had already been created, so the
@@ -419,18 +424,62 @@ class UserService:
             projection_revision=0,
         )
 
-    async def _ensure_sso_membership(
+    async def _ensure_sso_workspace(
         self,
         session: AsyncSession,
         account_uuid: str,
+        account_name: str | None = None,
     ) -> WorkspaceMembership:
-        """Bind an SSO Account to the singleton Workspace at operator level.
+        """Resolve an SSO Account's isolated Workspace.
 
-        Operator is the least privileged role that can use the chat runtime.
-        An existing disabled or removed membership is never reactivated: a
+        Personal editions give every account its own Workspace. The first
+        account (or an existing Default member) stays in the Default Workspace;
+        everyone else receives an empty personal Workspace as owner. An
+        existing disabled or removed membership is never reactivated: a
         Workspace administrator's removal must outrank the identity provider.
         """
-        workspace = await self.ap.workspace_service.get_singleton_workspace(session=session)
+        workspace_service = self.ap.workspace_service
+        personal_enabled = bool(getattr(workspace_service.policy, 'personal_workspace_enabled', False))
+
+        if personal_enabled:
+            active_statement = (
+                sqlalchemy.select(WorkspaceMembership, Workspace)
+                .join(Workspace, Workspace.uuid == WorkspaceMembership.workspace_uuid)
+                .where(
+                    WorkspaceMembership.account_uuid == account_uuid,
+                    WorkspaceMembership.status == MembershipStatus.ACTIVE.value,
+                    Workspace.instance_uuid == workspace_service.instance_uuid,
+                )
+                .order_by(Workspace.created_at, Workspace.uuid)
+            )
+            active_rows = (await session.execute(active_statement)).all()
+            if len(active_rows) > 1:
+                raise WorkspaceInvariantError(
+                    f'Account {account_uuid!r} has multiple active Workspaces; refusing to guess'
+                )
+            if active_rows:
+                return active_rows[0][0]
+
+            any_membership = await session.scalar(
+                sqlalchemy.select(WorkspaceMembership)
+                .join(Workspace, Workspace.uuid == WorkspaceMembership.workspace_uuid)
+                .where(
+                    WorkspaceMembership.account_uuid == account_uuid,
+                    Workspace.instance_uuid == workspace_service.instance_uuid,
+                )
+                .limit(1)
+            )
+            if any_membership is not None:
+                raise AccountDisabledError('The Workspace membership is not active')
+
+            _, membership = await workspace_service.ensure_personal_workspace(
+                account_uuid,
+                account_name,
+                session=session,
+            )
+            return membership
+
+        workspace = await workspace_service.get_singleton_workspace(session=session)
         membership = await session.scalar(
             sqlalchemy.select(WorkspaceMembership)
             .where(
@@ -487,7 +536,7 @@ class UserService:
                         session.add(account)
                         await session.flush()
                     self._require_active_account(account)
-                    await self._ensure_sso_membership(session, account.uuid)
+                    await self._ensure_sso_workspace(session, account.uuid, normalized)
                 return account
 
     async def get_user_by_email(self, user_email: str) -> user.User | None:
@@ -1015,8 +1064,13 @@ class UserService:
         # Exchange code for tokens and bind both installation and the active
         # OSS Workspace as independent identities.
         workspace_service = getattr(self.ap, 'workspace_service', None)
+        collaboration_service = getattr(self.ap, 'workspace_collaboration_service', None)
         if workspace_service is not None:
-            binding = await workspace_service.get_execution_binding()
+            if collaboration_service is not None:
+                access = await collaboration_service.resolve_account_workspace(local_account.uuid, None)
+                binding = access.execution
+            else:
+                binding = await workspace_service.get_default_execution_binding()
             created_at = binding.workspace_created_at
             created_ts = (
                 int(created_at.replace(tzinfo=datetime.timezone.utc).timestamp())

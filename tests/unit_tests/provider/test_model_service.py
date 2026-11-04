@@ -98,6 +98,7 @@ async def test_model_manager_initialize_skips_space_sync_after_timeout():
         state='active',
     )
     ap.workspace_service = SimpleNamespace(
+        get_default_execution_binding=AsyncMock(return_value=binding),
         get_local_execution_binding=AsyncMock(return_value=binding),
         get_execution_binding=AsyncMock(return_value=binding),
     )

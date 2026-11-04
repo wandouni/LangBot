@@ -12,6 +12,7 @@ from ..entity.persistence.workspace import (
     WorkspaceExecutionState,
     WorkspaceMembership,
     WorkspaceSource,
+    WorkspaceStatus,
 )
 
 
@@ -64,6 +65,42 @@ class WorkspaceRepository:
         if for_update:
             statement = statement.with_for_update()
         return list((await self.session.scalars(statement)).all())
+
+    async def list_local_workspaces_by_type(
+        self,
+        instance_uuid: str,
+        workspace_type: str,
+        *,
+        for_update: bool = False,
+    ) -> list[Workspace]:
+        statement = (
+            sqlalchemy.select(Workspace)
+            .where(
+                Workspace.instance_uuid == instance_uuid,
+                Workspace.source == WorkspaceSource.LOCAL.value,
+                Workspace.type == workspace_type,
+            )
+            .order_by(Workspace.created_at, Workspace.uuid)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return list((await self.session.scalars(statement)).all())
+
+    async def get_local_workspace_by_slug(
+        self,
+        instance_uuid: str,
+        slug: str,
+        *,
+        for_update: bool = False,
+    ) -> Workspace | None:
+        statement = sqlalchemy.select(Workspace).where(
+            Workspace.instance_uuid == instance_uuid,
+            Workspace.source == WorkspaceSource.LOCAL.value,
+            Workspace.slug == slug,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self.session.scalar(statement)
 
     async def get_workspace(self, workspace_uuid: str) -> Workspace | None:
         return await self.session.get(Workspace, workspace_uuid)
@@ -141,6 +178,43 @@ class WorkspaceRepository:
         if for_update:
             statement = statement.with_for_update()
         return await self.session.scalar(statement)
+
+    async def list_active_memberships_for_account(
+        self,
+        instance_uuid: str,
+        account_uuid: str,
+        *,
+        for_update: bool = False,
+    ) -> list[tuple[Workspace, WorkspaceMembership]]:
+        statement = (
+            sqlalchemy.select(Workspace, WorkspaceMembership)
+            .join(WorkspaceMembership, WorkspaceMembership.workspace_uuid == Workspace.uuid)
+            .where(
+                WorkspaceMembership.account_uuid == account_uuid,
+                WorkspaceMembership.status == MembershipStatus.ACTIVE.value,
+                Workspace.instance_uuid == instance_uuid,
+                Workspace.status == WorkspaceStatus.ACTIVE.value,
+            )
+            .order_by(Workspace.created_at, Workspace.uuid)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return [(workspace, membership) for workspace, membership in (await self.session.execute(statement)).all()]
+
+    async def list_any_memberships_for_account(
+        self,
+        instance_uuid: str,
+        account_uuid: str,
+    ) -> list[WorkspaceMembership]:
+        statement = (
+            sqlalchemy.select(WorkspaceMembership)
+            .join(Workspace, Workspace.uuid == WorkspaceMembership.workspace_uuid)
+            .where(
+                WorkspaceMembership.account_uuid == account_uuid,
+                Workspace.instance_uuid == instance_uuid,
+            )
+        )
+        return list((await self.session.scalars(statement)).all())
 
     def add_membership(self, membership: WorkspaceMembership) -> None:
         self.session.add(membership)

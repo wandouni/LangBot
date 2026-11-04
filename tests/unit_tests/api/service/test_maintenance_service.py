@@ -1191,3 +1191,37 @@ async def test_path_helpers_handle_missing_paths(tenant_maintenance_service, tmp
     missing = tmp_path / 'missing'
     assert tenant_maintenance_service._path_size(missing) == 0
     assert tenant_maintenance_service._file_count(missing) == 0
+
+
+_REAL_IS_OSS_SINGLETON = MaintenanceService._is_oss_singleton
+
+
+async def test_storage_analysis_scope_is_default_workspace_only(monkeypatch):
+    # The autouse fixture replaces the guard for unrelated tests; restore the
+    # real implementation here.
+    monkeypatch.setattr(MaintenanceService, '_is_oss_singleton', _REAL_IS_OSS_SINGLETON)
+    service = object.__new__(MaintenanceService)
+    service.ap = SimpleNamespace(
+        workspace_service=SimpleNamespace(
+            get_default_workspace=AsyncMock(return_value=SimpleNamespace(uuid='default-workspace')),
+            get_execution_binding=AsyncMock(return_value=SimpleNamespace()),
+        )
+    )
+    default_context = ExecutionContext(
+        instance_uuid='instance-a',
+        workspace_uuid='default-workspace',
+        placement_generation=1,
+    )
+    personal_context = ExecutionContext(
+        instance_uuid='instance-a',
+        workspace_uuid='personal-workspace',
+        placement_generation=1,
+    )
+
+    assert await MaintenanceService._is_oss_singleton(service, default_context) is True
+    assert await MaintenanceService._is_oss_singleton(service, personal_context) is False
+    service.ap.workspace_service.get_execution_binding.assert_awaited_once()
+
+    # A fenced or missing binding must also fall back to the scoped branches.
+    service.ap.workspace_service.get_execution_binding = AsyncMock(side_effect=RuntimeError('fenced'))
+    assert await MaintenanceService._is_oss_singleton(service, default_context) is False

@@ -7,11 +7,12 @@ from .errors import (
     WorkspaceOwnerAlreadyExistsError,
 )
 from .entities import WorkspaceExecutionBinding
-from .policy import SingleWorkspacePolicy
+from .policy import PersonalWorkspacePolicy, SingleWorkspacePolicy
 from .repository import WorkspaceRepository
 from .service import WorkspaceService
 
 __all__ = [
+    'PersonalWorkspacePolicy',
     'SingleWorkspacePolicy',
     'WorkspaceExecutionBinding',
     'WorkspaceExecutionUnavailableError',

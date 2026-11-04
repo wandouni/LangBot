@@ -9,15 +9,43 @@ from .errors import WorkspaceLimitExceededError
 class SingleWorkspacePolicy:
     """OSS edition policy: one local workspace with unrestricted membership count."""
 
-    workspace_limit: int = 1
+    workspace_limit: int | None = 1
     members_enabled: bool = True
     invitations_enabled: bool = True
     fixed_rbac_enabled: bool = True
     multi_workspace_enabled: bool = False
+    personal_workspace_enabled: bool = False
 
     def require_workspace_creation_allowed(self, current_workspace_count: int) -> None:
+        if self.workspace_limit is None:
+            return
         if current_workspace_count >= self.workspace_limit:
             raise WorkspaceLimitExceededError(f'This LangBot edition allows at most {self.workspace_limit} workspace')
+
+
+@dataclass(frozen=True, slots=True)
+class PersonalWorkspacePolicy:
+    """OSS edition policy: one private local workspace per account.
+
+    Personal isolation reuses the existing ``workspace_uuid`` tenant boundary.
+    It deliberately keeps ``multi_workspace_enabled=False`` so the instance
+    continues to use the OSS persistence path (no Cloud directory projection,
+    no control-plane entitlements).  Membership and invitation surfaces are
+    disabled permanently; every account owns exactly one Workspace.
+
+    The stable "Default Workspace" still carries instance-level resources and
+    the administrator's existing data.
+    """
+
+    workspace_limit: int | None = None
+    members_enabled: bool = False
+    invitations_enabled: bool = False
+    fixed_rbac_enabled: bool = True
+    multi_workspace_enabled: bool = False
+    personal_workspace_enabled: bool = True
+
+    def require_workspace_creation_allowed(self, current_workspace_count: int) -> None:
+        del current_workspace_count
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,18 +56,19 @@ class CloudWorkspacePolicy:
     only enables explicit selection among already projected Workspaces.
     """
 
-    workspace_limit: int = 0
+    workspace_limit: int | None = 0
     members_enabled: bool = True
     invitations_enabled: bool = False
     fixed_rbac_enabled: bool = True
     multi_workspace_enabled: bool = True
+    personal_workspace_enabled: bool = False
 
     def require_workspace_creation_allowed(self, current_workspace_count: int) -> None:
         del current_workspace_count
         raise WorkspaceLimitExceededError('Cloud Workspaces are created by the SaaS control plane')
 
 
-def open_core_workspace_policy() -> SingleWorkspacePolicy:
+def open_core_workspace_policy() -> PersonalWorkspacePolicy:
     """Return the only policy the open-source bootstrap may activate.
 
     ``system.edition`` and other local configuration are deliberately absent
@@ -47,4 +76,4 @@ def open_core_workspace_policy() -> SingleWorkspacePolicy:
     signed InstanceManifest and then explicitly construct the cloud policy.
     """
 
-    return SingleWorkspacePolicy()
+    return PersonalWorkspacePolicy()

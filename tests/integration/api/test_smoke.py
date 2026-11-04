@@ -311,6 +311,8 @@ class TestUserInitEndpoint:
             'space_login_enabled': False,
             'passkey_login_enabled': True,
             'passkey_supported': True,
+            'cas_login_enabled': False,
+            'cas_login_label': '',
         }
         fake_api_app.user_service.get_login_capabilities.assert_awaited_once_with()
         fake_api_app.user_service.get_first_user.assert_not_awaited()
@@ -339,6 +341,8 @@ class TestUserInitEndpoint:
             # passkey login nor passkey support, and the routes refuse it.
             'passkey_login_enabled': False,
             'passkey_supported': False,
+            'cas_login_enabled': False,
+            'cas_login_label': '',
         }
 
     @pytest.mark.asyncio
@@ -362,6 +366,8 @@ class TestUserInitEndpoint:
             'space_login_enabled': True,
             'passkey_login_enabled': True,
             'passkey_supported': True,
+            'cas_login_enabled': False,
+            'cas_login_label': '',
         }
 
     @pytest.mark.asyncio

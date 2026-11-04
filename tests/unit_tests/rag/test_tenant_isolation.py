@@ -106,7 +106,9 @@ async def tenant_rag(tmp_path):
                     'uuid': WORKSPACE_A,
                     'instance_uuid': INSTANCE_UUID,
                     'name': 'Workspace A',
-                    'slug': 'workspace-a',
+                    # Legacy vector collection reuse is limited to the Default
+                    # Workspace that predates per-account isolation.
+                    'slug': 'default',
                     'source': 'local',
                 },
                 {
@@ -330,7 +332,9 @@ async def test_legacy_marker_is_ignored_outside_single_local_workspace(tenant_ra
             )
         )
     if deny_by == 'multi_workspace_policy':
-        app.workspace_policy = CloudWorkspacePolicy()
+        # The vector manager reads the policy owned by the service, matching
+        # production wiring.
+        app.workspace_service.policy = CloudWorkspacePolicy()
 
     database = _RecordingVectorDatabase()
     manager = VectorDBManager(app)

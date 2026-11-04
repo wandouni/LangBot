@@ -96,6 +96,12 @@ class KnowledgeMigrationRouterGroup(group.RouterGroup):
         instance-global.  A cloud projection must therefore never be allowed
         to inspect or restore them, even when it has a valid execution lease.
         """
+        # Legacy RAG backup tables belong to the instance, not to a personal
+        # Workspace, so migration is available only in the Default Workspace.
+        default_workspace = await self.ap.workspace_service.get_default_workspace()
+        if execution_context.workspace_uuid != default_workspace.uuid:
+            raise WorkspaceNotFoundError('RAG migration is unavailable')
+
         try:
             binding = await self.ap.workspace_service.get_local_execution_binding(
                 execution_context.workspace_uuid,

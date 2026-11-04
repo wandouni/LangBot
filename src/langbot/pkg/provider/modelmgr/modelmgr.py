@@ -303,7 +303,7 @@ class ModelManager:
             return
 
         try:
-            binding = await self.ap.workspace_service.get_local_execution_binding()
+            binding = await self.ap.workspace_service.get_default_execution_binding()
         except WorkspaceError as exc:
             self.ap.logger.info(f'Skipping LangBot Space model sync outside an OSS local Workspace: {exc}')
             return

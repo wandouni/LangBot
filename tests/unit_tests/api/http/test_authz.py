@@ -43,6 +43,34 @@ def test_operator_can_run_but_cannot_manage_resources_or_secrets():
     assert not authz.has_permission(ctx, authz.Permission.PROVIDER_SECRET_MANAGE)
 
 
+def test_personal_workspace_permissions_drop_sharing_and_isolated_surfaces():
+    # Personal Workspaces permanently disable sharing, so member management,
+    # workspace deletion and billing links must not appear even for the owner.
+    permissions = authz.permissions_for_role('owner', members_enabled=False)
+
+    for permission in (
+        authz.Permission.MEMBER_VIEW,
+        authz.Permission.MEMBER_INVITE,
+        authz.Permission.MEMBER_UPDATE_ROLE,
+        authz.Permission.MEMBER_REMOVE,
+        authz.Permission.WORKSPACE_DELETE,
+        authz.Permission.BILLING_LINK_MANAGE,
+    ):
+        assert permission.value not in permissions
+    assert authz.Permission.RESOURCE_MANAGE.value in permissions
+    assert authz.Permission.AUDIT_VIEW.value in permissions
+
+
+def test_personal_workspace_permissions_keep_every_role_usable():
+    for role in authz.WorkspaceRole:
+        permissions = authz.permissions_for_role(role, members_enabled=True)
+        personal_permissions = authz.permissions_for_role(role, members_enabled=False)
+        assert personal_permissions < permissions
+        assert personal_permissions == permissions - {
+            permission.value for permission in authz._SHARING_PERMISSIONS | authz._ISOLATED_WORKSPACE_PERMISSIONS
+        }
+
+
 def test_unknown_role_has_no_permissions():
     assert authz.permissions_for_role('unknown') == frozenset()
 

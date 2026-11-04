@@ -409,7 +409,7 @@ class UserRouterGroup(group.RouterGroup):
                 workspace_uuids = [launch_workspace_uuid] if launch_workspace_uuid else []
                 workspace_created_ats: dict[str, int] = {}
                 if not workspace_uuids and getattr(getattr(self.ap, 'deployment', None), 'mode', 'oss') != 'cloud':
-                    binding = await self.ap.workspace_service.get_execution_binding()
+                    binding = await self.ap.workspace_service.get_default_execution_binding()
                     workspace_uuids = [binding.workspace_uuid]
                     workspace_created_at = binding.workspace_created_at
                     if workspace_created_at is not None:

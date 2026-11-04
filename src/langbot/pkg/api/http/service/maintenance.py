@@ -316,9 +316,20 @@ class MaintenanceService:
         return sections
 
     async def _is_oss_singleton(self, context: TenantContext) -> bool:
+        """Return whether the context is the instance-level Default Workspace.
+
+        Instance storage, database, logs, vector and task statistics are not
+        tenant data. Personal Workspaces must only see their scoped storage
+        and skills through the existing non-singleton branches.
+        """
+
         try:
-            await self.ap.workspace_service.get_local_execution_binding(
-                require_workspace_uuid(context),
+            workspace_uuid = require_workspace_uuid(context)
+            default_workspace = await self.ap.workspace_service.get_default_workspace()
+            if workspace_uuid != default_workspace.uuid:
+                return False
+            await self.ap.workspace_service.get_execution_binding(
+                workspace_uuid,
                 expected_generation=getattr(context, 'placement_generation', None),
             )
         except Exception:

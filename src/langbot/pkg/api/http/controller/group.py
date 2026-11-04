@@ -12,7 +12,11 @@ from quart.typing import RouteCallable
 
 from ....utils import constants
 from ....utils import bounded_executor
-from ....workspace.collaboration import MembershipPermissionError, WorkspaceCollaborationError
+from ....workspace.collaboration import (
+    MembershipPermissionError,
+    SharingDisabledError,
+    WorkspaceCollaborationError,
+)
 from ....workspace.errors import WorkspaceNotFoundError
 from ....cloud.entitlements import EntitlementUnavailableError
 from ....core.errors import TaskCapacityError
@@ -304,6 +308,8 @@ class RouterGroup(abc.ABC):
                         return self.http_status(404, 'resource_not_found', 'Resource not found')
                     if isinstance(e, MembershipPermissionError):
                         return self.http_status(403, e.code, str(e))
+                    if isinstance(e, SharingDisabledError):
+                        return self.http_status(403, e.code, str(e))
                     if isinstance(e, WorkspaceCollaborationError):
                         return self.http_status(400, e.code, str(e))
                     if isinstance(e, TaskCapacityError):
@@ -570,6 +576,7 @@ class RouterGroup(abc.ABC):
             access.execution.instance_uuid,
             access.workspace.uuid,
         )
+        workspace_policy = getattr(getattr(self.ap, 'workspace_service', None), 'policy', None)
         request_context = RequestContext(
             instance_uuid=access.execution.instance_uuid,
             placement_generation=access.execution.placement_generation,
@@ -583,7 +590,10 @@ class RouterGroup(abc.ABC):
                 workspace_uuid=access.workspace.uuid,
                 membership_uuid=access.membership.uuid,
                 role=access.membership.role,
-                permissions=permissions_for_role(access.membership.role),
+                permissions=permissions_for_role(
+                    access.membership.role,
+                    members_enabled=getattr(workspace_policy, 'members_enabled', True),
+                ),
                 membership_revision=access.membership.projection_revision,
             ),
             entitlement_revision=entitlement_revision,
@@ -628,7 +638,7 @@ class RouterGroup(abc.ABC):
         workspace_service = getattr(self.ap, 'workspace_service', None)
         if workspace_service is None:
             raise ValueError('API key Workspace binding is unavailable')
-        binding = await workspace_service.get_local_execution_binding()
+        binding = await workspace_service.get_default_execution_binding()
         request_context = RequestContext(
             instance_uuid=binding.instance_uuid or constants.instance_id,
             placement_generation=binding.placement_generation,

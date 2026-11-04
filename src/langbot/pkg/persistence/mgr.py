@@ -1627,17 +1627,31 @@ class PersistenceManager:
         )
 
         workspace_result = await self.execute_async(
-            sqlalchemy.select(persistence_workspace.Workspace.uuid).where(
+            sqlalchemy.select(persistence_workspace.Workspace.uuid)
+            .where(
                 persistence_workspace.Workspace.instance_uuid == constants.instance_id,
                 persistence_workspace.Workspace.source == persistence_workspace.WorkspaceSource.LOCAL.value,
+                persistence_workspace.Workspace.slug == 'default',
             )
+            .limit(1)
         )
-        workspace_uuids = workspace_result.scalars().all()
-        if len(workspace_uuids) != 1:
-            raise RuntimeError(
-                f'The fixed LangBot Models provider requires exactly one local Workspace; found {len(workspace_uuids)}'
+        workspace_uuid = workspace_result.scalar_one_or_none()
+        if workspace_uuid is None:
+            # Compatibility for databases created before the Default slug
+            # became structural. Personal Workspaces are never selected here.
+            fallback_result = await self.execute_async(
+                sqlalchemy.select(persistence_workspace.Workspace.uuid)
+                .where(
+                    persistence_workspace.Workspace.instance_uuid == constants.instance_id,
+                    persistence_workspace.Workspace.source == persistence_workspace.WorkspaceSource.LOCAL.value,
+                    persistence_workspace.Workspace.type == 'team',
+                )
+                .order_by(persistence_workspace.Workspace.created_at, persistence_workspace.Workspace.uuid)
+                .limit(1)
             )
-        workspace_uuid = workspace_uuids[0]
+            workspace_uuid = fallback_result.scalar_one_or_none()
+        if workspace_uuid is None:
+            raise RuntimeError('The fixed LangBot Models provider requires an initialized Default Workspace')
 
         # The compatibility Space provider belongs to the OSS singleton
         # Workspace.  It must never be discovered or inserted globally.

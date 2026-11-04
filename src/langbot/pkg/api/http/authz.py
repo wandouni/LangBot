@@ -94,14 +94,44 @@ class EditionLimitError(AuthorizationError):
     error_code = 'edition_limit'
 
 
-def permissions_for_role(role: str | WorkspaceRole) -> frozenset[str]:
-    """Return the canonical fixed permissions for a Workspace role."""
+_SHARING_PERMISSIONS = frozenset(
+    {
+        Permission.MEMBER_VIEW,
+        Permission.MEMBER_INVITE,
+        Permission.MEMBER_UPDATE_ROLE,
+        Permission.MEMBER_REMOVE,
+    }
+)
+
+_ISOLATED_WORKSPACE_PERMISSIONS = frozenset(
+    {
+        Permission.WORKSPACE_DELETE,
+        Permission.BILLING_LINK_MANAGE,
+    }
+)
+
+
+def permissions_for_role(
+    role: str | WorkspaceRole,
+    *,
+    members_enabled: bool = True,
+) -> frozenset[str]:
+    """Return the canonical fixed permissions for a Workspace role.
+
+    ``members_enabled=False`` is the personal-workspace edition: sharing is
+    permanently disabled, so member management, workspace deletion and billing
+    links never appear in an effective permission set.
+    """
 
     try:
         parsed_role = WorkspaceRole(role)
     except ValueError:
         return frozenset()
-    return frozenset(permission.value for permission in _ROLE_PERMISSIONS[parsed_role])
+    permissions = set(_ROLE_PERMISSIONS[parsed_role])
+    if not members_enabled:
+        permissions -= _SHARING_PERMISSIONS
+        permissions -= _ISOLATED_WORKSPACE_PERMISSIONS
+    return frozenset(permission.value for permission in permissions)
 
 
 def has_permission(ctx: RequestContext, permission: str | Permission) -> bool:

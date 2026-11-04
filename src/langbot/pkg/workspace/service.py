@@ -31,12 +31,19 @@ from .errors import (
     WorkspaceOwnerAlreadyExistsError,
 )
 from .entities import WorkspaceExecutionBinding
-from .identity import workspace_uuid_from_instance_id
-from .policy import CloudWorkspacePolicy, SingleWorkspacePolicy
+from .identity import (
+    personal_workspace_slug,
+    personal_workspace_uuid,
+    workspace_uuid_from_instance_id,
+)
+from .policy import CloudWorkspacePolicy, PersonalWorkspacePolicy, SingleWorkspacePolicy
 from .repository import WorkspaceRepository
 
 
 T = TypeVar('T')
+
+DEFAULT_WORKSPACE_SLUG = 'default'
+DEFAULT_WORKSPACE_NAME = 'Default Workspace'
 
 if typing.TYPE_CHECKING:
     from ..core.app import Application
@@ -49,7 +56,7 @@ class WorkspaceService:
         self,
         ap: Application,
         *,
-        policy: SingleWorkspacePolicy | CloudWorkspacePolicy | None = None,
+        policy: PersonalWorkspacePolicy | SingleWorkspacePolicy | CloudWorkspacePolicy | None = None,
         instance_uuid: str | None = None,
     ) -> None:
         self.ap = ap
@@ -101,6 +108,31 @@ class WorkspaceService:
                     f'Expected one local workspace for {self.instance_uuid!r}, found {len(workspaces)}'
                 )
             return workspaces[0]
+
+        return await self._run(operation, session=session)
+
+    async def get_default_workspace(self, *, session: AsyncSession | None = None) -> Workspace:
+        """Load the stable Default Workspace that owns instance-level resources.
+
+        Personal Workspaces never become this workspace.  The slug lookup is
+        the fast path; the oldest local team Workspace is a compatibility
+        fallback for databases created before the slug became structural.
+        """
+
+        async def operation(repository: WorkspaceRepository) -> Workspace:
+            workspace = await repository.get_local_workspace_by_slug(
+                self.instance_uuid,
+                DEFAULT_WORKSPACE_SLUG,
+            )
+            if workspace is not None:
+                return workspace
+            team_workspaces = await repository.list_local_workspaces_by_type(
+                self.instance_uuid,
+                WorkspaceType.TEAM.value,
+            )
+            if not team_workspaces:
+                raise WorkspaceNotFoundError('The Default Workspace has not been initialized')
+            return team_workspaces[0]
 
         return await self._run(operation, session=session)
 
@@ -233,14 +265,21 @@ class WorkspaceService:
         async def operation(repository: WorkspaceRepository) -> WorkspaceExecutionBinding:
             selected_uuid = workspace_uuid
             if selected_uuid is None:
-                workspaces = await repository.list_local_workspaces(self.instance_uuid)
-                if not workspaces:
-                    raise WorkspaceNotFoundError('The local workspace has not been initialized')
-                if len(workspaces) != 1:
-                    raise WorkspaceInvariantError(
-                        f'Expected one local workspace for {self.instance_uuid!r}, found {len(workspaces)}'
+                # A no-argument lookup always means the instance-level Default
+                # Workspace.  It must never guess among personal Workspaces.
+                default_workspace = await repository.get_local_workspace_by_slug(
+                    self.instance_uuid,
+                    DEFAULT_WORKSPACE_SLUG,
+                )
+                if default_workspace is None:
+                    team_workspaces = await repository.list_local_workspaces_by_type(
+                        self.instance_uuid,
+                        WorkspaceType.TEAM.value,
                     )
-                selected_uuid = workspaces[0].uuid
+                    if not team_workspaces:
+                        raise WorkspaceNotFoundError('The Default Workspace has not been initialized')
+                    default_workspace = team_workspaces[0]
+                selected_uuid = default_workspace.uuid
 
             workspace = await repository.get_execution_projection(selected_uuid)
             if workspace is None:
@@ -324,29 +363,131 @@ class WorkspaceService:
             session=session,
         )
 
+    async def get_default_execution_binding(
+        self,
+        *,
+        expected_generation: int | None = None,
+        session: AsyncSession | None = None,
+    ) -> WorkspaceExecutionBinding:
+        """Resolve the instance-level Default Workspace explicitly."""
+
+        workspace = await self.get_default_workspace(session=session)
+        return await self.get_execution_binding(
+            workspace.uuid,
+            expected_generation=expected_generation,
+            session=session,
+        )
+
     async def ensure_singleton_workspace(
         self,
         *,
         session: AsyncSession | None = None,
-        name: str = 'Default Workspace',
-        slug: str = 'default',
+        name: str = DEFAULT_WORKSPACE_NAME,
+        slug: str = DEFAULT_WORKSPACE_SLUG,
     ) -> Workspace:
-        """Create or repair the instance's single local workspace and execution state."""
+        """Compatibility alias for :meth:`ensure_default_workspace`."""
+
+        return await self.ensure_default_workspace(session=session, name=name, slug=slug)
+
+    async def ensure_default_workspace(
+        self,
+        *,
+        session: AsyncSession | None = None,
+        name: str = DEFAULT_WORKSPACE_NAME,
+        slug: str = DEFAULT_WORKSPACE_SLUG,
+    ) -> Workspace:
+        """Create or repair the stable Default Workspace and its execution state.
+
+        Personal Workspaces may already exist; only the team Workspace is
+        considered here, so the startup path stays idempotent.
+        """
 
         async def operation(repository: WorkspaceRepository) -> Workspace:
-            workspaces = await repository.list_local_workspaces(self.instance_uuid, for_update=True)
-            if len(workspaces) > 1:
-                raise WorkspaceInvariantError(f'Multiple local workspaces exist for instance {self.instance_uuid!r}')
-            if workspaces:
-                workspace = workspaces[0]
+            team_workspaces = await repository.list_local_workspaces_by_type(
+                self.instance_uuid,
+                WorkspaceType.TEAM.value,
+                for_update=True,
+            )
+            if len(team_workspaces) > 1:
+                preferred = [workspace for workspace in team_workspaces if workspace.slug == slug]
+                if len(preferred) != 1:
+                    raise WorkspaceInvariantError(
+                        f'Multiple local team workspaces exist for instance {self.instance_uuid!r}'
+                    )
+                workspace = preferred[0]
+            elif team_workspaces:
+                workspace = team_workspaces[0]
             else:
-                self.policy.require_workspace_creation_allowed(0)
+                self.policy.require_workspace_creation_allowed(
+                    await repository.count_local_workspaces(self.instance_uuid)
+                )
                 workspace = self._new_local_workspace(name=name, slug=slug)
                 repository.add_workspace(workspace)
                 await repository.flush()
 
             await self._ensure_execution_state(repository, workspace)
             return workspace
+
+        return await self._run(operation, session=session)
+
+    async def ensure_personal_workspace(
+        self,
+        account_uuid: str,
+        account_name: str | None = None,
+        *,
+        session: AsyncSession | None = None,
+    ) -> tuple[Workspace, WorkspaceMembership]:
+        """Return or create the account's private Workspace and owner membership.
+
+        The operation is idempotent: an existing active membership is returned
+        unchanged, so the Default owner keeps its Workspace even if this method
+        is invoked defensively.
+        """
+
+        self._require_personal_workspaces_supported()
+
+        async def operation(repository: WorkspaceRepository) -> tuple[Workspace, WorkspaceMembership]:
+            existing = await repository.list_active_memberships_for_account(
+                self.instance_uuid,
+                account_uuid,
+                for_update=True,
+            )
+            if existing:
+                return existing[0]
+
+            slug = personal_workspace_slug(account_uuid)
+            workspace = await repository.get_local_workspace_by_slug(self.instance_uuid, slug, for_update=True)
+            if workspace is None:
+                workspace = self._new_local_workspace(
+                    name=account_name or 'Personal Workspace',
+                    slug=slug,
+                    created_by_account_uuid=account_uuid,
+                    workspace_uuid=personal_workspace_uuid(self.instance_uuid, account_uuid),
+                    workspace_type=WorkspaceType.PERSONAL,
+                )
+                repository.add_workspace(workspace)
+                await repository.flush()
+            elif workspace.type != WorkspaceType.PERSONAL.value:
+                raise WorkspaceInvariantError(
+                    f'Workspace {workspace.uuid!r} collides with a non-personal Workspace slug'
+                )
+
+            await self._ensure_execution_state(repository, workspace)
+            membership = await self._claim_initial_owner(repository, workspace, account_uuid)
+            return workspace, membership
+
+        return await self._run(operation, session=session)
+
+    async def list_account_workspaces(
+        self,
+        account_uuid: str,
+        *,
+        session: AsyncSession | None = None,
+    ) -> list[tuple[Workspace, WorkspaceMembership]]:
+        """List this account's active Workspaces projected onto this instance."""
+
+        async def operation(repository: WorkspaceRepository) -> list[tuple[Workspace, WorkspaceMembership]]:
+            return await repository.list_active_memberships_for_account(self.instance_uuid, account_uuid)
 
         return await self._run(operation, session=session)
 
@@ -387,17 +528,7 @@ class WorkspaceService:
         """Atomically claim an ownerless singleton workspace for the first account."""
 
         async def operation(repository: WorkspaceRepository) -> WorkspaceMembership:
-            workspaces = await repository.list_local_workspaces(self.instance_uuid, for_update=True)
-            if not workspaces:
-                self.policy.require_workspace_creation_allowed(0)
-                workspace = self._new_local_workspace(name='Default Workspace', slug='default')
-                repository.add_workspace(workspace)
-                await repository.flush()
-            elif len(workspaces) == 1:
-                workspace = workspaces[0]
-            else:
-                raise WorkspaceInvariantError(f'Multiple local workspaces exist for instance {self.instance_uuid!r}')
-            await self._ensure_execution_state(repository, workspace)
+            workspace = await self._ensure_default_workspace_in_session(repository)
             return await self._claim_initial_owner(repository, workspace, account_uuid)
 
         return await self._run(operation, session=session)
@@ -411,22 +542,44 @@ class WorkspaceService:
         """Bind the first local account to the singleton workspace as owner."""
 
         async def operation(repository: WorkspaceRepository) -> tuple[Workspace, WorkspaceMembership]:
-            workspaces = await repository.list_local_workspaces(self.instance_uuid, for_update=True)
-            if not workspaces:
-                self.policy.require_workspace_creation_allowed(0)
-                workspace = self._new_local_workspace(name='Default Workspace', slug='default')
-                repository.add_workspace(workspace)
-                await repository.flush()
-            elif len(workspaces) == 1:
-                workspace = workspaces[0]
-            else:
-                raise WorkspaceInvariantError(f'Multiple local workspaces exist for instance {self.instance_uuid!r}')
-
-            await self._ensure_execution_state(repository, workspace)
+            workspace = await self._ensure_default_workspace_in_session(repository)
             membership = await self._claim_initial_owner(repository, workspace, account_uuid)
             return workspace, membership
 
         return await self._run(operation, session=session)
+
+    async def _ensure_default_workspace_in_session(self, repository: WorkspaceRepository) -> Workspace:
+        """Create or repair the Default Workspace inside an existing transaction."""
+
+        team_workspaces = await repository.list_local_workspaces_by_type(
+            self.instance_uuid,
+            WorkspaceType.TEAM.value,
+            for_update=True,
+        )
+        if len(team_workspaces) > 1:
+            preferred = [
+                workspace for workspace in team_workspaces if workspace.slug == DEFAULT_WORKSPACE_SLUG
+            ]
+            if len(preferred) != 1:
+                raise WorkspaceInvariantError(
+                    f'Multiple local team workspaces exist for instance {self.instance_uuid!r}'
+                )
+            workspace = preferred[0]
+        elif team_workspaces:
+            workspace = team_workspaces[0]
+        else:
+            self.policy.require_workspace_creation_allowed(
+                await repository.count_local_workspaces(self.instance_uuid)
+            )
+            workspace = self._new_local_workspace(
+                name=DEFAULT_WORKSPACE_NAME,
+                slug=DEFAULT_WORKSPACE_SLUG,
+            )
+            repository.add_workspace(workspace)
+            await repository.flush()
+
+        await self._ensure_execution_state(repository, workspace)
+        return workspace
 
     async def _claim_initial_owner(
         self,
@@ -500,18 +653,63 @@ class WorkspaceService:
         name: str,
         slug: str,
         created_by_account_uuid: str | None = None,
+        workspace_uuid: str | None = None,
+        workspace_type: WorkspaceType = WorkspaceType.TEAM,
     ) -> Workspace:
         return Workspace(
-            uuid=workspace_uuid_from_instance_id(self.instance_uuid),
+            uuid=workspace_uuid or workspace_uuid_from_instance_id(self.instance_uuid),
             instance_uuid=self.instance_uuid,
             name=name,
             slug=slug,
-            type=WorkspaceType.TEAM.value,
+            type=workspace_type.value,
             status=WorkspaceStatus.ACTIVE.value,
             created_by_account_uuid=created_by_account_uuid,
             source=WorkspaceSource.LOCAL.value,
             projection_revision=0,
         )
+
+    def _dialect_name(self) -> str | None:
+        get_engine = getattr(self.ap.persistence_mgr, 'get_db_engine', None)
+        if not callable(get_engine):
+            return None
+        try:
+            return get_engine().dialect.name
+        except Exception:  # pragma: no cover - defensive for lightweight test doubles
+            return None
+
+    def _require_personal_workspaces_supported(self) -> None:
+        """Reject personal Workspaces on the PostgreSQL OSS tenant scope.
+
+        The OSS PostgreSQL manager pins ``langbot.workspace_uuid`` for every
+        transaction to one Workspace, so several local Workspaces would read
+        and write each other's rows.
+        """
+
+        if self._dialect_name() == 'postgresql':
+            raise WorkspaceInvariantError(
+                'Personal Workspaces require SQLite in this OSS build; '
+                'the PostgreSQL OSS tenant scope is pinned to a single Workspace'
+            )
+
+    async def validate_workspace_layout(self) -> None:
+        """Fail closed when a single-Workspace database holds several locals.
+
+        PostgreSQL OSS cannot fence several local Workspaces, so an upgraded
+        database must never start with personal rows on that backend.
+        """
+
+        if self._dialect_name() != 'postgresql':
+            return
+
+        async def operation(repository: WorkspaceRepository) -> None:
+            local_count = await repository.count_local_workspaces(self.instance_uuid)
+            if local_count > 1:
+                raise WorkspaceInvariantError(
+                    f'Instance {self.instance_uuid!r} has {local_count} local Workspaces, '
+                    'but PostgreSQL OSS supports exactly one; migrate to SQLite before upgrading'
+                )
+
+        await self._run(operation, session=None)
 
     async def _run(
         self,

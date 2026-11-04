@@ -360,7 +360,7 @@ class PluginsRouterGroup(group.RouterGroup):
         policy = getattr(workspace_service, 'policy', None)
         if workspace_service is None or policy is None or getattr(policy, 'multi_workspace_enabled', False):
             raise WorkspaceNotFoundError('Plugin resource not found')
-        binding = await workspace_service.get_local_execution_binding()
+        binding = await workspace_service.get_default_execution_binding()
         execution_context = ExecutionContext(
             instance_uuid=binding.instance_uuid,
             workspace_uuid=binding.workspace_uuid,

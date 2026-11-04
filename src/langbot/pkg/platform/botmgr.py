@@ -2064,7 +2064,7 @@ class PlatformManager:
         # request/runtime context instead of guessing among Workspaces.
         if not self.websocket_proxy_bots:
             try:
-                binding = await self.ap.workspace_service.get_execution_binding()
+                binding = await self.ap.workspace_service.get_default_execution_binding()
             except Exception:
                 pass
             else:

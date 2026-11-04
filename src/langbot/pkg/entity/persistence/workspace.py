@@ -109,11 +109,19 @@ class Workspace(Base):
         sqlalchemy.UniqueConstraint('instance_uuid', 'slug', name='uq_workspaces_instance_slug'),
         sqlalchemy.Index('ix_workspaces_instance_status', 'instance_uuid', 'status'),
         sqlalchemy.Index(
-            'uq_workspaces_local_instance',
+            'uq_workspaces_local_team_instance',
             'instance_uuid',
             unique=True,
-            sqlite_where=sqlalchemy.text("source = 'local'"),
-            postgresql_where=sqlalchemy.text("source = 'local'"),
+            sqlite_where=sqlalchemy.text("source = 'local' AND type = 'team'"),
+            postgresql_where=sqlalchemy.text("source = 'local' AND type = 'team'"),
+        ),
+        sqlalchemy.Index(
+            'uq_workspaces_local_personal_owner',
+            'instance_uuid',
+            'created_by_account_uuid',
+            unique=True,
+            sqlite_where=sqlalchemy.text("source = 'local' AND type = 'personal'"),
+            postgresql_where=sqlalchemy.text("source = 'local' AND type = 'personal'"),
         ),
         sqlalchemy.CheckConstraint(
             "type IN ('personal', 'team')",

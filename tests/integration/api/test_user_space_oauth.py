@@ -62,6 +62,14 @@ async def space_oauth_api():
         return_value={'account_uuid': 'account-a', 'workspace_uuid': WORKSPACE_UUID}
     )
     application.workspace_collaboration_service.resolve_account_workspace = AsyncMock(return_value=access)
+    # Space OAuth launch is instance-level and always resolves the Default
+    # Workspace, never the OAuth caller's personal one.
+    application.workspace_service.get_default_execution_binding = AsyncMock(
+        return_value=SimpleNamespace(
+            workspace_uuid=WORKSPACE_UUID,
+            workspace_created_at=WORKSPACE_CREATED_AT,
+        )
+    )
     application.workspace_service.get_execution_binding = AsyncMock(
         return_value=SimpleNamespace(
             workspace_uuid=WORKSPACE_UUID,

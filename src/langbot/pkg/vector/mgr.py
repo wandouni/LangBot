@@ -193,6 +193,7 @@ class VectorDBManager:
                     persistence_rag.KnowledgeBase.collection_id,
                     persistence_rag.KnowledgeBase.legacy_vector_collection,
                     persistence_workspace.Workspace.source,
+                    persistence_workspace.Workspace.slug,
                 )
                 .join(
                     persistence_workspace.Workspace,
@@ -209,16 +210,25 @@ class VectorDBManager:
         if row is None:
             raise WorkspaceNotFoundError('Knowledge base not found')
 
-        collection_id, legacy_vector_collection, workspace_source = row
+        collection_id, legacy_vector_collection, workspace_source, workspace_slug = row
         if legacy_vector_collection:
-            policy = getattr(self.ap, 'workspace_policy', None)
+            workspace_service = getattr(self.ap, 'workspace_service', None)
+            policy = getattr(workspace_service, 'policy', None) or getattr(self.ap, 'workspace_policy', None)
             is_single_workspace = policy is not None and not getattr(
                 policy,
                 'multi_workspace_enabled',
                 True,
             )
-            is_local_workspace = workspace_source == persistence_workspace.WorkspaceSource.LOCAL.value
-            if is_single_workspace and is_local_workspace and isinstance(collection_id, str) and collection_id.strip():
+            is_default_workspace = (
+                workspace_source == persistence_workspace.WorkspaceSource.LOCAL.value
+                and workspace_slug == 'default'
+            )
+            if (
+                is_single_workspace
+                and is_default_workspace
+                and isinstance(collection_id, str)
+                and collection_id.strip()
+            ):
                 return collection_id
             self.ap.logger.warning(
                 'Ignored a legacy vector collection marker outside the local single-Workspace compatibility boundary.'

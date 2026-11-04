@@ -41,7 +41,7 @@ class SkillManager:
 
     async def initialize(self):
         try:
-            binding = await self.ap.workspace_service.get_execution_binding()
+            binding = await self.ap.workspace_service.get_default_execution_binding()
         except Exception:
             self.ap.logger.info('No unambiguous Workspace binding; skill caches will load on demand.')
             return

@@ -911,7 +911,7 @@ class TestUserServiceCreateOrUpdateSpaceUser:
     async def test_oss_space_provider_refresh_uses_workspace_owner_credentials(self):
         owner_account = _create_mock_user(email='owner@example.com', space_account_uuid='space-owner')
         access = SimpleNamespace(
-            workspace=SimpleNamespace(uuid='workspace-a'),
+            workspace=SimpleNamespace(uuid='workspace-a', slug='default'),
             membership=SimpleNamespace(role='owner'),
         )
         provider_service = SimpleNamespace(update_space_model_provider_api_keys=AsyncMock())
@@ -931,7 +931,7 @@ class TestUserServiceCreateOrUpdateSpaceUser:
 
         owner_account = _create_mock_user(email='owner@example.com', space_account_uuid='space-owner')
         access = SimpleNamespace(
-            workspace=SimpleNamespace(uuid='workspace-a'),
+            workspace=SimpleNamespace(uuid='workspace-a', slug='default'),
             membership=SimpleNamespace(role='owner'),
         )
         provider_service = SimpleNamespace(
