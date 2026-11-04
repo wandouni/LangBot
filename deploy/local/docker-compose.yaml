@@ -24,6 +24,21 @@ services:
     command: ["uv", "run", "--no-sync", "-m", "langbot_plugin.cli.__init__", "rt"]
     restart: unless-stopped
     pull_policy: never
+    # Shared-profile plugin workers run inside nsjail. The container needs
+    # SYS_ADMIN plus unconfined seccomp/AppArmor/systempaths; without them
+    # nsjail dies with "clone(...) failed: Operation not permitted" or cannot
+    # mount /proc, and every worker restarts in a loop.
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
+    # nsjail applies memory/pid/cpu limits through the host cgroup v2
+    # hierarchy. With Docker's private cgroup namespace it cannot write
+    # cgroup.subtree_control and exits 255; --cgroupns=host is what nsjail
+    # itself recommends for containers.
+    cgroup: host
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       # Shared control secret for the multi-Workspace Runtime profile. Must be
@@ -33,6 +48,9 @@ services:
       - ${LANGBOT_DATA_DIR:?LANGBOT_DATA_DIR must be set in .env}/plugins:/app/data/plugins
       # Per-plugin dependency environments survive container recreation.
       - ${LANGBOT_DATA_DIR}/plugin-runtime:/app/data/plugin-runtime
+      # nsjail needs a writable host cgroup tree. Docker Desktop exposes it
+      # read-only, so shared workers only run on a Linux Docker host.
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     ports:
       - "127.0.0.1:${PLUGIN_DEBUG_PORT:-5401}:5401"
     healthcheck:
