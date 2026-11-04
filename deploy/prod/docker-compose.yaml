@@ -151,6 +151,10 @@ services:
       LANGBOT_SSO_TICKET_TTL_SECONDS: ${SQLBOT_SSO_TICKET_TTL_SECONDS:-60}
       LANGBOT_SSO_TOKEN_TTL_MINUTES: ${SQLBOT_SSO_TOKEN_TTL_MINUTES:-480}
       LANGBOT_SSO_DEFAULT_WORKSPACE_ID: ${SQLBOT_SSO_DEFAULT_WORKSPACE_ID:-1}
+      # When true, each new SSO account gets an empty personal workspace and
+      # becomes its admin. Set to false to restore the shared default workspace
+      # with ordinary-member rights.
+      LANGBOT_SSO_PERSONAL_WORKSPACE: ${SQLBOT_SSO_PERSONAL_WORKSPACE:-true}
       # Endpoint written into the "export MCP config" JSON. Without it SQLBot
       # uses the request Host plus MCP_PORT, which yields http://<host>:8001/mcp
       # -- a port this compose file never publishes, so LangBot cannot connect.

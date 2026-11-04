@@ -26,6 +26,9 @@ services:
     pull_policy: never
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      # Shared control secret for the multi-Workspace Runtime profile. Must be
+      # identical here and on the Core service; leave empty to keep oss_dev.
+      LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN: ${LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN:-}
     volumes:
       - ${LANGBOT_DATA_DIR:?LANGBOT_DATA_DIR must be set in .env}/plugins:/app/data/plugins
       # Per-plugin dependency environments survive container recreation.
@@ -53,6 +56,9 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       # The name in data/docker/config.yaml is this service's DNS alias.
       PLUGIN__RUNTIME_WS_URL: ws://vocational-langbot-runtime:5400/control/ws
+      # Enables the shared plugin Runtime so personal Workspaces can install
+      # plugins. Generate once with: openssl rand -hex 32
+      LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN: ${LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN:-}
       BOX__ENABLED: "false"
       BOX__LOCAL__DEFAULT_WORKSPACE: default
       BOX__LOCAL__HOST_ROOT: /app/data/box
@@ -102,6 +108,7 @@ services:
       CONTEXT_PATH: /sqlbot
       LANGBOT_SSO_ENABLED: "true"
       LANGBOT_SSO_SHARED_SECRET: ${SQLBOT_SSO_SHARED_SECRET}
+      LANGBOT_SSO_PERSONAL_WORKSPACE: ${SQLBOT_SSO_PERSONAL_WORKSPACE:-true}
     volumes:
       - ${SQLBOT_DATA_DIR:?SQLBOT_DATA_DIR must be set in .env}/sqlbot/excel:/opt/sqlbot/data/excel
       - ${SQLBOT_DATA_DIR}/sqlbot/file:/opt/sqlbot/data/file

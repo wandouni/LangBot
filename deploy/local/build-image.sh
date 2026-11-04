@@ -82,6 +82,9 @@ update_env() {
 }
 
 update_env LANGBOT_IMAGE "$IMAGE"
+# The Runtime must run the same image: it carries the SDK runtime CLI and the
+# nsjail-based shared worker that personal Workspaces depend on.
+update_env PLUGIN_RUNTIME_IMAGE "$IMAGE"
 update_env PORTAL_GATEWAY_IMAGE "$GATEWAY_IMAGE"
 
 echo "==> built ${IMAGE}"
