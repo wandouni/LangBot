@@ -163,6 +163,18 @@
     .cell-muted { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .cell-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; }
     .row-action { border: 0; background: transparent; color: var(--accent); padding: 0; font-size: 12px; white-space: nowrap; }
+    .row-action:disabled { color: var(--muted); cursor: default; }
+    .filter-select {
+      min-width: 130px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px;
+      background: var(--bg); color: var(--text); outline: none; font-size: 12px;
+    }
+    .filter-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+    .status-badge {
+      display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .status-badge.pending { background: #fef3c7; color: #92400e; }
+    .status-badge.processed { background: #dcfce7; color: #166534; }
     .pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12px; }
     .pagination-actions { display: flex; align-items: center; gap: 6px; }
     .pagination button:disabled { opacity: .45; cursor: default; border-color: var(--border); color: var(--muted); }
@@ -248,6 +260,7 @@
       <button type="button" role="tab" data-tab="stats" class="active" data-i18n="tabs.stats">Overview</button>
       <button type="button" role="tab" data-tab="questions" data-i18n="tabs.questions">Questions</button>
       <button type="button" role="tab" data-tab="visits" data-i18n="tabs.visits">Sessions</button>
+      <button type="button" role="tab" data-tab="consult" data-i18n="tabs.consult">Message board</button>
     </nav>
 
     <div id="statsPanel">
@@ -311,6 +324,13 @@
           <button type="button" class="button primary" id="applyVisitFilters" data-i18n="filters.apply">Filter</button>
           <button type="button" class="button" id="resetVisitFilters" data-i18n="filters.reset">Reset</button>
         </div>
+        <div class="filters" id="consultFilters" hidden>
+          <select class="filter-select" id="consultStatusFilter" data-i18n-aria-label="consult.filterLabel" aria-label="Status">
+            <option value="" data-i18n="consult.filterAll">All statuses</option>
+            <option value="pending" data-i18n="consult.pending">Pending</option>
+            <option value="processed" data-i18n="consult.processed">Processed</option>
+          </select>
+        </div>
       </div>
       <div class="table-wrap">
         <table>
@@ -358,11 +378,14 @@
         pendingBot: null,
         questionPage: 1,
         visitPage: 1,
+        consultPage: 1,
         questionFilters: { keyword: '', ip: '', region: '' },
         visitFilters: { ip: '', region: '' },
+        consultFilters: { status: '' },
         overview: null,
         questionData: null,
         visitData: null,
+        consultData: null,
         detailData: null,
         detailKeyword: '',
         translations: {},
@@ -687,6 +710,7 @@
         }
         state.questionPage = 1;
         state.visitPage = 1;
+        state.consultPage = 1;
         closeDetail();
         if (state.booted) refreshAll();
       }
@@ -705,6 +729,7 @@
         }
         state.questionPage = 1;
         state.visitPage = 1;
+        state.consultPage = 1;
         if (state.booted) refreshAll();
       }
 
@@ -730,11 +755,28 @@
         });
       }
 
+      function activeTableData() {
+        if (state.tab === 'questions') return state.questionData;
+        if (state.tab === 'visits') return state.visitData;
+        if (state.tab === 'consult') return state.consultData;
+        return null;
+      }
+
+      function botDisplayName(botUuid) {
+        if (!botUuid) return '-';
+        for (var i = 0; i < state.bots.length; i++) {
+          if (state.bots[i].uuid === botUuid) {
+            return state.bots[i].name || state.bots[i].uuid;
+          }
+        }
+        return botUuid;
+      }
+
       function renderLocalizedContent() {
         renderBotOptions();
         if (state.overview) renderOverview();
         if (state.tab !== 'stats') {
-          var tableData = state.tab === 'questions' ? state.questionData : state.visitData;
+          var tableData = activeTableData();
           if (tableData) renderTable();
         }
         if (state.detailData && !document.getElementById('detailModal').hidden) {
@@ -942,7 +984,7 @@
       }
 
       function switchTab(tab) {
-        state.tab = ['stats', 'questions', 'visits'].indexOf(tab) === -1 ? 'stats' : tab;
+        state.tab = ['stats', 'questions', 'visits', 'consult'].indexOf(tab) === -1 ? 'stats' : tab;
         Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (button) {
           button.classList.toggle('active', button.getAttribute('data-tab') === state.tab);
         });
@@ -950,12 +992,22 @@
         document.getElementById('tablePanel').hidden = state.tab === 'stats';
         document.getElementById('questionFilters').hidden = state.tab !== 'questions';
         document.getElementById('visitFilters').hidden = state.tab !== 'visits';
+        document.getElementById('consultFilters').hidden = state.tab !== 'consult';
+        // Leads are long-lived records, so the time-range control does not
+        // apply to the message board tab.
+        var rangeGroup = document.querySelector('.segmented');
+        if (rangeGroup) rangeGroup.hidden = state.tab === 'consult';
+        var emptyNode = document.getElementById('tableEmpty');
+        emptyNode.setAttribute('data-i18n', state.tab === 'consult' ? 'consult.empty' : 'empty');
+        emptyNode.textContent = state.tab === 'consult'
+          ? t('consult.empty', 'No messages yet')
+          : t('empty', 'No data in this range');
         if (state.tab === 'stats') renderOverview();
         else loadTable();
       }
 
       function loadTable() {
-        if (state.tab === 'stats') return;
+        if (state.tab === 'stats') return Promise.resolve();
         var seq = ++requestSeq.table;
         var loading = document.getElementById('tableLoading');
         var empty = document.getElementById('tableEmpty');
@@ -971,18 +1023,25 @@
             ip: state.questionFilters.ip,
             region: resolveRegionFilter(state.questionFilters.region)
           });
-        } else {
+        } else if (state.tab === 'visits') {
           request = api('/qa-analytics/visits', {
             page: state.visitPage,
             page_size: 20,
             ip: state.visitFilters.ip,
             region: resolveRegionFilter(state.visitFilters.region)
           });
+        } else {
+          request = api('/qa-analytics/consult-messages', {
+            page: state.consultPage,
+            page_size: 20,
+            status: state.consultFilters.status
+          });
         }
-        request.then(function (data) {
+        return request.then(function (data) {
           if (seq !== requestSeq.table) return;
           if (state.tab === 'questions') state.questionData = data;
-          else state.visitData = data;
+          else if (state.tab === 'visits') state.visitData = data;
+          else state.consultData = data;
           renderTable();
         }).catch(function (error) {
           if (seq !== requestSeq.table) return;
@@ -997,9 +1056,14 @@
         var head = document.getElementById('tableHead');
         head.textContent = '';
         var row = el('tr');
-        var columns = state.tab === 'questions'
-          ? ['table.time', 'table.question', 'table.rewritten', 'table.latency', 'table.ip', 'table.region', 'table.detail']
-          : ['visits.index', 'visits.ip', 'visits.region', 'visits.firstSeen', 'visits.lastSeen', 'visits.duration', 'visits.rounds'];
+        var columns;
+        if (state.tab === 'questions') {
+          columns = ['table.time', 'table.question', 'table.rewritten', 'table.latency', 'table.ip', 'table.region', 'table.detail'];
+        } else if (state.tab === 'visits') {
+          columns = ['visits.index', 'visits.ip', 'visits.region', 'visits.firstSeen', 'visits.lastSeen', 'visits.duration', 'visits.rounds'];
+        } else {
+          columns = ['consult.time', 'consult.bot', 'consult.province', 'consult.city', 'consult.name', 'consult.score', 'consult.contact', 'consult.status', 'consult.action'];
+        }
         columns.forEach(function (key) {
           row.appendChild(el('th', null, t(key, key)));
         });
@@ -1010,7 +1074,7 @@
         renderTableHead();
         var body = document.getElementById('tableBody');
         body.textContent = '';
-        var data = state.tab === 'questions' ? state.questionData : state.visitData;
+        var data = activeTableData();
         var items = data && Array.isArray(data.items) ? data.items : [];
         var empty = document.getElementById('tableEmpty');
         if (!items.length) {
@@ -1040,7 +1104,7 @@
             action.addEventListener('click', function () { openDetail(item.id); });
             actionCell.appendChild(action);
             row.appendChild(actionCell);
-          } else {
+          } else if (state.tab === 'visits') {
             row.appendChild(el('td', 'cell-muted', String((data.page - 1) * data.page_size + body.children.length + 1)));
             row.appendChild(el('td', 'cell-mono', item.visitor_ip || '-'));
             row.appendChild(el('td', 'cell-muted', formatRegion(item.region)));
@@ -1048,6 +1112,27 @@
             row.appendChild(el('td', 'cell-muted', formatDate(item.last_seen)));
             row.appendChild(el('td', 'cell-muted', formatDuration(item.dwell_seconds)));
             row.appendChild(el('td', 'cell-muted', item.rounds));
+          } else {
+            var processed = item.status === 'processed';
+            row.appendChild(el('td', 'cell-muted', formatDate(item.created_at)));
+            row.appendChild(el('td', 'cell-muted', botDisplayName(item.bot_uuid)));
+            row.appendChild(el('td', 'cell-muted', item.province || '-'));
+            row.appendChild(el('td', 'cell-muted', item.city || '-'));
+            row.appendChild(el('td', null, item.name || '-'));
+            row.appendChild(el('td', 'cell-muted', item.score || '-'));
+            row.appendChild(el('td', 'cell-mono', item.contact || '-'));
+            var statusCell = el('td');
+            statusCell.appendChild(el('span', 'status-badge ' + (processed ? 'processed' : 'pending'),
+              processed ? t('consult.processed', 'Processed') : t('consult.pending', 'Pending')));
+            row.appendChild(statusCell);
+            var consultActionCell = el('td');
+            if (!processed) {
+              var processButton = el('button', 'row-action', t('consult.markProcessed', 'Mark processed'));
+              processButton.type = 'button';
+              processButton.addEventListener('click', function () { processConsult(item.id, processButton); });
+              consultActionCell.appendChild(processButton);
+            }
+            row.appendChild(consultActionCell);
           }
           body.appendChild(row);
         });
@@ -1104,6 +1189,28 @@
         state.visitFilters = { ip: '', region: '' };
         state.visitPage = 1;
         loadTable();
+      }
+
+      function processConsult(id, button) {
+        if (!id || (button && button.disabled)) return;
+        var originalText = button ? button.textContent : '';
+        if (button) {
+          button.disabled = true;
+          button.textContent = t('consult.processing', 'Processing...');
+        }
+        api('/qa-analytics/consult-messages/process', { id: id }).then(function () {
+          var isEmptyPage = state.consultData &&
+            Array.isArray(state.consultData.items) &&
+            state.consultData.items.length <= 1;
+          if (isEmptyPage && state.consultPage > 1) state.consultPage -= 1;
+          return loadTable();
+        }).catch(function () {
+          showError(t('consult.updateFailed', 'Could not update the status.'));
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+        });
       }
 
       function openDetail(id) {
@@ -1313,14 +1420,26 @@
         } else if (state.tab === 'visits' && state.visitPage > 1) {
           state.visitPage -= 1;
           loadTable();
+        } else if (state.tab === 'consult' && state.consultPage > 1) {
+          state.consultPage -= 1;
+          loadTable();
         }
       });
       document.getElementById('nextPage').addEventListener('click', function () {
         if (state.tab === 'questions') {
           state.questionPage += 1;
-        } else {
+        } else if (state.tab === 'visits') {
           state.visitPage += 1;
+        } else if (state.tab === 'consult') {
+          state.consultPage += 1;
+        } else {
+          return;
         }
+        loadTable();
+      });
+      document.getElementById('consultStatusFilter').addEventListener('change', function (event) {
+        state.consultFilters.status = event.target.value;
+        state.consultPage = 1;
         loadTable();
       });
       Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (button) {

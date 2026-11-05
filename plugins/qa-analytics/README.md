@@ -1,13 +1,17 @@
 # Q&A Analytics plugin
 
-This plugin adds the **Q&A Analytics** page to the LangBot sidebar. It is a
-read-only view of the Workspace's knowledge-base questions, sessions, keyword
-cloud, frequent questions, and visitor regions. All views can be filtered by
-the bots configured in the current Workspace.
+This plugin adds the **Q&A Analytics** page to the LangBot sidebar. The
+**Overview**, **Questions**, and **Sessions** tabs show the Workspace's
+knowledge-base questions, keyword cloud, frequent questions, and visitor
+regions. The **Message board** tab lists visitor leads submitted from the
+standalone consultation pages and lets staff mark them as processed. All views
+can be filtered by the bots configured in the current Workspace.
 
 The page asset and sidebar entry come from this plugin. Question collection,
-storage, retention, and queries are implemented in LangBot Core, so a plugin
-upgrade cannot change the analytics data model.
+lead storage, retention, and queries are implemented in LangBot Core, so a
+plugin upgrade cannot change the analytics data model. The message board is
+write-capable only through the status action (pending → processed); leads are
+never deleted or edited from the page.
 
 ## Install
 
@@ -16,7 +20,7 @@ and install the `.lbpkg` from **Add extension → Upload extension** in the WebU
 
 ```bash
 cd plugins/qa-analytics
-zip -r ../qa-analytics-0.1.1.lbpkg .
+zip -r ../qa-analytics-0.1.2.lbpkg .
 ```
 
 Choose **Manual add**, upload the `.lbpkg`, confirm the install, then enable the
@@ -48,4 +52,4 @@ qa_analytics:
 
 `page.plugin_author` / `page.plugin_name` must match this plugin's identity. If
 you fork the plugin under another identity, update both values so Core serves
-the read-only data path for your package.
+the page API data path for your package.
