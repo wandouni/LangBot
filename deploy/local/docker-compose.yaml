@@ -46,8 +46,12 @@ services:
       LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN: ${LANGBOT_PLUGIN_RUNTIME_CONTROL_TOKEN:-}
     volumes:
       - ${LANGBOT_DATA_DIR:?LANGBOT_DATA_DIR must be set in .env}/plugins:/app/data/plugins
-      # Per-plugin dependency environments survive container recreation.
-      - ${LANGBOT_DATA_DIR}/plugin-runtime:/app/data/plugin-runtime
+      # Per-plugin dependency environments and nsjail jail roots survive
+      # container recreation. This MUST be a Docker volume, not a host bind
+      # mount: nsjail remounts its chroot read-only, and Docker Desktop's
+      # virtiofs share rejects MS_REMOUNT with EPERM ("Failed to build mount
+      # tree"), so every shared-profile plugin worker fails to launch.
+      - plugin_runtime_data:/app/data/plugin-runtime
       # nsjail needs a writable host cgroup tree. Docker Desktop exposes it
       # read-only, so shared workers only run on a Linux Docker host.
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -175,6 +179,11 @@ services:
     logging: *default-logging
     networks:
       - langbot_network
+
+volumes:
+  # Deliberately not under LANGBOT_DATA_DIR: see the runtime volume comment.
+  plugin_runtime_data:
+    name: vocational-langbot-plugin-runtime
 
 networks:
   langbot_network:
