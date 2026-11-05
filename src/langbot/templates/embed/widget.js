@@ -54,6 +54,8 @@
       send: "Send",
       thinking: "Thinking...",
       failedToConnect: "Failed to connect",
+      connecting: "Connecting...",
+      reconnecting: "Connection lost. Reconnecting...",
       imageTooLarge: "Image must be under 5MB",
       onlyImages: "Only image files are supported",
       botVerificationFailed: "Bot verification failed",
@@ -75,6 +77,8 @@
       send: "发送",
       thinking: "正在思考...",
       failedToConnect: "连接失败",
+      connecting: "正在连接...",
+      reconnecting: "连接已断开，正在重连...",
       imageTooLarge: "图片大小不能超过 5MB",
       onlyImages: "仅支持图片文件",
       botVerificationFailed: "机器人验证失败",
@@ -96,6 +100,8 @@
       send: "傳送",
       thinking: "正在思考...",
       failedToConnect: "連線失敗",
+      connecting: "正在連線...",
+      reconnecting: "連線已中斷，正在重新連線...",
       imageTooLarge: "圖片大小不能超過 5MB",
       onlyImages: "僅支援圖片檔案",
       botVerificationFailed: "機器人驗證失敗",
@@ -117,6 +123,8 @@
       send: "送信",
       thinking: "考え中...",
       failedToConnect: "接続に失敗しました",
+      connecting: "接続しています...",
+      reconnecting: "接続が切れました。再接続しています...",
       imageTooLarge: "画像は5MB以下にしてください",
       onlyImages: "画像ファイルのみ対応しています",
       botVerificationFailed: "ボット認証に失敗しました",
@@ -138,6 +146,8 @@
       send: "Enviar",
       thinking: "Pensando...",
       failedToConnect: "Error de conexión",
+      connecting: "Conectando...",
+      reconnecting: "Conexión perdida. Reconectando...",
       imageTooLarge: "La imagen debe ser menor a 5MB",
       onlyImages: "Solo se admiten archivos de imagen",
       botVerificationFailed: "Verificación del bot fallida",
@@ -159,6 +169,8 @@
       send: "Отправить",
       thinking: "Думаю...",
       failedToConnect: "Ошибка подключения",
+      connecting: "Подключение...",
+      reconnecting: "Соединение потеряно. Переподключение...",
       imageTooLarge: "Изображение должно быть менее 5МБ",
       onlyImages: "Поддерживаются только изображения",
       botVerificationFailed: "Проверка бота не пройдена",
@@ -180,6 +192,8 @@
       send: "ส่ง",
       thinking: "กำลังคิด...",
       failedToConnect: "เชื่อมต่อไม่สำเร็จ",
+      connecting: "กำลังเชื่อมต่อ...",
+      reconnecting: "การเชื่อมต่อขาดหาย กำลังเชื่อมต่อใหม่...",
       imageTooLarge: "รูปภาพต้องมีขนาดไม่เกิน 5MB",
       onlyImages: "รองรับเฉพาะไฟล์รูปภาพเท่านั้น",
       botVerificationFailed: "การยืนยันบอทล้มเหลว",
@@ -201,6 +215,8 @@
       send: "Gửi",
       thinking: "Đang suy nghĩ...",
       failedToConnect: "Kết nối thất bại",
+      connecting: "Đang kết nối...",
+      reconnecting: "Mất kết nối. Đang kết nối lại...",
       imageTooLarge: "Hình ảnh phải nhỏ hơn 5MB",
       onlyImages: "Chỉ hỗ trợ tệp hình ảnh",
       botVerificationFailed: "Xác minh bot thất bại",
@@ -224,9 +240,16 @@
     sessionType: "person",
     title: scriptTitle || "LangBot",
     logoUrl: "__LANGBOT_BASE_URL__" + "/api/v1/embed/logo",
-    maxReconnectAttempts: 5,
-    reconnectDelay: 3000,
+    // Reconnect forever with a capped exponential backoff. A chat page is
+    // meant to stay open for hours: any fixed attempt budget will eventually
+    // give up while the server or the visitor's network is still down.
+    reconnectBaseDelay: 3000,
+    reconnectMaxDelay: 30000,
     heartbeatInterval: 30000,
+    // A healthy heartbeat answers well within this window. Two consecutive
+    // misses mean the socket is a zombie (sleep, network switch) and must be
+    // replaced even if the browser still reports it as OPEN.
+    heartbeatTimeout: 10000,
     turnstileSiteKey: "__LANGBOT_TURNSTILE_SITE_KEY__",
     bubbleIcon: "__LANGBOT_BUBBLE_ICON__",
     // Injected by the backend. The quoted placeholder keeps the template
@@ -242,7 +265,11 @@
   function normalizeQuickQuestions(raw) {
     if (!Array.isArray(raw)) return [];
     var result = [];
-    for (var i = 0; i < raw.length && result.length < MAX_QUICK_QUESTIONS; i++) {
+    for (
+      var i = 0;
+      i < raw.length && result.length < MAX_QUICK_QUESTIONS;
+      i++
+    ) {
       if (typeof raw[i] !== "string") continue;
       var question = raw[i].trim();
       if (!question || result.indexOf(question) !== -1) continue;
@@ -397,11 +424,10 @@
       link: mixHex(
         accent,
         light,
-        relativeLuminance(accent) > 0.4 ? 0.45 : 0.78
+        relativeLuminance(accent) > 0.4 ? 0.45 : 0.78,
       ),
       onAccent: onAccent ? onAccent.hex : pickOnAccent(accent),
-      shadow:
-        "rgba(" + accent.r + ", " + accent.g + ", " + accent.b + ", 0.4)",
+      shadow: "rgba(" + accent.r + ", " + accent.g + ", " + accent.b + ", 0.4)",
       shadowHover:
         "rgba(" + accent.r + ", " + accent.g + ", " + accent.b + ", 0.5)",
     };
@@ -409,20 +435,66 @@
 
   function buildThemeCSS(p) {
     return (
-      ".lb-bubble { background: " + p.accent + "; box-shadow: 0 4px 12px " + p.shadow + "; }" +
-      ".lb-bubble:hover { box-shadow: 0 6px 20px " + p.shadowHover + "; }" +
-      ".lb-header { background: " + p.accent + "; color: " + p.onAccent + "; }" +
-      ".lb-header-btn { color: " + p.onAccent + "; }" +
-      ".lb-msg-user .lb-msg-bubble { background: " + p.accent + "; color: " + p.onAccent + "; }" +
-      ".lb-msg-bubble a { color: " + p.accent + "; }" +
-      ".lb-msg-user .lb-msg-bubble a { color: " + p.link + "; }" +
-      ".lb-avatar-user { background: " + p.accent + "; color: " + p.onAccent + "; }" +
-      ".lb-act-btn.lb-active { color: " + p.accent + "; border-color: " + p.border + "; background: " + p.soft + "; }" +
-      ".lb-quick-btn:hover { background: " + p.soft + "; border-color: " + p.border + "; color: " + p.hover + "; }" +
-      ".lb-quick-btn:focus-visible { outline: 2px solid " + p.accent + "; }" +
-      ".lb-input:focus { border-color: " + p.accent + "; }" +
-      ".lb-send-btn { background: " + p.accent + "; color: " + p.onAccent + "; }" +
-      ".lb-send-btn:hover { background: " + p.hover + "; }"
+      ".lb-bubble { background: " +
+      p.accent +
+      "; box-shadow: 0 4px 12px " +
+      p.shadow +
+      "; }" +
+      ".lb-bubble:hover { box-shadow: 0 6px 20px " +
+      p.shadowHover +
+      "; }" +
+      ".lb-header { background: " +
+      p.accent +
+      "; color: " +
+      p.onAccent +
+      "; }" +
+      ".lb-header-btn { color: " +
+      p.onAccent +
+      "; }" +
+      ".lb-msg-user .lb-msg-bubble { background: " +
+      p.accent +
+      "; color: " +
+      p.onAccent +
+      "; }" +
+      ".lb-msg-bubble a { color: " +
+      p.accent +
+      "; }" +
+      ".lb-msg-user .lb-msg-bubble a { color: " +
+      p.link +
+      "; }" +
+      ".lb-avatar-user { background: " +
+      p.accent +
+      "; color: " +
+      p.onAccent +
+      "; }" +
+      ".lb-act-btn.lb-active { color: " +
+      p.accent +
+      "; border-color: " +
+      p.border +
+      "; background: " +
+      p.soft +
+      "; }" +
+      ".lb-quick-btn:hover { background: " +
+      p.soft +
+      "; border-color: " +
+      p.border +
+      "; color: " +
+      p.hover +
+      "; }" +
+      ".lb-quick-btn:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; }" +
+      ".lb-input:focus { border-color: " +
+      p.accent +
+      "; }" +
+      ".lb-send-btn { background: " +
+      p.accent +
+      "; color: " +
+      p.onAccent +
+      "; }" +
+      ".lb-send-btn:hover { background: " +
+      p.hover +
+      "; }"
     );
   }
 
@@ -433,15 +505,33 @@
       ".lb-role-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 18px; }" +
       ".lb-role-tab { min-height: 36px; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; background: #f3f4f6; color: #4b5563; font-family: inherit; font-size: 13px; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }" +
       ".lb-role-tab:hover { background: #e5e7eb; }" +
-      ".lb-role-tab.lb-role-active { background: " + p.accent + "; border-color: " + p.accent + "; color: " + p.onAccent + "; font-weight: 600; }" +
-      ".lb-role-tab:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-tab.lb-role-active { background: " +
+      p.accent +
+      "; border-color: " +
+      p.accent +
+      "; color: " +
+      p.onAccent +
+      "; font-weight: 600; }" +
+      ".lb-role-tab:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; outline-offset: 2px; }" +
       ".lb-role-questions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 16px; text-align: left; }" +
       "@media (min-width: 640px) { .lb-role-questions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }" +
       "@media (min-width: 1100px) { .lb-role-questions { grid-template-columns: repeat(3, minmax(0, 1fr)); } }" +
       ".lb-role-question { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; color: #374151; font-family: inherit; font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }" +
-      ".lb-role-question:hover { background: " + p.soft + "; border-color: " + p.border + "; color: " + p.hover + "; }" +
-      ".lb-role-question:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
-      ".lb-q-index { flex: 0 0 auto; color: " + p.accent + "; font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.7; }" +
+      ".lb-role-question:hover { background: " +
+      p.soft +
+      "; border-color: " +
+      p.border +
+      "; color: " +
+      p.hover +
+      "; }" +
+      ".lb-role-question:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; outline-offset: 2px; }" +
+      ".lb-q-index { flex: 0 0 auto; color: " +
+      p.accent +
+      "; font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.7; }" +
       ".lb-q-text { flex: 1 1 auto; min-width: 0; }" +
       ".lb-q-arrow { flex: 0 0 auto; color: #9ca3af; font-size: 14px; line-height: 1.4; }" +
       ".lb-role-dock { display: flex; flex-direction: column; flex-shrink: 0; border-top: 1px solid #e5e7eb; background: #fff; }" +
@@ -452,22 +542,38 @@
       ".lb-role-dock-preview { display: flex; flex: 1 1 auto; gap: 8px; min-width: 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }" +
       ".lb-role-dock-preview::-webkit-scrollbar { display: none; }" +
       ".lb-role-dock-preview-btn { flex: 0 0 auto; max-width: 240px; min-height: 36px; padding: 0 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; color: #374151; font-family: inherit; font-size: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }" +
-      ".lb-role-dock-preview-btn:hover { background: " + p.soft + "; border-color: " + p.border + "; color: " + p.hover + "; }" +
-      ".lb-role-dock-preview-btn:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
-      ".lb-role-dock-toggle { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px; border: none; border-radius: 6px; background: none; color: " + p.accent + "; font-family: inherit; font-size: 12px; cursor: pointer; }" +
+      ".lb-role-dock-preview-btn:hover { background: " +
+      p.soft +
+      "; border-color: " +
+      p.border +
+      "; color: " +
+      p.hover +
+      "; }" +
+      ".lb-role-dock-preview-btn:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; outline-offset: 2px; }" +
+      ".lb-role-dock-toggle { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px; border: none; border-radius: 6px; background: none; color: " +
+      p.accent +
+      "; font-family: inherit; font-size: 12px; cursor: pointer; }" +
       ".lb-role-dock-toggle:hover { text-decoration: underline; }" +
-      ".lb-role-dock-toggle:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-toggle:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; outline-offset: 2px; }" +
       ".lb-role-dock-chevron { display: inline-flex; }" +
       ".lb-role-dock-chevron svg { width: 16px; height: 16px; fill: currentColor; transition: transform 0.15s; }" +
       '.lb-role-dock-toggle[aria-expanded="true"] .lb-role-dock-chevron svg { transform: rotate(180deg); }' +
       ".lb-role-dock-panel { margin: 6px 16px 10px; padding: 10px 12px 12px; border: 1px solid #e5e7eb; border-radius: 10px; max-height: min(45vh, 360px); overflow-y: auto; outline: none; }" +
       ".lb-role-dock-panel[hidden] { display: none; }" +
-      ".lb-role-dock-panel:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-panel:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; outline-offset: 2px; }" +
       ".lb-role-dock-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }" +
       ".lb-role-dock-title { color: #111827; font-size: 13px; font-weight: 600; }" +
       ".lb-role-dock-close { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; border-radius: 6px; background: none; color: #6b7280; cursor: pointer; }" +
       ".lb-role-dock-close:hover { background: #f3f4f6; color: #374151; }" +
-      ".lb-role-dock-close:focus-visible { outline: 2px solid " + p.accent + "; outline-offset: 2px; }" +
+      ".lb-role-dock-close:focus-visible { outline: 2px solid " +
+      p.accent +
+      "; outline-offset: 2px; }" +
       ".lb-role-dock-close svg { width: 18px; height: 18px; fill: currentColor; }" +
       ".lb-role-tabs.lb-role-tabs-dock { flex-wrap: nowrap; justify-content: flex-start; gap: 6px; margin-top: 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }" +
       ".lb-role-tabs.lb-role-tabs-dock::-webkit-scrollbar { display: none; }" +
@@ -572,6 +678,10 @@
     .lb-quick-btn:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }\
     .lb-quick-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }\
     .lb-quick-dock .lb-quick-btn { flex: 0 0 auto; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\
+    .lb-conn-status { display: none; align-items: center; justify-content: center; margin: 0 16px 8px; padding: 6px 10px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #92400e; font-family: inherit; font-size: 12px; line-height: 1.4; text-align: center; cursor: pointer; flex-shrink: 0; }\
+    .lb-conn-status.lb-visible { display: flex; }\
+    .lb-conn-status:hover { background: #fef3c7; }\
+    .lb-conn-status:focus-visible { outline: 2px solid #d97706; outline-offset: 2px; }\
     .lb-input-area { display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e7eb; background: #fff; flex-shrink: 0; }\
     .lb-input { flex: 1; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-family: inherit; line-height: 1.4; resize: none; outline: none; max-height: 120px; min-height: 40px; transition: border-color 0.15s; overflow-y: auto; }\
     .lb-input:focus { border-color: #2563eb; }\
@@ -680,7 +790,14 @@
     sessionToken: null,
     sessionId: getOrCreateSessionId(),
     reconnectAttempts: 0,
+    reconnectTimer: null,
     heartbeatTimer: null,
+    heartbeatTimeoutTimer: null,
+    heartbeatMisses: 0,
+    lastPongAt: 0,
+    // Set only when the host destroys the widget. Recovery listeners must not
+    // resurrect a connection the page intentionally tore down.
+    stopped: false,
     messages: [],
     nextLocalId: 1,
     isStreaming: false,
@@ -834,35 +951,131 @@
   }
 
   // ========== WebSocket Client ==========
-  function wsConnect() {
-    if (
+  function isSocketBusy() {
+    return !!(
       state.ws &&
       (state.ws.readyState === WebSocket.OPEN ||
         state.ws.readyState === WebSocket.CONNECTING)
-    ) {
+    );
+  }
+
+  function clearReconnectTimer() {
+    if (state.reconnectTimer) {
+      clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+    }
+  }
+
+  // Exponential backoff capped at reconnectMaxDelay, with up to one second of
+  // jitter so many open pages do not retry in lockstep after a restart.
+  function reconnectDelayMs() {
+    var delay =
+      CONFIG.reconnectBaseDelay * Math.pow(2, state.reconnectAttempts);
+    delay = Math.min(delay, CONFIG.reconnectMaxDelay);
+    return delay + Math.floor(Math.random() * 1000);
+  }
+
+  function scheduleReconnect(immediate) {
+    if (state.stopped || state.reconnectTimer) return;
+    // Background tabs throttle timers anyway. Wait for the visibility event
+    // instead of burning attempts while the visitor cannot see the page.
+    if (document.visibilityState === "hidden") return;
+    if (!state.isOpen) return;
+    var delay = immediate ? 0 : reconnectDelayMs();
+    if (!immediate) state.reconnectAttempts++;
+    state.reconnectTimer = setTimeout(function () {
+      state.reconnectTimer = null;
+      wsConnect();
+    }, delay);
+  }
+
+  // Assumes the socket is gone even if the browser still reports it as OPEN
+  // (typically after sleep or a network switch). The handlers are detached
+  // before closing so the close event does not schedule a second reconnect.
+  function forceReconnect() {
+    var socket = state.ws;
+    clearReconnectTimer();
+    stopHeartbeat();
+    state.ws = null;
+    state.isConnected = false;
+    state.connectionId = null;
+    removeTypingIndicator();
+    updateStatusDot();
+    updateSendBtn();
+    showConnectionStatus(
+      state.hasConnected ? t("reconnecting") : t("connecting"),
+    );
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      try {
+        socket.close();
+      } catch (e) {
+        // already closed
+      }
+    }
+    scheduleReconnect(true);
+  }
+
+  // Recovery entry point shared by online/focus/visibilitychange and the
+  // status banner. Skips the remaining backoff and retries immediately.
+  function recoverNow() {
+    if (state.stopped || !state.isOpen) return;
+    if (document.visibilityState === "hidden") return;
+    if (state.isConnected) {
+      // Wake-up and network switches often leave a socket that looks OPEN but
+      // never delivers another message. Probe it; a missing pong forces a
+      // reconnect instead of waiting for the next failed send.
+      probeConnection();
       return;
     }
+    if (isSocketBusy()) return;
+    clearReconnectTimer();
+    state.reconnectAttempts = 0;
+    wsConnect();
+  }
+
+  function wsConnect() {
+    if (state.stopped || isSocketBusy()) return;
 
     var endpoint = new URL(CONFIG.baseUrl || "/", window.location.href);
-    endpoint.protocol = endpoint.protocol === "https:" || endpoint.protocol === "wss:" ? "wss:" : "ws:";
-    endpoint.pathname = endpoint.pathname.replace(/\/$/, "") +
-      "/api/v1/embed/" + encodeURIComponent(CONFIG.botUuid) + "/ws/connect";
+    endpoint.protocol =
+      endpoint.protocol === "https:" || endpoint.protocol === "wss:"
+        ? "wss:"
+        : "ws:";
+    endpoint.pathname =
+      endpoint.pathname.replace(/\/$/, "") +
+      "/api/v1/embed/" +
+      encodeURIComponent(CONFIG.botUuid) +
+      "/ws/connect";
     endpoint.search = "";
     endpoint.hash = "";
     endpoint.searchParams.set("session_type", CONFIG.sessionType);
     endpoint.searchParams.set("session_id", state.sessionId);
     var url = endpoint.toString();
 
+    var socket;
     try {
-      state.ws = new WebSocket(url);
+      socket = new WebSocket(url);
     } catch (e) {
       showError(t("failedToConnect"));
+      showConnectionStatus(
+        state.hasConnected ? t("reconnecting") : t("connecting"),
+      );
+      scheduleReconnect(false);
       return;
     }
+    state.ws = socket;
 
-    state.ws.onopen = function () {
-      state.reconnectAttempts = 0;
-      state.ws.send(
+    socket.onopen = function () {
+      if (state.ws !== socket) return;
+      // Do not reset reconnectAttempts here: only the server's authenticated
+      // "connected" frame proves this socket is usable. A server that accepts
+      // the TCP connection and then rejects it would otherwise be retried
+      // forever with the base delay.
+      socket.send(
         JSON.stringify({
           type: "authenticate",
           token: state.sessionToken || "",
@@ -870,7 +1083,8 @@
       );
     };
 
-    state.ws.onmessage = function (event) {
+    socket.onmessage = function (event) {
+      if (state.ws !== socket) return;
       try {
         var data = JSON.parse(event.data);
         handleWsMessage(data);
@@ -879,20 +1093,25 @@
       }
     };
 
-    state.ws.onclose = function () {
+    socket.onclose = function () {
+      if (state.ws !== socket) return;
+      state.ws = null;
       state.isConnected = false;
+      state.connectionId = null;
       removeTypingIndicator();
       updateStatusDot();
       updateSendBtn();
       stopHeartbeat();
-
-      if (state.reconnectAttempts < CONFIG.maxReconnectAttempts) {
-        state.reconnectAttempts++;
-        setTimeout(wsConnect, CONFIG.reconnectDelay * state.reconnectAttempts);
-      }
+      showConnectionStatus(
+        state.hasConnected ? t("reconnecting") : t("connecting"),
+      );
+      scheduleReconnect(false);
     };
 
-    state.ws.onerror = function () {
+    socket.onerror = function () {
+      if (state.ws !== socket) return;
+      // Browsers emit onerror before onclose. Only update the visual state
+      // here so the reconnect is scheduled exactly once, from onclose.
       state.isConnected = false;
       removeTypingIndicator();
       updateStatusDot();
@@ -905,6 +1124,12 @@
       case "connected":
         state.isConnected = true;
         state.connectionId = data.connection_id;
+        // The authenticated handshake succeeded: this is the only place that
+        // resets the backoff. clearReconnectTimer() also discards a retry that
+        // was scheduled just before this frame arrived.
+        state.reconnectAttempts = 0;
+        clearReconnectTimer();
+        hideConnectionStatus();
         if (state.hasConnected) loadHistory(true);
         state.hasConnected = true;
         startHeartbeat();
@@ -928,6 +1153,7 @@
         break;
 
       case "pong":
+        handlePong();
         break;
 
       case "error":
@@ -1025,12 +1251,52 @@
     );
   }
 
+  function sendPing(forceOnTimeout) {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    var sentAt = Date.now();
+    try {
+      state.ws.send(JSON.stringify({ type: "ping" }));
+    } catch (e) {
+      forceReconnect();
+      return;
+    }
+    if (state.heartbeatTimeoutTimer) clearTimeout(state.heartbeatTimeoutTimer);
+    state.heartbeatTimeoutTimer = setTimeout(function () {
+      state.heartbeatTimeoutTimer = null;
+      if (state.lastPongAt >= sentAt) return;
+      state.heartbeatMisses++;
+      // Two missed heartbeats in a row mean the socket is a zombie (sleep,
+      // network switch). An explicit probe (focus/online recovery) forces the
+      // reconnect after a single miss so the visitor does not keep typing into
+      // a dead socket.
+      if (state.heartbeatMisses >= 2 || forceOnTimeout) {
+        forceReconnect();
+      }
+    }, CONFIG.heartbeatTimeout);
+  }
+
+  function handlePong() {
+    state.lastPongAt = Date.now();
+    state.heartbeatMisses = 0;
+    if (state.heartbeatTimeoutTimer) {
+      clearTimeout(state.heartbeatTimeoutTimer);
+      state.heartbeatTimeoutTimer = null;
+    }
+  }
+
+  function probeConnection() {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+      forceReconnect();
+      return;
+    }
+    sendPing(true);
+  }
+
   function startHeartbeat() {
     stopHeartbeat();
+    state.heartbeatMisses = 0;
     state.heartbeatTimer = setInterval(function () {
-      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-        state.ws.send(JSON.stringify({ type: "ping" }));
-      }
+      sendPing(false);
     }, CONFIG.heartbeatInterval);
   }
 
@@ -1039,17 +1305,38 @@
       clearInterval(state.heartbeatTimer);
       state.heartbeatTimer = null;
     }
+    if (state.heartbeatTimeoutTimer) {
+      clearTimeout(state.heartbeatTimeoutTimer);
+      state.heartbeatTimeoutTimer = null;
+    }
   }
 
+  // Intentional teardown by the host page (langbotDestroy). Unlike a dropped
+  // connection this must never be retried, so stop() latches state.stopped.
   function wsDisconnect() {
+    state.stopped = true;
+    clearReconnectTimer();
     stopHeartbeat();
-    state.reconnectAttempts = CONFIG.maxReconnectAttempts;
+    state.reconnectAttempts = 0;
     if (state.ws) {
-      if (state.ws.readyState === WebSocket.OPEN) {
-        state.ws.send(JSON.stringify({ type: "disconnect" }));
-      }
-      state.ws.close();
+      var socket = state.ws;
       state.ws = null;
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(JSON.stringify({ type: "disconnect" }));
+        } catch (e) {
+          // already closed
+        }
+      }
+      try {
+        socket.close();
+      } catch (e) {
+        // already closed
+      }
     }
     state.isConnected = false;
     state.connectionId = null;
@@ -1445,7 +1732,6 @@
     return wrap;
   }
 
-
   // ========== Role dock ==========
   // Once the conversation has messages the welcome block is gone, so the role
   // tabs and their questions would disappear with it. The dock keeps three
@@ -1486,17 +1772,20 @@
     if (!els.roleDockPanel) return;
     els.roleDockPanel.hidden = !state.roleDockOpen;
     if (els.roleDock) {
-      els.roleDock.classList.toggle("lb-role-dock-expanded", state.roleDockOpen);
+      els.roleDock.classList.toggle(
+        "lb-role-dock-expanded",
+        state.roleDockOpen,
+      );
     }
     if (els.roleDockToggle) {
       els.roleDockToggle.setAttribute(
         "aria-expanded",
-        state.roleDockOpen ? "true" : "false"
+        state.roleDockOpen ? "true" : "false",
       );
     }
     if (els.roleDockToggleLabel) {
       els.roleDockToggleLabel.textContent = t(
-        state.roleDockOpen ? "collapseQuestions" : "showMoreQuestions"
+        state.roleDockOpen ? "collapseQuestions" : "showMoreQuestions",
       );
     }
     if (state.roleDockOpen) {
@@ -1718,6 +2007,18 @@
     scrollToBottom();
   }
 
+  function showConnectionStatus(text) {
+    if (!els.connStatus) return;
+    els.connStatus.textContent = text;
+    els.connStatus.classList.add("lb-visible");
+  }
+
+  function hideConnectionStatus() {
+    if (!els.connStatus) return;
+    els.connStatus.classList.remove("lb-visible");
+    els.connStatus.textContent = "";
+  }
+
   function updateStatusDot() {
     if (els.statusDot) {
       if (state.isConnected) {
@@ -1740,9 +2041,24 @@
     if (state.isOpen) {
       els.panel.classList.add("lb-visible");
       els.bubble.classList.add("lb-open");
+      // Reopening the panel is an explicit request to be connected; undo a
+      // previous destroy() latch and retry without waiting for the backoff.
+      state.stopped = false;
+      clearReconnectTimer();
+      if (!state.isConnected) {
+        showConnectionStatus(
+          state.hasConnected ? t("reconnecting") : t("connecting"),
+        );
+      }
       ensureTurnstileVerified(function () {
         loadHistory();
-        wsConnect();
+        if (state.isConnected) {
+          // A socket left from before the panel closed may be a zombie after
+          // sleep. Probe it rather than assuming it still works.
+          probeConnection();
+        } else {
+          wsConnect();
+        }
       });
       setTimeout(function () {
         if (!els.input) return;
@@ -2106,7 +2422,28 @@
     footer.innerHTML = t("poweredBy");
     panel.appendChild(footer);
 
+    // Connection banner: explains why the composer is disabled and doubles as
+    // a manual retry button. Hidden while the socket is authenticated.
+    var connStatus = document.createElement("button");
+    connStatus.type = "button";
+    connStatus.className = "lb-conn-status";
+    // Keep the native button semantics (it is a retry control) while still
+    // announcing reconnection progress to screen readers.
+    connStatus.setAttribute("aria-live", "polite");
+    connStatus.addEventListener("click", recoverNow);
+    els.connStatus = connStatus;
+    panel.appendChild(connStatus);
+
     panel.appendChild(inputArea);
+
+    // The visitor may come back long after the socket was dropped. Retry as
+    // soon as the network or the tab returns instead of waiting out the
+    // backoff, and probe sockets that merely look connected after sleep.
+    window.addEventListener("online", recoverNow);
+    window.addEventListener("focus", recoverNow);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") recoverNow();
+    });
     updateRoleDock();
 
     shadow.appendChild(panel);

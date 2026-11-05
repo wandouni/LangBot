@@ -66,6 +66,14 @@ class FakeElement {
           .split(/\s+/);
         this.className = [...new Set(classes)].join(' ');
       },
+      remove: (...names) => {
+        const removed = new Set(names);
+        this.className = this.className
+          .split(/\s+/)
+          .filter((name) => name && !removed.has(name))
+          .join(' ');
+      },
+      contains: (name) => this.className.split(/\s+/).includes(name),
     };
   }
 
@@ -105,9 +113,15 @@ class FakeDocument {
     this.body = new FakeElement('body');
     this.head = new FakeElement('head');
     this.readyState = 'complete';
+    this.visibilityState = 'visible';
+    this.listeners = {};
     this.currentScript = {
       getAttribute: (name) => scriptAttributes[name] ?? null,
     };
+  }
+
+  addEventListener(event, listener) {
+    this.listeners[event] = listener;
   }
 
   createElement(tagName) {
@@ -150,6 +164,10 @@ function launchWidget(options = {}) {
     location: { href: 'https://embed.test/' },
     crypto: { randomUUID: () => '00000000-0000-4000-8000-000000000000' },
     sessionStorage: { getItem: () => null, setItem: () => {} },
+    listeners: {},
+    addEventListener(event, listener) {
+      this.listeners[event] = listener;
+    },
   };
   const context = vm.createContext({
     document,
