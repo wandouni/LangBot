@@ -19,7 +19,7 @@ from langbot.pkg.api.http.context import ExecutionContext
 from langbot.pkg.entity import persistence
 from langbot.pkg.entity.persistence.base import Base
 from langbot.pkg.entity.persistence.bot import Bot
-from langbot.pkg.entity.persistence.qa_analytics import QAAnalyticsRecord
+from langbot.pkg.entity.persistence.qa_analytics import QAAnalyticsConsultMessage, QAAnalyticsRecord
 from langbot.pkg.qa_analytics import context as qa_context
 from langbot.pkg.qa_analytics.service import QAAnalyticsService
 from langbot.pkg.persistence.tenant_uow import _validate_scoped_statement_call
@@ -543,3 +543,182 @@ class TestCollection:
             {'language': 'xx-XX'},
         )
         assert fallback['tabs.stats'] == 'Overview'
+
+
+async def _insert_consult(engine, **overrides):
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    values = {
+        'id': uuid.uuid4().hex,
+        'workspace_uuid': WORKSPACE,
+        'bot_uuid': BOT_A,
+        'province': '广东省',
+        'city': '广州市',
+        'name': '张三',
+        'score': '520',
+        'contact': '13800000000',
+        'status': 'pending',
+        'created_at': now,
+        'processed_at': None,
+    }
+    values.update(overrides)
+    async with engine.begin() as connection:
+        await connection.execute(sqlalchemy.insert(QAAnalyticsConsultMessage).values(**values))
+    return values
+
+
+class TestConsultMessages:
+    @pytest.mark.asyncio
+    async def test_submit_stores_trimmed_values_and_truncates_long_fields(self, database):
+        service, engine = database
+        result = await service.submit_consult_message(
+            WORKSPACE,
+            BOT_A,
+            {
+                'province': ' 广东省 ',
+                'city': ' 广州市 ',
+                'name': ' 张三 ',
+                'score': 520,
+                'contact': 'x' * 300,
+            },
+        )
+        assert result['id']
+
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    sqlalchemy.select(
+                        QAAnalyticsConsultMessage.province,
+                        QAAnalyticsConsultMessage.city,
+                        QAAnalyticsConsultMessage.name,
+                        QAAnalyticsConsultMessage.score,
+                        QAAnalyticsConsultMessage.contact,
+                        QAAnalyticsConsultMessage.status,
+                        QAAnalyticsConsultMessage.workspace_uuid,
+                        QAAnalyticsConsultMessage.bot_uuid,
+                    )
+                )
+            ).one()
+        assert row[0] == '广东省'
+        assert row[1] == '广州市'
+        assert row[2] == '张三'
+        assert row[3] == '520'
+        assert len(row[4]) == 255
+        assert row[5] == 'pending'
+        assert row[6] == WORKSPACE
+        assert row[7] == BOT_A
+
+    @pytest.mark.asyncio
+    async def test_submit_requires_every_field(self, database):
+        service, _ = database
+        with pytest.raises(ValueError, match='province is required'):
+            await service.submit_consult_message(
+                WORKSPACE,
+                BOT_A,
+                {'province': '  ', 'city': '广州市', 'name': '张三', 'score': '520', 'contact': '1'},
+            )
+
+    @pytest.mark.asyncio
+    async def test_list_filters_by_workspace_status_and_bot(self, database):
+        service, engine = database
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        first = await _insert_consult(engine, created_at=now - datetime.timedelta(minutes=1))
+        second = await _insert_consult(
+            engine,
+            bot_uuid=BOT_B,
+            name='李四',
+            created_at=now - datetime.timedelta(minutes=2),
+        )
+        await _insert_consult(
+            engine,
+            workspace_uuid=OTHER_WORKSPACE,
+            name='外区',
+            created_at=now,
+        )
+        processed = await _insert_consult(
+            engine,
+            name='王五',
+            status='processed',
+            processed_at=now,
+            created_at=now - datetime.timedelta(minutes=3),
+        )
+
+        page = await service.get_consult_messages(WORKSPACE, 1, 2)
+        assert page['total'] == 3
+        assert [item['id'] for item in page['items']] == [first['id'], second['id']]
+
+        second_page = await service.get_consult_messages(WORKSPACE, 2, 2)
+        assert [item['id'] for item in second_page['items']] == [processed['id']]
+
+        pending = await service.get_consult_messages(WORKSPACE, 1, 20, status='pending')
+        assert pending['total'] == 2
+        assert all(item['status'] == 'pending' for item in pending['items'])
+
+        by_bot = await service.get_consult_messages(WORKSPACE, 1, 20, bot_uuid=BOT_B)
+        assert by_bot['total'] == 1
+        assert by_bot['items'][0]['name'] == '李四'
+
+        invalid_status = await service.get_consult_messages(WORKSPACE, 1, 20, status='unknown')
+        assert invalid_status['total'] == 3
+
+    @pytest.mark.asyncio
+    async def test_process_is_idempotent_and_workspace_scoped(self, database):
+        service, engine = database
+        record = await _insert_consult(engine)
+        other = await _insert_consult(engine, workspace_uuid=OTHER_WORKSPACE)
+
+        assert await service.process_consult_message(OTHER_WORKSPACE, record['id']) == {'updated': False}
+        assert await service.process_consult_message(WORKSPACE, record['id']) == {'updated': True}
+        assert await service.process_consult_message(WORKSPACE, record['id']) == {'updated': False}
+        assert await service.process_consult_message(WORKSPACE, other['id']) == {'updated': False}
+
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    sqlalchemy.select(
+                        QAAnalyticsConsultMessage.status,
+                        QAAnalyticsConsultMessage.processed_at,
+                    ).where(QAAnalyticsConsultMessage.id == record['id'])
+                )
+            ).one()
+            other_row = (
+                await connection.execute(
+                    sqlalchemy.select(QAAnalyticsConsultMessage.status).where(
+                        QAAnalyticsConsultMessage.id == other['id']
+                    )
+                )
+            ).one()
+        assert row[0] == 'processed'
+        assert row[1] is not None
+        assert other_row[0] == 'pending'
+
+    @pytest.mark.asyncio
+    async def test_page_api_lists_and_processes_messages(self, database):
+        service, engine = database
+        record = await _insert_consult(engine)
+        execution_context = SimpleNamespace(workspace_uuid=WORKSPACE)
+
+        listed = await service.handle_page_api(
+            execution_context,
+            '/qa-analytics/consult-messages',
+            'POST',
+            {'page': 1, 'page_size': 20},
+        )
+        assert listed['total'] == 1
+        assert listed['items'][0]['id'] == record['id']
+
+        processed = await service.handle_page_api(
+            execution_context,
+            '/qa-analytics/consult-messages/process',
+            'POST',
+            {'id': record['id']},
+        )
+        assert processed == {'updated': True}
+
+        listed = await service.handle_page_api(
+            execution_context,
+            '/qa-analytics/consult-messages',
+            'POST',
+            {'status': 'processed'},
+        )
+        assert listed['total'] == 1
+        assert listed['items'][0]['status'] == 'processed'

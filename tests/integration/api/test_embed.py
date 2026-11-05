@@ -123,6 +123,13 @@ def fake_embed_app():
     app.monitoring_service = Mock()
     app.monitoring_service.record_feedback = AsyncMock()
 
+    # Q&A analytics owns the consultation message board storage.
+    app.qa_analytics_service = Mock()
+    app.qa_analytics_service.is_enabled = Mock(return_value=True)
+    app.qa_analytics_service.submit_consult_message = AsyncMock(
+        return_value={'id': 'consult-id', 'created_at': '2026-11-04T00:00:00Z'}
+    )
+
     return app
 
 
@@ -531,6 +538,116 @@ class TestEmbedFeedbackEndpoint:
         )
 
         assert response.status_code == 400
+
+
+@pytest.mark.usefixtures('mock_circular_import_chain')
+class TestEmbedConsultMessagesEndpoint:
+    """Tests for the standalone consultation page message board endpoint."""
+
+    BOT_UUID = 'a1b2c3d4-5678-90ab-cdef-123456789abc'
+    URL = f'/api/v1/embed/{BOT_UUID}/consult-messages'
+
+    @pytest.fixture(autouse=True)
+    def reset_rate_limit(self, monkeypatch):
+        import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
+
+        monkeypatch.setattr(embed, '_consult_rate_windows', {})
+
+    @pytest.fixture(autouse=True)
+    def reset_submit_mock(self, fake_embed_app):
+        fake_embed_app.qa_analytics_service.submit_consult_message.reset_mock()
+
+    @pytest.mark.asyncio
+    async def test_submit_uses_bot_workspace_and_hides_details(self, quart_test_client, fake_embed_app):
+        payload = {
+            'province': '广东省',
+            'city': '广州市',
+            'name': '张三',
+            'score': '520',
+            'contact': '13800000000',
+        }
+        response = await quart_test_client.post(self.URL, json=payload)
+
+        assert response.status_code == 200
+        body = await response.get_json()
+        assert body == {'code': 0, 'msg': 'ok', 'data': {'ok': True}}
+        text = json.dumps(body, ensure_ascii=False)
+        assert '张三' not in text
+        assert '13800000000' not in text
+
+        called = fake_embed_app.qa_analytics_service.submit_consult_message
+        assert called.await_count == 1
+        assert called.await_args.args[0] == 'workspace-test'
+        assert called.await_args.args[1] == self.BOT_UUID
+        assert called.await_args.args[2] == payload
+
+    @pytest.mark.asyncio
+    async def test_invalid_bot_uuid_returns_400(self, quart_test_client, fake_embed_app):
+        response = await quart_test_client.post(
+            '/api/v1/embed/not-a-uuid/consult-messages',
+            json={'province': '广东省'},
+        )
+
+        assert response.status_code == 400
+        fake_embed_app.qa_analytics_service.submit_consult_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_bot_returns_404(self, quart_test_client, fake_embed_app):
+        response = await quart_test_client.post(
+            '/api/v1/embed/00000000-0000-0000-0000-000000000000/consult-messages',
+            json={'province': '广东省'},
+        )
+
+        assert response.status_code == 404
+        fake_embed_app.qa_analytics_service.submit_consult_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_non_object_body_returns_400(self, quart_test_client, fake_embed_app):
+        response = await quart_test_client.post(
+            self.URL,
+            data='not json',
+            headers={'Content-Type': 'application/json'},
+        )
+
+        assert response.status_code == 400
+        fake_embed_app.qa_analytics_service.submit_consult_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_field_returns_400(self, quart_test_client, fake_embed_app, monkeypatch):
+        monkeypatch.setattr(
+            fake_embed_app.qa_analytics_service,
+            'submit_consult_message',
+            AsyncMock(side_effect=ValueError('province is required')),
+        )
+        response = await quart_test_client.post(self.URL, json={'city': '广州市'})
+
+        assert response.status_code == 400
+        body = await response.get_json()
+        assert body['msg'] == 'province is required'
+
+    @pytest.mark.asyncio
+    async def test_disabled_analytics_returns_503(self, quart_test_client, fake_embed_app, monkeypatch):
+        monkeypatch.setattr(fake_embed_app.qa_analytics_service, 'is_enabled', Mock(return_value=False))
+        response = await quart_test_client.post(
+            self.URL,
+            json={'province': '广东省', 'city': '广州市', 'name': '张三', 'score': '520', 'contact': '1'},
+        )
+
+        assert response.status_code == 503
+        fake_embed_app.qa_analytics_service.submit_consult_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_returns_429(self, quart_test_client, fake_embed_app, monkeypatch):
+        import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
+
+        monkeypatch.setattr(embed, '_CONSULT_RATE_LIMIT', 0)
+        response = await quart_test_client.post(
+            self.URL,
+            json={'province': '广东省', 'city': '广州市', 'name': '张三', 'score': '520', 'contact': '1'},
+        )
+
+        assert response.status_code == 429
+        fake_embed_app.qa_analytics_service.submit_consult_message.assert_not_awaited()
 
 
 @pytest.mark.usefixtures('mock_circular_import_chain')

@@ -66,3 +66,45 @@ class QAAnalyticsRecord(Base):
             'normalized_group_question',
         ),
     )
+
+
+class QAAnalyticsConsultMessage(Base):
+    """A visitor lead submitted from a standalone consultation page.
+
+    Leads are intentionally kept apart from ``qa_analytics_records``: they are
+    personal contact data used by admissions staff, not anonymous analytics,
+    so they must not be aggregated or deleted by the analytics retention job.
+    """
+
+    __tablename__ = 'qa_analytics_consult_messages'
+
+    id = sqlalchemy.Column(sqlalchemy.String(64), primary_key=True)
+    workspace_uuid = sqlalchemy.Column(
+        sqlalchemy.String(36),
+        sqlalchemy.ForeignKey('workspaces.uuid', ondelete='CASCADE'),
+        nullable=False,
+    )
+    bot_uuid = sqlalchemy.Column(sqlalchemy.String(36), nullable=True)
+    province = sqlalchemy.Column(sqlalchemy.String(64), nullable=False, default='')
+    city = sqlalchemy.Column(sqlalchemy.String(64), nullable=False, default='')
+    name = sqlalchemy.Column(sqlalchemy.String(128), nullable=False, default='')
+    score = sqlalchemy.Column(sqlalchemy.String(32), nullable=False, default='')
+    contact = sqlalchemy.Column(sqlalchemy.String(255), nullable=False, default='')
+    status = sqlalchemy.Column(sqlalchemy.String(16), nullable=False, default='pending')
+    created_at = sqlalchemy.Column(sqlalchemy.DateTime, nullable=False)
+    processed_at = sqlalchemy.Column(sqlalchemy.DateTime, nullable=True)
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            'ix_qa_analytics_consult_messages_workspace_created',
+            'workspace_uuid',
+            'created_at',
+            'id',
+        ),
+        sqlalchemy.Index(
+            'ix_qa_analytics_consult_messages_workspace_status',
+            'workspace_uuid',
+            'status',
+            'created_at',
+        ),
+    )

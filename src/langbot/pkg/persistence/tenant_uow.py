@@ -76,6 +76,7 @@ TENANT_TABLE_COLUMNS: dict[str, str] = {
     'monitoring_embedding_calls': 'workspace_uuid',
     'monitoring_feedback': 'workspace_uuid',
     'qa_analytics_records': 'workspace_uuid',
+    'qa_analytics_consult_messages': 'workspace_uuid',
     # Administrative traceability for member and resource operations. Owned by
     # the Workspace and therefore protected by the same RLS contract.
     'workspace_operation_logs': 'workspace_uuid',

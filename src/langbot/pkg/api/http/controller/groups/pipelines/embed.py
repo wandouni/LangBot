@@ -30,6 +30,49 @@ from .websocket_chat import create_scoped_duplex_tasks, wait_for_duplex_tasks
 logger = logging.getLogger(__name__)
 _AUTH_TIMEOUT_SECONDS = 10.0
 
+# Anonymous consultation submissions are throttled in-process because the
+# standalone pages cannot reuse the widget's Turnstile token (it lives in a
+# closure).  The limits are generous enough for shared campus networks.
+_CONSULT_RATE_WINDOW_SECONDS = 600.0
+_CONSULT_RATE_LIMIT = 20
+_CONSULT_RATE_MAX_CLIENTS = 10000
+_consult_rate_windows: dict[str, tuple[float, int]] = {}
+
+
+def _get_request_client_ip() -> str:
+    """Return the visitor IP for a regular HTTP request."""
+    try:
+        forwarded = quart.request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        if forwarded:
+            return forwarded[:64]
+        return str(quart.request.remote_addr or 'unknown')[:64]
+    except Exception:
+        return 'unknown'
+
+
+def _admit_consult_submission(ip: str, bot_uuid: str) -> bool:
+    """Reserve one slot in the caller's fixed submission window.
+
+    Must stay await-free so check-and-increment is atomic on the event loop.
+    """
+    global _consult_rate_windows
+    now = time.monotonic()
+    key = f'{ip}:{bot_uuid}'
+    window_start, count = _consult_rate_windows.get(key, (now, 0))
+    if now - window_start >= _CONSULT_RATE_WINDOW_SECONDS:
+        window_start, count = now, 0
+    if count >= _CONSULT_RATE_LIMIT:
+        _consult_rate_windows[key] = (window_start, count)
+        return False
+    _consult_rate_windows[key] = (window_start, count + 1)
+    if len(_consult_rate_windows) > _CONSULT_RATE_MAX_CLIENTS:
+        cutoff = now - _CONSULT_RATE_WINDOW_SECONDS
+        _consult_rate_windows = {
+            item_key: item_value for item_key, item_value in _consult_rate_windows.items() if item_value[0] > cutoff
+        }
+    return True
+
+
 # Cache the widget template content
 _widget_template_cache: str | None = None
 _widget_template_cache_mtime_ns: int | None = None
@@ -456,6 +499,49 @@ class EmbedRouterGroup(group.RouterGroup):
             except Exception as e:
                 logger.error(f'Failed to record feedback: {e}', exc_info=True)
                 return self.http_status(500, -1, 'Internal server error')
+
+        @self.route('/<bot_uuid>/consult-messages', methods=['POST'], auth_type=group.AuthType.NONE)
+        async def submit_consult_message(bot_uuid: str) -> str:
+            """Record a lead from the standalone consultation pages.
+
+            The standalone page cannot read the widget's Turnstile session
+            token, so this public route relies on strict field validation and
+            a per-IP submission window instead of the embed session token.
+            """
+            if not _is_valid_uuid(bot_uuid):
+                return self.http_status(400, -1, 'Invalid bot_uuid format')
+            runtime_bot, _ = await self._resolve_bot(bot_uuid)
+            if runtime_bot is None:
+                return self.http_status(404, -1, 'Bot not found or not available')
+
+            qa_service = getattr(self.ap, 'qa_analytics_service', None)
+            if qa_service is None or not qa_service.is_enabled():
+                return self.http_status(503, -1, 'Q&A analytics is disabled')
+
+            if not _admit_consult_submission(_get_request_client_ip(), bot_uuid):
+                return self.http_status(429, -1, 'Too many submissions; please try again later')
+
+            try:
+                data = await quart.request.get_json()
+            except Exception:
+                return self.http_status(400, -1, 'Invalid request body')
+            if not isinstance(data, dict):
+                return self.http_status(400, -1, 'Invalid request body')
+
+            try:
+                await qa_service.submit_consult_message(
+                    runtime_bot.execution_context.workspace_uuid,
+                    runtime_bot.bot_entity.uuid,
+                    data,
+                )
+            except ValueError as exc:
+                return self.http_status(400, -1, str(exc))
+            except Exception as exc:
+                # Never log the submitted contact details.
+                logger.error(f'Failed to record consultation message: {type(exc).__name__}')
+                return self.http_status(500, -1, 'Internal server error')
+
+            return self.success(data={'ok': True})
 
         # -- Embed WebSocket endpoint ----------------------------------------
 

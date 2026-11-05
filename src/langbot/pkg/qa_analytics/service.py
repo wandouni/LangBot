@@ -1,4 +1,4 @@
-"""Collection and read-only query service for the Q&A analytics dashboard."""
+"""Collection, query, and message-board service for the Q&A analytics dashboard."""
 
 from __future__ import annotations
 
@@ -26,6 +26,12 @@ _MAX_KEYWORD_LENGTH = 200
 _MAX_IP_LENGTH = 64
 _MAX_REGION_LENGTH = 200
 _MAX_BOT_UUID_LENGTH = 36
+_MAX_CONSULT_PROVINCE_LENGTH = 64
+_MAX_CONSULT_CITY_LENGTH = 64
+_MAX_CONSULT_NAME_LENGTH = 128
+_MAX_CONSULT_SCORE_LENGTH = 32
+_MAX_CONSULT_CONTACT_LENGTH = 255
+_CONSULT_STATUSES = frozenset({'pending', 'processed'})
 _MAX_CLEANUP_BATCH = 5000
 _MAX_CLEANUP_BATCHES = 20
 _CATALOG_LANGUAGES = frozenset(
@@ -699,6 +705,163 @@ class QAAnalyticsService:
         }
 
     # ------------------------------------------------------------------
+    # Consultation message board
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _consult_text(payload: dict[str, typing.Any], key: str, limit: int) -> str:
+        value = payload.get(key)
+        if isinstance(value, str):
+            text = value.strip()
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            text = str(value)
+        else:
+            text = ''
+        if not text:
+            # Field-level validation diagnostics are not localized.
+            raise ValueError(f'{key} is required')
+        return text[:limit]
+
+    @classmethod
+    def _consult_values(cls, payload: typing.Any) -> dict[str, str]:
+        body = payload if isinstance(payload, dict) else {}
+        return {
+            'province': cls._consult_text(body, 'province', _MAX_CONSULT_PROVINCE_LENGTH),
+            'city': cls._consult_text(body, 'city', _MAX_CONSULT_CITY_LENGTH),
+            'name': cls._consult_text(body, 'name', _MAX_CONSULT_NAME_LENGTH),
+            'score': cls._consult_text(body, 'score', _MAX_CONSULT_SCORE_LENGTH),
+            'contact': cls._consult_text(body, 'contact', _MAX_CONSULT_CONTACT_LENGTH),
+        }
+
+    async def submit_consult_message(
+        self,
+        workspace_uuid: str,
+        bot_uuid: typing.Any,
+        payload: typing.Any,
+    ) -> dict[str, typing.Any]:
+        """Persist one visitor lead submitted from a standalone chat page."""
+
+        if not self.is_enabled():
+            raise ValueError('Q&A analytics is disabled')
+        values = self._consult_values(payload)
+        now = _utc_now_naive()
+        record_id = uuid.uuid4().hex
+        row = {
+            'id': record_id,
+            'workspace_uuid': workspace_uuid,
+            'bot_uuid': str(bot_uuid or '').strip()[:_MAX_BOT_UUID_LENGTH] or None,
+            **values,
+            'status': 'pending',
+            'created_at': now,
+            'processed_at': None,
+        }
+        tenant_uow = getattr(self.ap.persistence_mgr, 'tenant_uow', None)
+        if callable(tenant_uow):
+            async with tenant_uow(workspace_uuid) as uow:
+                await uow.execute(sqlalchemy.insert(persistence_qa.QAAnalyticsConsultMessage).values(**row))
+        else:
+            await self.ap.persistence_mgr.execute_async(
+                sqlalchemy.insert(persistence_qa.QAAnalyticsConsultMessage).values(**row)
+            )
+        return {'id': record_id, 'created_at': _iso_utc(now)}
+
+    async def get_consult_messages(
+        self,
+        workspace_uuid: str,
+        page: typing.Any = 1,
+        page_size: typing.Any = 20,
+        status: typing.Any = '',
+        bot_uuid: typing.Any = '',
+    ) -> dict[str, typing.Any]:
+        """List leads newest-first. Leads are not limited by the time range."""
+        model = persistence_qa.QAAnalyticsConsultMessage
+        conditions: list[typing.Any] = [model.workspace_uuid == workspace_uuid]
+        status_text = str(status or '').strip()
+        if status_text in _CONSULT_STATUSES:
+            conditions.append(model.status == status_text)
+        bot_text = str(bot_uuid or '').strip()[:_MAX_BOT_UUID_LENGTH]
+        if bot_text:
+            conditions.append(model.bot_uuid == bot_text)
+        page_number = _bounded_int(page, 1, 1, 1_000_000)
+        page_limit = _bounded_int(page_size, 20, 1, _MAX_PAGE_SIZE)
+        offset = (page_number - 1) * page_limit
+
+        async with self._read_unit(workspace_uuid) as uow:
+            total = await self._scalar(
+                uow,
+                sqlalchemy.select(sqlalchemy.func.count()).select_from(model).where(*conditions),
+            )
+            result = await self._execute(
+                uow,
+                sqlalchemy.select(
+                    model.id,
+                    model.created_at,
+                    model.bot_uuid,
+                    model.province,
+                    model.city,
+                    model.name,
+                    model.score,
+                    model.contact,
+                    model.status,
+                    model.processed_at,
+                )
+                .where(*conditions)
+                .order_by(model.created_at.desc(), model.id.desc())
+                .limit(page_limit)
+                .offset(offset),
+            )
+            rows = result.all()
+
+        items = [
+            {
+                'id': row[0],
+                'created_at': _iso_utc(row[1]),
+                'bot_uuid': row[2] or '',
+                'province': row[3] or '',
+                'city': row[4] or '',
+                'name': row[5] or '',
+                'score': row[6] or '',
+                'contact': row[7] or '',
+                'status': row[8] or 'pending',
+                'processed_at': _iso_utc(row[9]),
+            }
+            for row in rows
+        ]
+        return {
+            'total': total,
+            'page': page_number,
+            'page_size': page_limit,
+            'items': items,
+        }
+
+    async def process_consult_message(
+        self,
+        workspace_uuid: str,
+        record_id: typing.Any,
+    ) -> dict[str, bool]:
+        """Mark one pending lead as processed.
+
+        The update is idempotent: already-processed or unknown ids return
+        ``updated=False`` so the page can simply reload the current list.
+        """
+
+        text_id = str(record_id or '').strip()[:64]
+        if not text_id:
+            raise ValueError('id is required')
+        model = persistence_qa.QAAnalyticsConsultMessage
+        statement = (
+            sqlalchemy.update(model)
+            .where(
+                model.workspace_uuid == workspace_uuid,
+                model.id == text_id,
+                model.status == 'pending',
+            )
+            .values(status='processed', processed_at=_utc_now_naive())
+        )
+        async with self._read_unit(workspace_uuid) as uow:
+            result = await self._execute(uow, statement)
+        return {'updated': bool(getattr(result, 'rowcount', 0))}
+
+    # ------------------------------------------------------------------
     # Page API
     # ------------------------------------------------------------------
     async def handle_page_api(
@@ -708,7 +871,7 @@ class QAAnalyticsService:
         method: str,
         body: typing.Any,
     ) -> typing.Any:
-        """Serve the dashboard plugin's read-only page requests."""
+        """Serve the dashboard plugin's page requests."""
 
         if not self.is_enabled():
             raise ValueError('Q&A analytics is disabled')
@@ -760,6 +923,19 @@ class QAAnalyticsService:
                 payload.get('region'),
                 payload.get('bot_uuid'),
             )
+        if endpoint == '/qa-analytics/consult-messages':
+            return await self.get_consult_messages(
+                workspace_uuid,
+                payload.get('page'),
+                payload.get('page_size'),
+                payload.get('status'),
+                payload.get('bot_uuid'),
+            )
+        if endpoint == '/qa-analytics/consult-messages/process':
+            return await self.process_consult_message(
+                workspace_uuid,
+                payload.get('id'),
+            )
         if endpoint == '/qa-analytics/i18n':
             return await self.get_page_translations(payload.get('language'))
         if endpoint == '/qa-analytics/health':
@@ -771,7 +947,7 @@ class QAAnalyticsService:
 
         The WebUI loads authenticated plugin pages from a blob URL, so the page
         cannot fetch sibling JSON files directly.  Serving the catalog through
-        the same read-only page API keeps the translation files in the plugin
+        the same authenticated page API keeps the translation files in the plugin
         while still working inside the sandbox.
         """
 

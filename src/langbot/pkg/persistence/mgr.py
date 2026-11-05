@@ -87,6 +87,7 @@ _ALEMBIC_TENANT_TABLES = {
     'monitoring_embedding_calls',
     'monitoring_feedback',
     'qa_analytics_records',
+    'qa_analytics_consult_messages',
     'workspace_operation_logs',
     'langbot_vectors',
     'directory_projection_states',
