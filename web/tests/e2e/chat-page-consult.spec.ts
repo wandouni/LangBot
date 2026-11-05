@@ -130,6 +130,13 @@ async function mockChatBackend(
       body: JSON.stringify({ code: 0, data: {} }),
     }),
   );
+  await page.route('**/api/v1/embed/*/consult-messages', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, msg: 'ok', data: { ok: true } }),
+    }),
+  );
   await page.routeWebSocket('**/api/v1/embed/*/ws/connect**', (ws) => {
     ws.onMessage((raw) => {
       if (JSON.parse(String(raw)).type === 'authenticate') {
@@ -411,4 +418,142 @@ test('URL parameters override the inline page config', async ({ page }) => {
   await expect(page).toHaveTitle('测试咨询');
   await expect(page.locator('.lb-header-title')).toHaveText('测试咨询');
   await expect.poll(() => headerBackground(page)).toBe('rgb(18, 52, 86)');
+});
+
+test('the message board collects a lead from chat.html', async ({ page }) => {
+  let submitted: Record<string, string> | null = null;
+  await mockChatBackend(page);
+  await page.route('**/api/v1/embed/*/consult-messages', async (route) => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, msg: 'ok', data: { ok: true } }),
+    });
+  });
+  await page.goto('/chat.html');
+
+  const launcher = page.locator('#ln-consult-launcher');
+  await expect(launcher).toBeVisible();
+  await expect(launcher).toHaveText('留言板');
+  await launcher.click();
+
+  const dialog = page.locator('#ln-consult-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(
+    '提交后招生办老师根据您的信息提供更加详细的院校和专业建议。',
+  );
+
+  await page.locator('#ln-consult-province').fill('广东省');
+  await page.locator('#ln-consult-city').fill('广州市');
+  await page.locator('#ln-consult-name').fill('张三');
+  await page.locator('#ln-consult-score').fill('520');
+  await page.locator('#ln-consult-contact').fill('13800000000');
+  await page.locator('#ln-consult-save').click();
+
+  await expect(page.locator('#ln-consult-message')).toHaveText(
+    '提交成功，招生办老师将尽快与您联系',
+  );
+  expect(submitted).toMatchObject({
+    province: '广东省',
+    city: '广州市',
+    name: '张三',
+    score: '520',
+    contact: '13800000000',
+  });
+  await expect(page.locator('#ln-consult-overlay')).toBeHidden({
+    timeout: 3000,
+  });
+});
+
+test('the message board stays available on the admin preview hash', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto(previewUrl('/chat.html', COLLEGE_ROLE_GROUPS));
+
+  await expect(page.locator('#langbot-widget-root')).toBeAttached();
+  const launcher = page.locator('#ln-consult-launcher');
+  await expect(launcher).toBeVisible();
+  await launcher.click();
+  await expect(page.locator('#ln-consult-dialog')).toBeVisible();
+});
+
+test('the message board keeps the form open when saving fails', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.route('**/api/v1/embed/*/consult-messages', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: -1, msg: 'province is required' }),
+    }),
+  );
+  await page.goto('/chat-jishi.html');
+
+  await page.locator('#ln-consult-launcher').click();
+  await page.locator('#ln-consult-province').fill('广东省');
+  await page.locator('#ln-consult-city').fill('广州市');
+  await page.locator('#ln-consult-name').fill('张三');
+  await page.locator('#ln-consult-score').fill('520');
+  await page.locator('#ln-consult-contact').fill('13800000000');
+  await page.locator('#ln-consult-save').click();
+
+  await expect(page.locator('#ln-consult-message')).toHaveText(
+    'province is required',
+  );
+  await expect(page.locator('#ln-consult-overlay')).toBeVisible();
+  await expect(page.locator('#ln-consult-save')).toBeEnabled();
+});
+
+test('the message board validates required fields before submitting', async ({
+  page,
+}) => {
+  let submissions = 0;
+  await mockChatBackend(page);
+  await page.route('**/api/v1/embed/*/consult-messages', async (route) => {
+    submissions += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, msg: 'ok', data: { ok: true } }),
+    });
+  });
+  await page.goto('/chat.html');
+
+  await page.locator('#ln-consult-launcher').click();
+  await page.locator('#ln-consult-save').click();
+
+  await expect(page.locator('#ln-consult-message')).toHaveText(
+    '请填写所有必填项。',
+  );
+  await expect(page.locator('#ln-consult-province')).toBeFocused();
+  expect(submissions).toBe(0);
+});
+
+test('the technician college message board uses its accent and can close', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto('/chat-jishi.html');
+
+  const launcher = page.locator('#ln-consult-launcher');
+  await expect(launcher).toBeVisible();
+  await expect
+    .poll(() => launcher.evaluate((el) => getComputedStyle(el).backgroundColor))
+    .toBe('rgb(15, 111, 168)');
+
+  await launcher.click();
+  await expect(page.locator('#ln-consult-overlay')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ln-consult-overlay')).toBeHidden();
+});
+
+test('default.html has no message board entry', async ({ page }) => {
+  await mockChatBackend(page);
+  await page.goto('/default.html');
+
+  await expect(page.locator('#langbot-widget-root')).toBeAttached();
+  await expect(page.locator('#ln-consult-launcher')).toHaveCount(0);
 });

@@ -35,6 +35,324 @@
   }
   </script>
   <script src="/chat-shell.js"></script>
+  <style>
+    /* Message board entry for the standalone consultation page. Keep this
+       block in sync with chat.html; only the accent color differs. */
+    #ln-consult-launcher {
+      position: fixed;
+      top: 16px;
+      right: 88px;
+      z-index: 2147483647;
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      border-radius: 999px;
+      background: #0f6fa8;
+      color: #fff;
+      font: 600 14px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+      -webkit-tap-highlight-color: transparent;
+    }
+    #ln-consult-launcher[hidden] { display: none; }
+    #ln-consult-launcher:hover { filter: brightness(1.12); }
+    #ln-consult-launcher:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    #ln-consult-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(17, 24, 39, 0.5);
+      -webkit-backdrop-filter: blur(2px);
+      backdrop-filter: blur(2px);
+    }
+    #ln-consult-overlay[hidden] { display: none; }
+    #ln-consult-dialog {
+      width: min(440px, 100%);
+      max-height: 90dvh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 22px;
+      border-radius: 14px;
+      background: #fff;
+      color: #111827;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+    /* The dialog renders outside the host page's reset styles, so scope
+       border-box here; otherwise 100%-wide inputs add their padding and
+       border on top of the content width and touch the right edge. */
+    #ln-consult-dialog,
+    #ln-consult-dialog *,
+    #ln-consult-dialog *::before,
+    #ln-consult-dialog *::after { box-sizing: border-box; }
+    #ln-consult-dialog h2 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #111827; }
+    #ln-consult-hint { margin: 0 0 4px; font-size: 13px; line-height: 1.6; color: #4b5563; }
+    .ln-consult-field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+    .ln-consult-field label { font-size: 13px; font-weight: 600; color: #374151; }
+    .ln-consult-field input {
+      display: block;
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      color: #111827;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .ln-consult-field input:focus {
+      border-color: #0f6fa8;
+      box-shadow: 0 0 0 3px rgba(15, 111, 168, 0.15);
+    }
+    #ln-consult-message { min-height: 18px; margin-top: 12px; font-size: 13px; line-height: 1.5; color: #4b5563; }
+    #ln-consult-message.error { color: #b91c1c; }
+    #ln-consult-message.success { color: #166534; }
+    .ln-consult-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .ln-consult-btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+    }
+    .ln-consult-btn:hover { filter: brightness(0.97); }
+    .ln-consult-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(15, 111, 168, 0.25); }
+    .ln-consult-btn.secondary { border: 1px solid #d1d5db; background: #f3f4f6; color: #374151; }
+    .ln-consult-btn.primary { border: 1px solid #0f6fa8; background: #0f6fa8; color: #fff; }
+    .ln-consult-btn.primary:disabled { opacity: 0.65; cursor: default; filter: none; }
+    @media (max-width: 480px) {
+      #ln-consult-launcher { top: 12px; right: 80px; padding: 7px 14px; font-size: 13px; }
+      #ln-consult-dialog { padding: 18px; }
+      .ln-consult-field input { font-size: 16px; }
+    }
+  </style>
 </head>
-<body></body>
+<body>
+  <button type="button" id="ln-consult-launcher" hidden>留言板</button>
+  <div id="ln-consult-overlay" hidden>
+    <div id="ln-consult-dialog" role="dialog" aria-modal="true" aria-labelledby="ln-consult-title">
+      <h2 id="ln-consult-title">留言板</h2>
+      <p id="ln-consult-hint">提交后招生办老师根据您的信息提供更加详细的院校和专业建议。</p>
+      <form id="ln-consult-form" novalidate>
+        <div class="ln-consult-field">
+          <label for="ln-consult-province">所在省市</label>
+          <input id="ln-consult-province" name="province" type="text" maxlength="64" autocomplete="address-level1" required>
+        </div>
+        <div class="ln-consult-field">
+          <label for="ln-consult-city">所在城市</label>
+          <input id="ln-consult-city" name="city" type="text" maxlength="64" autocomplete="address-level2" required>
+        </div>
+        <div class="ln-consult-field">
+          <label for="ln-consult-name">姓名</label>
+          <input id="ln-consult-name" name="name" type="text" maxlength="128" autocomplete="name" required>
+        </div>
+        <div class="ln-consult-field">
+          <label for="ln-consult-score">分数</label>
+          <input id="ln-consult-score" name="score" type="text" inputmode="decimal" maxlength="32" required>
+        </div>
+        <div class="ln-consult-field">
+          <label for="ln-consult-contact">联系方式</label>
+          <input id="ln-consult-contact" name="contact" type="text" maxlength="255" inputmode="tel" autocomplete="tel" required>
+        </div>
+        <p id="ln-consult-message" role="status" aria-live="polite"></p>
+        <div class="ln-consult-actions">
+          <button type="button" class="ln-consult-btn secondary" id="ln-consult-close">关闭</button>
+          <button type="submit" class="ln-consult-btn primary" id="ln-consult-save">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    (function () {
+      'use strict';
+
+      // The widget script is the source of truth: chat-shell applies ?embed=
+      // and remote config overrides before it injects the script tag.
+      var BOT_PATTERN = /\/api\/v1\/embed\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\/widget\.js/;
+      var SUCCESS_TEXT = '提交成功，招生办老师将尽快与您联系';
+      var REQUIRED_TEXT = '请填写所有必填项。';
+      var GENERIC_ERROR_TEXT = '提交失败，请稍后重试。';
+      var NETWORK_ERROR_TEXT = '网络异常，请稍后重试。';
+
+      var launcher = document.getElementById('ln-consult-launcher');
+      var overlay = document.getElementById('ln-consult-overlay');
+      var form = document.getElementById('ln-consult-form');
+      var saveButton = document.getElementById('ln-consult-save');
+      var closeButton = document.getElementById('ln-consult-close');
+      var messageNode = document.getElementById('ln-consult-message');
+      var provinceInput = document.getElementById('ln-consult-province');
+      var cityInput = document.getElementById('ln-consult-city');
+      var nameInput = document.getElementById('ln-consult-name');
+      var scoreInput = document.getElementById('ln-consult-score');
+      var contactInput = document.getElementById('ln-consult-contact');
+
+      var botUuid = '';
+      var submitting = false;
+      var lastFocus = null;
+      var previousBodyOverflow = '';
+      var closeTimer = null;
+      function findBotUuid() {
+        var scripts = document.querySelectorAll('script[src*="/api/v1/embed/"]');
+        for (var i = 0; i < scripts.length; i++) {
+          var match = (scripts[i].getAttribute('src') || '').match(BOT_PATTERN);
+          if (match) return match[1];
+        }
+        return '';
+      }
+
+      function enableLauncher(uuid) {
+        if (!uuid) return false;
+        botUuid = uuid;
+        launcher.hidden = false;
+        return true;
+      }
+
+      function setMessage(text, kind) {
+        messageNode.textContent = text || '';
+        messageNode.className = kind || '';
+      }
+
+      function fieldValue(input) {
+        return input.value.replace(/^\s+|\s+$/g, '');
+      }
+
+      function focusField(input) {
+        input.focus();
+      }
+
+      function resetSubmitState() {
+        submitting = false;
+        saveButton.disabled = false;
+        saveButton.textContent = '保存';
+      }
+
+      function openModal() {
+        if (!botUuid) return;
+        if (closeTimer) {
+          window.clearTimeout(closeTimer);
+          closeTimer = null;
+        }
+        resetSubmitState();
+        setMessage('', '');
+        lastFocus = document.activeElement;
+        previousBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        overlay.hidden = false;
+        focusField(provinceInput);
+      }
+
+      function closeModal() {
+        if (overlay.hidden) return;
+        if (closeTimer) {
+          window.clearTimeout(closeTimer);
+          closeTimer = null;
+        }
+        overlay.hidden = true;
+        document.body.style.overflow = previousBodyOverflow;
+        resetSubmitState();
+        if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+      }
+
+      function collectPayload() {
+        return {
+          province: fieldValue(provinceInput),
+          city: fieldValue(cityInput),
+          name: fieldValue(nameInput),
+          score: fieldValue(scoreInput),
+          contact: fieldValue(contactInput)
+        };
+      }
+
+      function validate(payload) {
+        var fields = [
+          ['province', provinceInput],
+          ['city', cityInput],
+          ['name', nameInput],
+          ['score', scoreInput],
+          ['contact', contactInput]
+        ];
+        for (var i = 0; i < fields.length; i++) {
+          if (!payload[fields[i][0]]) {
+            setMessage(REQUIRED_TEXT, 'error');
+            focusField(fields[i][1]);
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function clearFields() {
+        provinceInput.value = '';
+        cityInput.value = '';
+        nameInput.value = '';
+        scoreInput.value = '';
+        contactInput.value = '';
+      }
+
+      function submitPayload() {
+        if (submitting || !botUuid) return;
+        setMessage('', '');
+        var payload = collectPayload();
+        if (!validate(payload)) return;
+
+        submitting = true;
+        saveButton.disabled = true;
+        saveButton.textContent = '提交中…';
+
+        fetch('/api/v1/embed/' + encodeURIComponent(botUuid) + '/consult-messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).then(function (response) {
+          return response.json().catch(function () { return null; }).then(function (body) {
+            return { ok: response.ok, body: body };
+          });
+        }).then(function (result) {
+          if (result.ok && result.body && result.body.code === 0) {
+            setMessage(SUCCESS_TEXT, 'success');
+            clearFields();
+            saveButton.disabled = true;
+            saveButton.textContent = '已提交';
+            closeTimer = window.setTimeout(closeModal, 1000);
+            return;
+          }
+          var serverMessage = result.body && typeof result.body.msg === 'string' ? result.body.msg : '';
+          setMessage(serverMessage || GENERIC_ERROR_TEXT, 'error');
+          resetSubmitState();
+        }).catch(function () {
+          setMessage(NETWORK_ERROR_TEXT, 'error');
+          resetSubmitState();
+        });
+      }
+
+      launcher.addEventListener('click', openModal);
+      closeButton.addEventListener('click', closeModal);
+      overlay.addEventListener('click', function (event) {
+        if (event.target === overlay) closeModal();
+      });
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitPayload();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !overlay.hidden) closeModal();
+      });
+
+      if (!enableLauncher(findBotUuid())) {
+        var observer = new MutationObserver(function () {
+          if (enableLauncher(findBotUuid())) observer.disconnect();
+        });
+        observer.observe(document.head, { childList: true });
+        window.setTimeout(function () { observer.disconnect(); }, 15000);
+      }
+    })();
+  </script>
+</body>
 </html>
