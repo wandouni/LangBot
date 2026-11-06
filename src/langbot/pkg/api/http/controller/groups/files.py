@@ -14,6 +14,28 @@ from ...context import RequestContext
 from .. import group
 
 
+# Media cache names are 128-bit content hashes, so the URL itself is an
+# unguessable capability. Keep the response inert anyway: media bytes can
+# include SVG or other active content that must not script the LangBot origin.
+_INLINE_MEDIA_PREFIXES = ('image/', 'audio/', 'video/')
+_ACTIVE_IMAGE_TYPES = frozenset({'image/svg+xml'})
+
+
+def _media_response_headers(mime_type: str) -> dict[str, str]:
+    """Return cache and content-safety headers for a public media response."""
+    normalized = (mime_type or '').lower()
+    headers = {
+        'Cache-Control': 'public, max-age=86400',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+    }
+    if normalized in _ACTIVE_IMAGE_TYPES or not normalized.startswith(_INLINE_MEDIA_PREFIXES):
+        headers['Content-Disposition'] = 'attachment'
+    else:
+        headers['Content-Disposition'] = 'inline'
+    return headers
+
+
 def _storage_owner(context: RequestContext) -> str:
     if context.principal.account_uuid:
         return f'account:{context.principal.account_uuid}'
@@ -59,10 +81,11 @@ class FilesRouterGroup(group.RouterGroup):
             if media is None:
                 return quart.Response('Media not found or expired', status=404)
             media_bytes, mime_type = media
-            headers = {
-                'Cache-Control': 'public, max-age=2592000, immutable',
-            }
-            return quart.Response(media_bytes, mimetype=mime_type, headers=headers)
+            return quart.Response(
+                media_bytes,
+                mimetype=mime_type,
+                headers=_media_response_headers(mime_type),
+            )
 
         @self.route(
             '/images',
