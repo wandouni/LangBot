@@ -11,9 +11,9 @@ LangBot uses a layered quality gate system for developers and CI:
 |-------|---------|--------------|-------------|
 | **Quick** | `make test-quick` or `bash scripts/test-quick.sh` | Ruff lint + Unit tests + Smoke tests | Before every commit |
 | **Fast Integration** | `make test-integration-fast` or `bash scripts/test-integration-fast.sh` | SQLite/API/Pipeline integration (no external services) | Before PR, weekly |
-| **Backend E2E** | `uv run --python 3.12 pytest tests/e2e -q --tb=short` | Starts a real LangBot process with minimal config | Before release, CI |
+| **Backend E2E** | `uv run --python 3.12 pytest tests/e2e -q --tb=short` | Real LangBot process, SDK Plugin Runtime, platform ingress and knowledge RAG flows | Before release, CI |
 | **Box Integration** | `uv run --python 3.12 pytest tests/integration_tests -q --tb=short` | Real Box sandbox/runtime integration | Before Box/runtime changes, CI |
-| **Frontend E2E** | `cd web && pnpm test:e2e` | Playwright smoke tests with mocked backend and Space APIs | Before web changes, CI |
+| **Frontend E2E** | `cd web && pnpm test:e2e` | Playwright page tests with mocked backend and Space APIs, plus real-stack specs driven by `tests/e2e/` | Before web changes, CI |
 | **Coverage Gate** | `make test-coverage` or `bash scripts/test-coverage.sh` | All tests with coverage, threshold: 18% | Before merge, CI |
 | **Full Local** | `make test-all-local` | Quick + Integration + Coverage | Before major changes |
 
@@ -88,18 +88,24 @@ tests/
 │   └── platform.py              # FakePlatform factory
 ├── integration/                  # Integration tests (real resources)
 │   ├── __init__.py
-│   ├── api/                     # HTTP API tests
+│   ├── api/                     # HTTP API tests (fake services, real routes)
 │   │   ├── __init__.py
-│   │   └── test_smoke.py        # API smoke tests
+│   │   ├── test_smoke.py        # API smoke tests
+│   │   ├── test_knowledge.py    # Knowledge bases, files, parsers, retrieval
+│   │   └── test_logs.py         # Default-Workspace-only instance logs
 │   ├── pipeline/                # Pipeline stage-chain tests
 │   │   ├── __init__.py
 │   │   └── test_full_flow.py    # Full flow integration
 │   └── persistence/             # Database/persistence tests
 │       ├── __init__.py
 │       └── test_migrations.py   # Alembic migration tests
-├── e2e/                          # Real LangBot startup E2E tests
+├── e2e/                          # Real-process E2E tests
 │   ├── conftest.py
 │   ├── test_startup.py
+│   ├── test_runner_plugin_runtime.py  # Real SDK Plugin Runtime + browser save/copy/run
+│   ├── test_platform_message_flow.py  # Signed platform ingress -> pipeline -> reply
+│   ├── test_knowledge_rag_flow.py     # Upload -> ingest -> Chroma retrieval
+│   ├── test_wizard_real_stack.py      # Login -> wizard -> create/save Bot
 │   └── utils/
 ├── integration_tests/            # Container-backed integration tests
 │   └── box/                      # Box runtime and MCP process tests
@@ -355,10 +361,24 @@ They do not require provider keys or external services.
 uv run --python 3.12 pytest tests/e2e -q --tb=short
 ```
 
-These tests verify startup orchestration, migrations, API route registration,
-and the minimal no-LLM startup path. The E2E process manager disables ambient
-proxy variables for subprocess startup and uses direct localhost HTTP clients,
-so local proxy settings should not affect the health checks.
+These tests verify startup orchestration, migrations, and API route
+registration, and they also drive production flows through a real LangBot
+process:
+
+- `test_platform_message_flow.py` posts a signed Bot webhook, runs the real
+  pipeline and SDK Plugin Runtime, and asserts the outbound reply and persisted
+  monitoring rows.
+- `test_knowledge_rag_flow.py` uploads documents over HTTP, waits for async
+  ingestion through the plugin runtime, and checks that embedded Chroma
+  retrieval is scoped to each knowledge base.
+- `test_runner_plugin_runtime.py` and `test_wizard_real_stack.py` start the SDK
+  Plugin Runtime plus the built frontend (`vite preview`) and drive Chromium
+  for pipeline save/copy/run and the quick-start wizard. They need
+  `web/node_modules`, Chromium, and a prior `pnpm build` in `web/`.
+
+The E2E process manager disables ambient proxy variables for subprocess startup
+and uses direct localhost HTTP clients, so local proxy settings should not
+affect the health checks.
 
 ### Running Box integration tests
 
@@ -375,12 +395,26 @@ Box integration job checks Docker availability before running the tests.
 
 ### Running frontend E2E tests
 
-Frontend E2E tests live in `web/tests/e2e` and use Playwright. They start Vite
-and mock the LangBot backend and Space APIs, so no backend process is required.
+Frontend E2E tests live in `web/tests/e2e` and use Playwright. The default
+suite starts Vite and mocks the LangBot backend and Space APIs, so no backend
+process is required.
 
 ```bash
 cd web
 pnpm test:e2e
+```
+
+Two specs require a real stack and are started from pytest instead of
+`pnpm test:e2e`: `runner-real-runtime.spec.ts` (pipeline save/copy/run) and
+`wizard-real-stack.spec.ts` (login -> wizard -> create/save Bot). They run
+against an isolated backend and SDK Plugin Runtime through `vite preview`, so
+build the frontend first:
+
+```bash
+cd web && pnpm install && pnpm build
+cd ..
+uv run pytest tests/e2e/test_runner_plugin_runtime.py -q -m e2e
+uv run pytest tests/e2e/test_wizard_real_stack.py -q -m e2e
 ```
 
 ### Known Issues
@@ -400,9 +434,11 @@ Tests are automatically run on:
 - Push to master/develop branches
 
 The workflow runs tests on Python 3.11, 3.12, and 3.13 to ensure compatibility.
-Startup E2E and Box integration tests run as separate Python 3.12 jobs because
-they exercise process/container behavior instead of pure Python compatibility.
-Frontend Playwright smoke tests run in `.github/workflows/frontend-tests.yml`.
+The `tests/e2e` suite and Box integration tests run as separate Python 3.12 jobs
+because they exercise process/container and browser behavior instead of pure
+Python compatibility. The E2E job builds `web/` and installs Chromium before
+running `pytest tests/e2e -m "not local_agent"`. Mocked frontend Playwright
+tests run in `.github/workflows/frontend-tests.yml`.
 
 ## Adding New Tests
 
@@ -486,7 +522,7 @@ Check that you're mocking at the right level and using `AsyncMock` for async fun
 - [x] Add PostgreSQL migration integration tests (G-003)
 - [x] Add integration tests for full pipeline execution
 - [x] Add API smoke integration tests
-- [ ] Add E2E tests
+- [x] Add E2E tests (startup, platform ingress, knowledge RAG, real-stack browser)
 - [ ] Add performance benchmarks
 - [ ] Add mutation testing for better coverage quality
 - [ ] Add property-based testing with Hypothesis
