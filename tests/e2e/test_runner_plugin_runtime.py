@@ -38,6 +38,19 @@ def runner_e2e_port():
 
 
 @pytest.fixture(scope='session')
+def runner_web_port():
+    """Port for the ``vite preview`` server driving the Chromium E2E.
+
+    The preview server proxies ``/api`` with ``changeOrigin``, so the backend
+    sees its own host in ``Host`` while the browser's ``Origin`` stays
+    ``http://127.0.0.1:<preview-port>``. ``check_websocket_origin`` rejects
+    that mismatch unless the origin is explicitly allow-listed, so the config
+    fixture below registers this port.
+    """
+    return _free_port()
+
+
+@pytest.fixture(scope='session')
 def runner_e2e_tmpdir():
     """Create temporary directory for Runner E2E testing."""
     root = find_project_root() / '.qa' / 'lang54'
@@ -333,8 +346,17 @@ def runner_runtime_ports():
 
 
 @pytest.fixture(scope='session')
-def runner_e2e_config_path(runner_e2e_tmpdir, runner_e2e_port, runner_runtime_ports):
-    """Create a plugin-enabled config and deterministic Runner fixture."""
+def runner_e2e_config_path(
+    runner_e2e_tmpdir,
+    runner_e2e_port,
+    runner_runtime_ports,
+    runner_web_port,
+):
+    """Create a plugin-enabled config and deterministic Runner fixture.
+
+    ``runner_web_port`` is ``None`` when another E2E module reuses this
+    fixture through ``__wrapped__`` for API-only flows without a browser.
+    """
     config_path = create_minimal_config(runner_e2e_tmpdir, port=runner_e2e_port)
     create_test_directories(runner_e2e_tmpdir)
 
@@ -343,6 +365,8 @@ def runner_e2e_config_path(runner_e2e_tmpdir, runner_e2e_port, runner_runtime_po
     with open(config_path, encoding='utf-8') as f:
         config = yaml.safe_load(f)
     config['api']['global_api_key'] = 'e2e-agent-runner-key'
+    if runner_web_port is not None:
+        config['api']['cors_origins'] = [f'http://127.0.0.1:{runner_web_port}']
     runtime_control_port, _runtime_debug_port = runner_runtime_ports
     config['plugin']['enable'] = True
     config['plugin']['runtime_ws_url'] = f'ws://127.0.0.1:{runtime_control_port}/control/ws'
@@ -772,7 +796,11 @@ def test_mixed_plugin_runner_does_not_authorize_extensions(runner_client, runner
     assert 'qa_boundary_command' in command_reply
 
 
-def test_chromium_pipeline_save_copy_execute_real_runtime(runner_client, runner_e2e_tmpdir):
+def test_chromium_pipeline_save_copy_execute_real_runtime(
+    runner_client,
+    runner_e2e_tmpdir,
+    runner_web_port,
+):
     token = _init_and_auth(runner_client)
     _ensure_qa_plugin(runner_client, token, runner_e2e_tmpdir / 'agent-runner-qa.zip')
     pipeline_id = _create_boundary_pipeline(runner_client, token)
@@ -794,7 +822,7 @@ def test_chromium_pipeline_save_copy_execute_real_runtime(runner_client, runner_
     env.update(
         {
             'LANGBOT_RUNNER_API_URL': str(runner_client.base_url).rstrip('/'),
-            'LANGBOT_RUNNER_WEB_PORT': str(_free_port()),
+            'LANGBOT_RUNNER_WEB_PORT': str(runner_web_port),
             'LANGBOT_RUNNER_TOKEN': token,
             'LANGBOT_RUNNER_PIPELINE_ID': pipeline_id,
             'LANGBOT_RUNNER_BROWSER_OUTPUT': str(runner_e2e_tmpdir / 'browser-results'),

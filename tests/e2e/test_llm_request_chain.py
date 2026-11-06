@@ -53,7 +53,12 @@ def runner_e2e_port():
 
 @pytest.fixture(scope='session')
 def runner_e2e_config_path(runner_e2e_tmpdir, runner_e2e_port, runner_runtime_ports):
-    path = runtime.runner_e2e_config_path.__wrapped__(runner_e2e_tmpdir, runner_e2e_port, runner_runtime_ports)
+    path = runtime.runner_e2e_config_path.__wrapped__(
+        runner_e2e_tmpdir,
+        runner_e2e_port,
+        runner_runtime_ports,
+        None,  # No browser preview origin: this module talks HTTP only.
+    )
     root = runner_e2e_tmpdir / 'agent-runner-qa-package'
     manifest = root / 'components/runner/default.yaml'
     data = yaml.safe_load(manifest.read_text(encoding='utf-8'))
