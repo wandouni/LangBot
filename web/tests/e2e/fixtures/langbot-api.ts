@@ -98,6 +98,8 @@ export interface WorkspaceEntryMock {
 
 interface LangBotApiMockState {
   authenticated: boolean;
+  initialized: boolean;
+  passwordLoginEnabled: boolean;
   withAssistant: boolean;
   bots: BotMock[];
   counters: Record<string, number>;
@@ -702,12 +704,20 @@ async function handleBackendApi(route: Route, state: LangBotApiMockState) {
     });
   }
 
+  if (path === '/api/v1/user/init') {
+    if (method === 'POST') {
+      state.initialized = true;
+      return fulfillJson(route, {});
+    }
+    return fulfillJson(route, { initialized: state.initialized });
+  }
+
   if (path === '/api/v1/user/account-info') {
     return fulfillJson(route, {
-      initialized: true,
+      initialized: state.initialized,
       authenticated_invitation_acceptance_enabled: false,
       invitation_registration_enabled: true,
-      password_login_enabled: true,
+      password_login_enabled: state.passwordLoginEnabled,
       space_login_enabled: false,
     });
   }
@@ -1478,6 +1488,8 @@ export async function installLangBotApiMocks(
   page: Page,
   options: {
     authenticated?: boolean;
+    initialized?: boolean;
+    passwordLoginEnabled?: boolean;
     withAssistant?: boolean;
     language?: string;
     marketplaceEnabled?: boolean;
@@ -1493,6 +1505,8 @@ export async function installLangBotApiMocks(
 ) {
   const {
     authenticated = false,
+    initialized = true,
+    passwordLoginEnabled = true,
     withAssistant = false,
     language = 'en-US',
     marketplaceEnabled = true,
@@ -1507,6 +1521,8 @@ export async function installLangBotApiMocks(
   } = options;
   const state: LangBotApiMockState = {
     authenticated,
+    initialized,
+    passwordLoginEnabled,
     withAssistant,
     bots: [],
     counters: {},

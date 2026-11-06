@@ -116,6 +116,19 @@ async function mockChatBackend(
       body: widgetSource(origin, roleGroups),
     });
   });
+  // The widget signs a session token before opening its WebSocket, even when
+  // Turnstile is disabled; without this route the socket never connects.
+  await page.route('**/api/v1/embed/*/turnstile/verify', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: { token: 'chat-page-test-token' },
+      }),
+    }),
+  );
   await page.route('**/api/v1/embed/*/messages/**', (route) =>
     route.fulfill({
       status: 200,

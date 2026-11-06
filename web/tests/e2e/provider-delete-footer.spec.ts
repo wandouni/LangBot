@@ -303,16 +303,17 @@ test('new providers do not expose footer deletion', async ({ page }) => {
   expect(state.deletes).toEqual([]);
 });
 
-test('system-managed provider has no edit or delete entry', async ({
+test('system-managed provider is hidden from the provider list', async ({
   page,
 }) => {
   const state = await fixture(page, 'space-chat-completions');
-  const card = page
-    .locator('[data-slot="card"]')
-    .filter({ hasText: 'Delete fixture provider' });
-  await expect(card).toBeVisible();
-  await expect(card.locator('svg.lucide-settings')).toHaveCount(0);
-  await expect(card.locator('svg.lucide-trash-2')).toHaveCount(0);
+  // Hosted LangBot Models is no longer rendered as a regular provider card, so
+  // it cannot expose edit or delete controls either.
+  await expect(
+    page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: 'Delete fixture provider' }),
+  ).toHaveCount(0);
   expect(state.deletes).toEqual([]);
 });
 

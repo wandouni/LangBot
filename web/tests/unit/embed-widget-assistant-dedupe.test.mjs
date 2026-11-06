@@ -157,7 +157,12 @@ class FakeWebSocket {
   }
 }
 
-function launchWidget(options = {}) {
+async function flushMicrotasks() {
+  // submitVerification chains two promise callbacks before connecting.
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+}
+
+async function launchWidget(options = {}) {
   FakeWebSocket.instances = [];
   const document = new FakeDocument(options.scriptAttributes);
   const window = {
@@ -175,7 +180,17 @@ function launchWidget(options = {}) {
     window,
     navigator: { clipboard: { writeText: () => Promise.resolve() } },
     WebSocket: FakeWebSocket,
-    fetch: () => new Promise(() => {}),
+    fetch: (url) => {
+      // Opening the panel asks the backend to sign a session token before the
+      // socket may connect; other requests stay pending like before.
+      if (String(url).includes('/turnstile/verify')) {
+        return Promise.resolve({
+          json: () =>
+            Promise.resolve({ data: { token: 'test-session-token' } }),
+        });
+      }
+      return new Promise(() => {});
+    },
     requestAnimationFrame: () => 0,
     setTimeout: () => 0,
     clearTimeout: () => {},
@@ -199,6 +214,7 @@ function launchWidget(options = {}) {
   const root = document.getElementById('langbot-widget-root');
   assert.ok(root, 'widget should initialize');
   root.shadowRoot.querySelector('.lb-bubble').click();
+  await flushMicrotasks();
   const socket = FakeWebSocket.instances.at(-1);
   assert.ok(socket, 'opening widget should connect its WebSocket');
 
@@ -220,8 +236,8 @@ function assistant(id, content) {
   return { id, role: 'assistant', content, is_final: true };
 }
 
-test('renders a non-empty reply after an empty assistant frame', () => {
-  const widget = launchWidget();
+test('renders a non-empty reply after an empty assistant frame', async () => {
+  const widget = await launchWidget();
 
   widget.receive(assistant('thought', ''));
   widget.receive(assistant('answer', 'visible answer'));
@@ -234,8 +250,8 @@ test('renders a non-empty reply after an empty assistant frame', () => {
   );
 });
 
-test('still drops a duplicate non-empty assistant frame', () => {
-  const widget = launchWidget();
+test('still drops a duplicate non-empty assistant frame', async () => {
+  const widget = await launchWidget();
 
   widget.receive(assistant('answer-1', 'same answer'));
   widget.receive(assistant('answer-2', 'same answer'));
@@ -243,8 +259,8 @@ test('still drops a duplicate non-empty assistant frame', () => {
   assert.equal(widget.assistantMessages().length, 1);
 });
 
-test('still keeps two distinct non-empty assistant frames', () => {
-  const widget = launchWidget();
+test('still keeps two distinct non-empty assistant frames', async () => {
+  const widget = await launchWidget();
 
   widget.receive(assistant('answer-1', 'first answer'));
   widget.receive(assistant('answer-2', 'second answer'));
@@ -252,8 +268,8 @@ test('still keeps two distinct non-empty assistant frames', () => {
   assert.equal(widget.assistantMessages().length, 2);
 });
 
-test('renders configured group questions under the welcome message', () => {
-  const widget = launchWidget({
+test('renders configured group questions under the welcome message', async () => {
+  const widget = await launchWidget({
     roleGroups: [
       {
         id: 'g1',
@@ -272,8 +288,8 @@ test('renders configured group questions under the welcome message', () => {
   assert.equal(dock.hidden, true);
 });
 
-test('clicking a group question fills the input without sending', () => {
-  const widget = launchWidget({
+test('clicking a group question fills the input without sending', async () => {
+  const widget = await launchWidget({
     roleGroups: [
       { id: 'g1', label: 'Visitors', questions: ['How do I start?'] },
     ],
@@ -295,8 +311,8 @@ test('clicking a group question fills the input without sending', () => {
   );
 });
 
-test('shows the role dock and hides the welcome after the conversation starts', () => {
-  const widget = launchWidget({
+test('shows the role dock and hides the welcome after the conversation starts', async () => {
+  const widget = await launchWidget({
     roleGroups: [{ id: 'g1', label: 'Visitors', questions: ['Q1', 'Q2'] }],
   });
 
@@ -309,8 +325,8 @@ test('shows the role dock and hides the welcome after the conversation starts', 
   assert.equal(dock.querySelectorAll('.lb-role-dock-preview-btn').length, 2);
 });
 
-test('does not render quick questions when none are configured', () => {
-  const widget = launchWidget();
+test('does not render quick questions when none are configured', async () => {
+  const widget = await launchWidget();
 
   assert.equal(
     widget.root.shadowRoot.querySelectorAll('.lb-role-question').length,
@@ -324,8 +340,8 @@ test('does not render quick questions when none are configured', () => {
   assert.equal(widget.root.shadowRoot.querySelector('.lb-quick-dock'), null);
 });
 
-test('an empty group does not fall back to another question source', () => {
-  const widget = launchWidget({
+test('an empty group does not fall back to another question source', async () => {
+  const widget = await launchWidget({
     roleGroups: [{ id: 'g1', label: 'Empty', questions: [] }],
   });
 
@@ -345,22 +361,22 @@ function welcomeText(widget) {
   return welcome.children[1].innerHTML;
 }
 
-test('renders the saved welcome message from the bot config', () => {
-  const widget = launchWidget({ welcomeMessage: 'Bot hello' });
+test('renders the saved welcome message from the bot config', async () => {
+  const widget = await launchWidget({ welcomeMessage: 'Bot hello' });
 
   assert.equal(welcomeText(widget), 'Bot hello');
 });
 
-test('falls back to the page subtitle when the bot has no welcome message', () => {
-  const widget = launchWidget({
+test('falls back to the page subtitle when the bot has no welcome message', async () => {
+  const widget = await launchWidget({
     scriptAttributes: { 'data-subtitle': 'Page hello' },
   });
 
   assert.equal(welcomeText(widget), 'Page hello');
 });
 
-test('an unsaved welcome draft overrides the saved message', () => {
-  const widget = launchWidget({
+test('an unsaved welcome draft overrides the saved message', async () => {
+  const widget = await launchWidget({
     welcomeMessage: 'Bot hello',
     scriptAttributes: {
       'data-preview-welcome': 'true',
@@ -371,8 +387,8 @@ test('an unsaved welcome draft overrides the saved message', () => {
   assert.equal(welcomeText(widget), 'Draft hello');
 });
 
-test('an empty welcome draft clears the saved message', () => {
-  const widget = launchWidget({
+test('an empty welcome draft clears the saved message', async () => {
+  const widget = await launchWidget({
     welcomeMessage: 'Bot hello',
     scriptAttributes: { 'data-preview-welcome': 'true' },
   });
@@ -380,8 +396,8 @@ test('an empty welcome draft clears the saved message', () => {
   assert.equal(welcomeText(widget), '');
 });
 
-test('a draft preview overrides saved groups even when it is empty', () => {
-  const widget = launchWidget({
+test('a draft preview overrides saved groups even when it is empty', async () => {
+  const widget = await launchWidget({
     roleGroups: [{ id: 'saved', label: 'Saved', questions: ['Saved Q'] }],
     scriptAttributes: {
       'data-preview-roles': 'true',
@@ -395,7 +411,7 @@ test('a draft preview overrides saved groups even when it is empty', () => {
     'Draft Q',
   );
 
-  const empty = launchWidget({
+  const empty = await launchWidget({
     roleGroups: [{ id: 'saved', label: 'Saved', questions: ['Saved Q'] }],
     scriptAttributes: { 'data-preview-roles': 'true' },
   });

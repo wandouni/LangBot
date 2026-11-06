@@ -275,7 +275,12 @@ class FakeWebSocket {
   }
 }
 
-function launchWidget() {
+async function flushMicrotasks() {
+  // submitVerification chains two promise callbacks before connecting.
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+}
+
+async function launchWidget() {
   FakeWebSocket.instances = [];
   const clock = new FakeClock();
   const document = new FakeDocument();
@@ -298,7 +303,17 @@ function launchWidget() {
     window,
     navigator: { clipboard: { writeText: () => Promise.resolve() } },
     WebSocket: FakeWebSocket,
-    fetch: () => new Promise(() => {}),
+    fetch: (url) => {
+      // Opening the panel asks the backend to sign a session token before the
+      // socket may connect; other requests stay pending like before.
+      if (String(url).includes('/turnstile/verify')) {
+        return Promise.resolve({
+          json: () =>
+            Promise.resolve({ data: { token: 'test-session-token' } }),
+        });
+      }
+      return new Promise(() => {});
+    },
     requestAnimationFrame: () => 0,
     setTimeout: (callback, delay) => clock.setTimeout(callback, delay),
     clearTimeout: (id) => clock.clearTimeout(id),
@@ -310,6 +325,7 @@ function launchWidget() {
   const root = document.getElementById('langbot-widget-root');
   assert.ok(root, 'widget should initialize');
   root.shadowRoot.querySelector('.lb-bubble').click();
+  await flushMicrotasks();
   const socket = FakeWebSocket.instances.at(-1);
   assert.ok(socket, 'opening widget should connect its WebSocket');
 
@@ -331,8 +347,8 @@ function launchWidget() {
   };
 }
 
-test('retries forever after a drop instead of giving up', () => {
-  const widget = launchWidget();
+test('retries forever after a drop instead of giving up', async () => {
+  const widget = await launchWidget();
   widget.connect();
   assert.equal(widget.sendBtn().disabled, false);
 
@@ -361,8 +377,8 @@ test('retries forever after a drop instead of giving up', () => {
   assert.ok(delays.at(-1) >= 30000, 'delay should reach the 30s cap');
 });
 
-test('recovers as soon as the connection succeeds again', () => {
-  const widget = launchWidget();
+test('recovers as soon as the connection succeeds again', async () => {
+  const widget = await launchWidget();
   widget.connect();
   const first = widget.currentSocket();
   first.drop();
@@ -381,8 +397,8 @@ test('recovers as soon as the connection succeeds again', () => {
   assert.equal(widget.statusBanner().textContent, '');
 });
 
-test('a network-online event skips the remaining backoff', () => {
-  const widget = launchWidget();
+test('a network-online event skips the remaining backoff', async () => {
+  const widget = await launchWidget();
   widget.connect();
   widget.currentSocket().drop();
 
@@ -393,8 +409,8 @@ test('a network-online event skips the remaining backoff', () => {
   assert.equal(widget.clock.nextTimeoutDelay(1000), null);
 });
 
-test('a hidden tab waits for visibility before retrying', () => {
-  const widget = launchWidget();
+test('a hidden tab waits for visibility before retrying', async () => {
+  const widget = await launchWidget();
   widget.connect();
   widget.document.visibilityState = 'hidden';
   widget.currentSocket().drop();
@@ -408,8 +424,8 @@ test('a hidden tab waits for visibility before retrying', () => {
   assert.equal(FakeWebSocket.instances.length, 2);
 });
 
-test('replaces a socket that never answers its heartbeat', () => {
-  const widget = launchWidget();
+test('replaces a socket that never answers its heartbeat', async () => {
+  const widget = await launchWidget();
   widget.connect();
   const original = widget.currentSocket();
 
