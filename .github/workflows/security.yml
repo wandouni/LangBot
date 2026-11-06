@@ -1,0 +1,163 @@
+name: security
+
+# Report-only baseline. Enable enforcement by setting the repository variable
+# SECURITY_GATE to `block` (fail when any secret or dependency vulnerability is
+# reported) once the baseline is triaged. SAST/container results stay advisory.
+on:
+  pull_request:
+  push:
+    branches: [master]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_AUDIT_SPEC: pip-audit==2.10.1
+  SEMGREP_SPEC: semgrep==1.182.0
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.24.0
+
+jobs:
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan working tree and history
+        run: |
+          mkdir -p security-results
+          docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" detect \
+            --source=/repo \
+            --report-format=json --report-path=/repo/security-results/gitleaks.json \
+            --redact --no-banner --exit-code=0 --log-opts=--all || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-results
+          path: security-results/
+          if-no-files-found: ignore
+
+  python-deps:
+    name: python dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Export locked requirements
+        run: |
+          mkdir -p security-results
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt \
+            > security-results/requirements.txt
+      - name: Audit
+        run: |
+          uvx --from "$PIP_AUDIT_SPEC" pip-audit \
+            -r security-results/requirements.txt --format json \
+            --no-deps --disable-pip --progress-spinner off \
+            > security-results/pip-audit.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-results
+          path: security-results/
+          if-no-files-found: ignore
+
+  node-deps:
+    name: frontend dependencies (pnpm audit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Audit
+        working-directory: web
+        run: |
+          mkdir -p ../security-results
+          pnpm audit --json > ../security-results/pnpm-audit.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-results
+          path: security-results/
+          if-no-files-found: ignore
+
+  sast:
+    name: sast (semgrep + bandit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Semgrep
+        run: |
+          mkdir -p security-results
+          uvx --from "$SEMGREP_SPEC" semgrep scan . \
+            --config p/owasp-top-ten --config p/python --config p/javascript --config p/secrets \
+            --metrics=off --sarif --output security-results/semgrep.sarif \
+            --exclude node_modules --exclude web/dist --exclude data --exclude .venv --exclude .git --exclude tests || true
+      - name: Bandit
+        run: |
+          uvx bandit -r src/langbot -f json -o security-results/bandit.json -q -x tests || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-results
+          path: security-results/
+          if-no-files-found: ignore
+
+  container:
+    name: container (trivy)
+    # Image builds are slow; keep them off pull requests.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t langbot:scan .
+      - name: Trivy image scan
+        run: |
+          mkdir -p security-results
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/security-results:/out" aquasec/trivy:0.76.1 image \
+            --format json --output /out/trivy-image.json \
+            --severity HIGH,CRITICAL --ignore-unfixed langbot:scan || true
+      - name: Trivy config scan
+        run: |
+          docker run --rm -v "$PWD:/repo" -v "$PWD/security-results:/out" aquasec/trivy:0.76.1 config \
+            --format json --output /out/trivy-config.json \
+            --skip-dirs .git --skip-dirs node_modules --skip-dirs .venv /repo || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-results
+          path: security-results/
+          if-no-files-found: ignore
+
+  gate:
+    name: gate
+    needs: [secrets, python-deps, node-deps, sast]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-results"
+          path: security-results
+          merge-multiple: true
+      - uses: actions/checkout@v4
+      - name: Summarize and evaluate gate
+        env:
+          SECURITY_GATE: ${{ vars.SECURITY_GATE || 'report' }}
+        run: python3 .github/scripts/security_gate.py
