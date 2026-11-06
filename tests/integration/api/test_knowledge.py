@@ -126,6 +126,20 @@ def fake_knowledge_app():
     app.knowledge_service.store_file = AsyncMock(return_value='test-task-id')
     app.knowledge_service.delete_file = AsyncMock()
     app.knowledge_service.retrieve_knowledge_base = AsyncMock(return_value=[{'content': 'test result', 'score': 0.95}])
+    app.knowledge_service.list_parsers = AsyncMock(
+        return_value=[
+            {
+                'plugin_id': 'test/pdf-parser',
+                'name': 'PDF Parser',
+                'supported_mime_types': ['application/pdf'],
+            },
+            {
+                'plugin_id': 'test/text-parser',
+                'name': 'Text Parser',
+                'supported_mime_types': ['text/plain'],
+            },
+        ]
+    )
 
     # RAG manager
     app.rag_mgr = Mock()
@@ -373,3 +387,50 @@ class TestKnowledgeBaseRetrieveEndpoint:
         assert response.status_code == 400
         data = await response.get_json()
         assert data['code'] == -1
+
+
+@pytest.mark.usefixtures('mock_circular_import_chain')
+class TestKnowledgeParsersEndpoint:
+    """Tests for /api/v1/knowledge/parsers."""
+
+    @pytest.mark.asyncio
+    async def test_list_parsers_returns_plugin_parsers(self, quart_test_client, fake_knowledge_app):
+        """GET /api/v1/knowledge/parsers returns parsers exposed by plugins."""
+        response = await quart_test_client.get(
+            '/api/v1/knowledge/parsers', headers={'Authorization': 'Bearer test_token'}
+        )
+
+        assert response.status_code == 200
+        data = await response.get_json()
+        assert data['code'] == 0
+        assert [parser['plugin_id'] for parser in data['data']['parsers']] == [
+            'test/pdf-parser',
+            'test/text-parser',
+        ]
+
+        called = fake_knowledge_app.knowledge_service.list_parsers
+        assert called.await_count == 1
+        assert called.await_args.args[0].workspace_uuid == '00000000-0000-0000-0000-00000000000a'
+        assert called.await_args.args[1:] == (None,)
+        assert called.await_args.kwargs == {}
+
+    @pytest.mark.asyncio
+    async def test_list_parsers_forwards_mime_filter(self, quart_test_client, fake_knowledge_app):
+        """The mime_type query parameter reaches the service unchanged."""
+        response = await quart_test_client.get(
+            '/api/v1/knowledge/parsers?mime_type=application/pdf',
+            headers={'Authorization': 'Bearer test_token'},
+        )
+
+        assert response.status_code == 200
+        called = fake_knowledge_app.knowledge_service.list_parsers
+        assert called.await_count == 1
+        assert called.await_args.args[1:] == ('application/pdf',)
+
+    @pytest.mark.asyncio
+    async def test_list_parsers_requires_authentication(self, quart_test_client, fake_knowledge_app):
+        """The parser catalog is not exposed without a token or API key."""
+        response = await quart_test_client.get('/api/v1/knowledge/parsers')
+
+        assert response.status_code == 401
+        fake_knowledge_app.knowledge_service.list_parsers.assert_not_awaited()

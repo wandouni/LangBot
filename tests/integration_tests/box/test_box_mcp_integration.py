@@ -4,10 +4,11 @@ These tests verify managed process lifecycle, WebSocket stdio attach,
 session cleanup, and the single-session query API using a real container
 runtime.
 
-CI only runs ``tests/unit_tests/``, so these tests never execute in the
-CI pipeline.  Run them locally with::
+CI runs this directory in the dedicated Box integration job
+(``.github/workflows/run-tests.yml``), which checks ``docker info`` first.  Run
+them locally with::
 
-    pytest tests/integration_tests/box/test_box_mcp_integration.py -v
+    uv run --python 3.12 pytest tests/integration_tests -q --tb=short
 """
 
 from __future__ import annotations

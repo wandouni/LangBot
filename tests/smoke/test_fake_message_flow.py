@@ -4,7 +4,8 @@ Minimal fake flow smoke tests for LangBot.
 These tests verify basic component interactions using fake providers and platforms.
 Not a full pipeline integration test - tests individual factory components.
 
-For full pipeline tests, see tests/integration/ (planned).
+For real stage chains, see ``tests/integration/pipeline/test_full_flow.py``;
+for real process, plugin-runtime and browser flows, see ``tests/e2e/``.
 """
 
 from __future__ import annotations
@@ -280,7 +281,7 @@ class TestMessageFlowIntegration:
     """Minimal fake flow integration tests.
 
     These tests verify component interactions but do NOT run full LangBot pipeline.
-    For real pipeline tests, integration tests are needed (planned).
+    Real stage-chain coverage lives in ``tests/integration/pipeline/``.
     """
 
     @pytest.mark.asyncio

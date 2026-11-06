@@ -423,7 +423,7 @@ async def test_full_service_to_remote_runtime(tmp_path):
             query,
         )
 
-        assert result['ok'] is True
+        assert result['ok'] is True, result
         assert result['status'] == 'completed'
         assert 'service-path' in result['stdout']
         assert result['session_id'] == box['id']
