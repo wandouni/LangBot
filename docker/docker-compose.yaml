@@ -12,6 +12,12 @@ services:
     ports:
       - 5401:5401
     restart: on-failure
+    # Plugin code runs here; drop the capabilities it never needs.
+    cap_drop:
+      - NET_RAW
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - TZ=Asia/Shanghai
       # Optional. Leave unset on both OSS services, or set the same value on
@@ -52,8 +58,18 @@ services:
       # Mount container runtime socket for Box sandbox backend.
       # Uncomment the one that matches your container runtime:
       # - /var/run/podman/podman.sock:/var/run/podman/podman.sock   # Podman
+      #
+      # SECURITY: access to the Docker socket is equivalent to host root. The
+      # Box profile is therefore off by default, and only trusted plugins
+      # should be allowed to request sandboxes. For untrusted workloads, run
+      # Box against a rootless Docker/Podman socket on a dedicated host.
       - /var/run/docker.sock:/var/run/docker.sock                   # Docker
     restart: on-failure
+    cap_drop:
+      - NET_RAW
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - TZ=Asia/Shanghai
       # Optional shared control-plane secret used to authenticate both the RPC
@@ -97,6 +113,12 @@ services:
       # consume the same Workspace-scoped package revisions.
       - ${LANGBOT_BOX_ROOT:-${PWD}/data/box}:${LANGBOT_BOX_ROOT:-${PWD}/data/box}
     restart: on-failure
+    # The core service needs no capabilities beyond Docker's defaults.
+    cap_drop:
+      - NET_RAW
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - TZ=Asia/Shanghai
       # Optional. Leave unset on both OSS services, or match plugin Runtime.

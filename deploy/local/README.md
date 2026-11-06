@@ -24,10 +24,13 @@
 2. 复制配置并填写本机绝对路径、镜像标签和密钥：
    ```bash
    cp deploy/local/.env.example deploy/local/.env
+   chmod 600 deploy/local/.env
    ```
+   - `.env` 含数据库、SSO 与 API 密钥，权限保持 `600`；`deploy.sh` 每次启动也会自动收紧
    - `LANGBOT_DATA_DIR`：现有环境是 `<LangBot 仓库>/data/docker`
    - `SQLBOT_DATA_DIR`：现有环境是 `<SQLBot 仓库>/data`
    - `SQLBOT_SSO_SHARED_SECRET`：必须同时等于 `data/docker/config.yaml` 里的 `sqlbot.sso.shared_secret`
+   - `SQLBOT_DEFAULT_PWD`：SqlBot 本地账号的初始密码，必须显式填写；启动时会把仍使用出厂默认口令的账号轮换为该值
    - `GATEWAY_LAN_IP`：本机非回环地址（回环由 Compose 自动再加一条 5300 映射）
 3. 构建镜像并启动：
    ```bash

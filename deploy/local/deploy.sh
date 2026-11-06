@@ -15,6 +15,9 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# .env carries database, SSO, and API credentials; keep it owner-only.
+chmod 600 .env 2>/dev/null || true
+
 if [ "${1:-}" = "--all" ]; then
     docker compose --env-file .env up -d --remove-orphans --wait --wait-timeout 360
 else
