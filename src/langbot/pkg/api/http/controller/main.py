@@ -4,6 +4,7 @@ import asyncio
 import importlib
 import os
 import typing
+from urllib.parse import urlsplit
 
 import quart
 import quart_cors
@@ -67,6 +68,70 @@ class BoundedJSONRequest(quart.Request):
         return result
 
 
+# The embed widget is served from LangBot but runs on arbitrary customer
+# sites, so only these public routes keep wildcard CORS. Authenticated APIs
+# are limited to an explicit origin allow list.
+_EMBED_CORS_PATH_PREFIX = '/api/v1/embed/'
+_EMBED_CORS_ALLOW_HEADERS = 'Authorization, Content-Type'
+_EMBED_CORS_ALLOW_METHODS = 'GET, POST, OPTIONS'
+_API_CORS_ALLOW_METHODS = 'GET, HEAD, POST, OPTIONS, PUT, PATCH, DELETE'
+_API_CORS_ALLOW_HEADERS = (
+    'Authorization, Content-Type, X-API-Key, X-Workspace-Id, X-LangBot-Language'
+)
+_DEV_CORS_ORIGINS = ('http://localhost:3000', 'http://127.0.0.1:3000')
+
+
+def _origin_from_url(value: typing.Any) -> str:
+    """Return ``scheme://host[:port]`` for a configured absolute URL."""
+    try:
+        parsed = urlsplit(str(value or '').strip())
+    except ValueError:
+        return ''
+    if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+        return ''
+    return f'{parsed.scheme}://{parsed.netloc}'
+
+
+def _is_same_origin(origin: str, host: str) -> bool:
+    """Return True when an origin header points at the request's own host."""
+    try:
+        parsed = urlsplit(origin)
+    except ValueError:
+        return False
+    return bool(parsed.netloc) and parsed.netloc.lower() == str(host or '').lower()
+
+
+def _configured_cors_origins(api_config: typing.Any) -> list[str]:
+    """Build the CORS allow list for authenticated API routes.
+
+    ``api.cors_origins`` wins when set. Otherwise the browser origins implied
+    by ``api.webui_url`` / ``api.webhook_prefix`` are allowed, plus the Vite
+    dev server. Same-origin WebUI deployments need no entry at all.
+    """
+    configured = api_config.get('cors_origins', []) if isinstance(api_config, dict) else []
+    if isinstance(configured, str):
+        configured = configured.split(',')
+    if not isinstance(configured, (list, tuple)):
+        configured = []
+
+    origins: list[str] = []
+    for item in configured:
+        origin = str(item or '').strip().rstrip('/')
+        if origin:
+            origins.append(origin)
+
+    if origins:
+        return list(dict.fromkeys(origins))
+
+    origins.extend(_DEV_CORS_ORIGINS)
+    if isinstance(api_config, dict):
+        for key in ('webui_url', 'webhook_prefix'):
+            origin = _origin_from_url(api_config.get(key))
+            if origin:
+                origins.append(origin)
+    return list(dict.fromkeys(origins))
+
+
 class HTTPController:
     ap: app.Application
 
@@ -76,7 +141,52 @@ class HTTPController:
         self.ap = ap
         self.quart_app = quart.Quart(__name__)
         self.quart_app.request_class = BoundedJSONRequest
-        quart_cors.cors(self.quart_app, allow_origin='*')
+        self._cors_origins = _configured_cors_origins(self.ap.instance_config.data.get('api', {}))
+
+        @self.quart_app.after_request
+        async def apply_cors_headers(response: quart.Response) -> quart.Response:
+            origin = quart.request.origin
+            if not origin:
+                return response
+
+            if (quart.request.path or '').startswith(_EMBED_CORS_PATH_PREFIX):
+                # Public widget routes are called from whatever site embeds the
+                # widget. The endpoints authenticate with the signed session
+                # token and use no cookies, so wildcard access is safe here.
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                response.headers['Access-Control-Allow-Headers'] = _EMBED_CORS_ALLOW_HEADERS
+                response.headers['Access-Control-Allow-Methods'] = _EMBED_CORS_ALLOW_METHODS
+                response.headers['Access-Control-Max-Age'] = '600'
+                return response
+
+            if origin in self._cors_origins:
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Methods'] = _API_CORS_ALLOW_METHODS
+                response.headers['Access-Control-Allow-Headers'] = (
+                    quart.request.access_control_request_headers or _API_CORS_ALLOW_HEADERS
+                )
+                response.headers['Access-Control-Max-Age'] = '600'
+                response.vary.add('Origin')
+            return response
+
+        @self.quart_app.before_websocket
+        async def check_websocket_origin() -> None:
+            # Browsers send Origin on the WebSocket handshake. Allow same-origin
+            # pages and explicitly configured origins; the embed socket is
+            # exempt because it runs on customer sites and authenticates with a
+            # signed session token.
+            view_func = self.quart_app.view_functions.get(quart.websocket.endpoint)
+            if getattr(view_func, quart_cors.QUART_CORS_EXEMPT_ATTRIBUTE, False):
+                return
+            origin = quart.websocket.origin
+            if not origin:
+                # Non-browser protocol clients (reverse WebSocket, CLI) omit it
+                # and authenticate through their own token checks.
+                return
+            host = quart.websocket.headers.get('Host', '')
+            if origin in self._cors_origins or _is_same_origin(origin, host):
+                return
+            quart.abort(400)
 
         # Set maximum content length to prevent large file uploads
         self.quart_app.config['MAX_CONTENT_LENGTH'] = group.MAX_FILE_SIZE

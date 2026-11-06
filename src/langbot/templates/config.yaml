@@ -9,6 +9,12 @@ api:
     # OAuth redirects trust only these server-side values, never request Host
     # or Origin headers.
     webui_url: ''
+    # Browser origins allowed to call authenticated APIs cross-origin.
+    # Leave empty to allow only the origins implied by webui_url and
+    # webhook_prefix plus the local Vite dev server. Same-origin WebUI
+    # deployments need no entry. The public /api/v1/embed/ routes keep
+    # wildcard CORS so the widget can run on arbitrary customer sites.
+    cors_origins: []
     # Global API key for the HTTP service API and the MCP server. When set to a
     # non-empty string, this key is accepted anywhere a web-UI-created API key is
     # accepted (X-API-Key header or "Authorization: Bearer <key>"), WITHOUT any

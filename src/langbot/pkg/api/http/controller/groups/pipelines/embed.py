@@ -19,6 +19,7 @@ import re
 import httpx
 
 import quart
+import quart_cors
 
 from ... import group
 from ......i18n import language, t
@@ -29,6 +30,11 @@ from .websocket_chat import create_scoped_duplex_tasks, wait_for_duplex_tasks
 
 logger = logging.getLogger(__name__)
 _AUTH_TIMEOUT_SECONDS = 10.0
+
+# Embed session tokens are bound to one bot and expire after this window.
+_EMBED_SESSION_TOKEN_TTL_SECONDS = 86400
+# Accept tokens minted slightly in the future on hosts whose clocks differ.
+_EMBED_SESSION_TOKEN_FUTURE_SKEW_SECONDS = 60
 
 # Anonymous consultation submissions are throttled in-process because the
 # standalone pages cannot reuse the widget's Turnstile token (it lives in a
@@ -237,17 +243,58 @@ class EmbedRouterGroup(group.RouterGroup):
     def _get_bot_config(runtime_bot) -> dict:
         return runtime_bot.bot_entity.adapter_config
 
-    def _verify_session_token_value(self, token: str, runtime_bot) -> bool:
+    def _session_signing_key(self, runtime_bot) -> str:
+        """Return the HMAC key used to sign embed session tokens.
+
+        A configured Turnstile secret is already a per-bot server-side secret,
+        so it stays the key for backward compatibility.  When Turnstile is
+        disabled the bot has no secret of its own, so derive a stable key from
+        the instance JWT secret and the bot UUID.  Returning ``''`` makes
+        verification fail closed instead of accepting arbitrary tokens.
+        """
         config = self._get_bot_config(runtime_bot)
-        secret = config.get('turnstile_secret_key', '')
-        if not secret:
-            return True
+        secret = str(config.get('turnstile_secret_key') or '').strip()
+        if secret:
+            return secret
+
+        system = self.ap.instance_config.data.get('system', {})
+        jwt_config = system.get('jwt', {}) if isinstance(system, dict) else {}
+        jwt_secret = str(jwt_config.get('secret') or '').strip() if isinstance(jwt_config, dict) else ''
+        if not jwt_secret:
+            return ''
+        return hmac.new(
+            jwt_secret.encode(),
+            f'langbot-embed-session:{runtime_bot.bot_entity.uuid}'.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def _issue_session_token(self, runtime_bot) -> str:
+        """Mint a timestamped token for one bot, or ``''`` without a key."""
+        signing_key = self._session_signing_key(runtime_bot)
+        if not signing_key:
+            logger.error('Cannot issue embed session token: no signing key configured')
+            return ''
+        ts_str = f'{time.time()}'
+        mac = hmac.new(signing_key.encode(), ts_str.encode(), hashlib.sha256).hexdigest()
+        return f'{ts_str}.{mac}'
+
+    def _verify_session_token_value(self, token: str, runtime_bot) -> bool:
+        """Verify a token minted by :meth:`_issue_session_token`."""
+        if not token:
+            return False
+        signing_key = self._session_signing_key(runtime_bot)
+        if not signing_key:
+            return False
         try:
-            ts_str, mac = token.split('.', 1)
+            # Time floats contain a dot, so the MAC is separated from the right.
+            ts_str, mac = token.rsplit('.', 1)
             ts = float(ts_str)
-            if time.time() - ts > 86400:
+            now = time.time()
+            if now - ts > _EMBED_SESSION_TOKEN_TTL_SECONDS:
                 return False
-            expected_mac = hmac.new(secret.encode(), f'{ts_str}'.encode(), hashlib.sha256).hexdigest()
+            if ts - now > _EMBED_SESSION_TOKEN_FUTURE_SKEW_SECONDS:
+                return False
+            expected_mac = hmac.new(signing_key.encode(), ts_str.encode(), hashlib.sha256).hexdigest()
             return hmac.compare_digest(mac, expected_mac)
         except Exception:
             return False
@@ -308,30 +355,29 @@ class EmbedRouterGroup(group.RouterGroup):
                 return self.http_status(404, -1, 'Bot not found or not available')
             try:
                 data = await quart.request.get_json()
-                token = data.get('token')
-                if not token:
-                    return self.http_status(400, -1, 'Token is required')
+                token = data.get('token') if isinstance(data, dict) else None
 
                 config = self._get_bot_config(runtime_bot)
-                secret = config.get('turnstile_secret_key', '')
-                if not secret:
-                    ts = time.time()
-                    return self.success(data={'token': f'{ts}.dummy'})
+                secret = str(config.get('turnstile_secret_key') or '').strip()
+                if secret:
+                    if not token:
+                        return self.http_status(400, -1, 'Token is required')
 
-                async with httpx.AsyncClient(event_hooks=httpclient.httpx_response_limit_hooks()) as client:
-                    resp = await client.post(
-                        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-                        data={'secret': secret, 'response': token},
-                    )
-                    result = await httpclient.parse_json_response(resp)
+                    async with httpx.AsyncClient(event_hooks=httpclient.httpx_response_limit_hooks()) as client:
+                        resp = await client.post(
+                            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+                            data={'secret': secret, 'response': token},
+                        )
+                        result = await httpclient.parse_json_response(resp)
 
-                if not result.get('success'):
-                    return self.http_status(403, -1, 'Turnstile verification failed')
+                    if not result.get('success'):
+                        return self.http_status(403, -1, 'Turnstile verification failed')
 
-                ts = time.time()
-                mac = hmac.new(secret.encode(), f'{ts}'.encode(), hashlib.sha256).hexdigest()
-                session_token = f'{ts}.{mac}'
-
+                # Turnstile disabled still mints an HMAC token: the session
+                # routes and the WebSocket must never accept anonymous callers.
+                session_token = self._issue_session_token(runtime_bot)
+                if not session_token:
+                    return self.http_status(500, -1, 'Embed session signing is not configured')
                 return self.success(data={'token': session_token})
 
             except Exception as e:
@@ -546,6 +592,7 @@ class EmbedRouterGroup(group.RouterGroup):
         # -- Embed WebSocket endpoint ----------------------------------------
 
         @self.quart_app.websocket(self.path + '/<bot_uuid>/ws/connect')
+        @quart_cors.cors_exempt
         async def embed_websocket_connect(bot_uuid: str):
             """WebSocket connection for embed widget, keyed by bot_uuid."""
             await quart.websocket.accept()
@@ -576,7 +623,11 @@ class EmbedRouterGroup(group.RouterGroup):
                 await self._authenticate_websocket(runtime_bot)
                 await self._assert_execution_active(runtime_bot)
             except Exception:
-                await quart.websocket.send(json.dumps({'type': 'error', 'message': t('Unauthorized')}))
+                # ``code`` lets the widget discard an expired token and mint a
+                # fresh one without parsing a localized message.
+                await quart.websocket.send(
+                    json.dumps({'type': 'error', 'message': t('Unauthorized'), 'code': 'unauthorized'})
+                )
                 return
             try:
                 proxy_bot = await self.ap.platform_mgr.get_websocket_proxy_bot(runtime_bot.execution_context)

@@ -1039,6 +1039,12 @@
 
   function wsConnect() {
     if (state.stopped || isSocketBusy()) return;
+    // The server rejects the authenticate frame without a signed session
+    // token, even when Turnstile is disabled. Acquire one before dialing.
+    if (!state.sessionToken) {
+      ensureSessionToken(wsConnect);
+      return;
+    }
 
     var endpoint = new URL(CONFIG.baseUrl || "/", window.location.href);
     endpoint.protocol =
@@ -1161,6 +1167,15 @@
         state.isStreaming = false;
         state.streamingMsgId = null;
         showError(data.message || "Unknown error");
+        if (data.code === "unauthorized") {
+          // The 24h session token expired after a long-lived page. Drop it
+          // and let wsConnect() mint a fresh one before reconnecting.
+          state.sessionToken = null;
+          state.isConnected = false;
+          updateStatusDot();
+          updateSendBtn();
+          ensureSessionToken(wsConnect);
+        }
         break;
     }
   }
@@ -2050,7 +2065,7 @@
           state.hasConnected ? t("reconnecting") : t("connecting"),
         );
       }
-      ensureTurnstileVerified(function () {
+      ensureSessionToken(function () {
         loadHistory();
         if (state.isConnected) {
           // A socket left from before the panel closed may be a zombie after
@@ -2077,12 +2092,8 @@
     }
   }
 
-  function ensureTurnstileVerified(callback) {
-    if (
-      state.sessionToken ||
-      !CONFIG.turnstileSiteKey ||
-      CONFIG.turnstileSiteKey.indexOf("__LANGBOT") === 0
-    ) {
+  function ensureSessionToken(callback) {
+    if (state.sessionToken) {
       return callback();
     }
     if (state.turnstileQueue) {
@@ -2099,6 +2110,46 @@
       }
     };
 
+    var submitVerification = function (payload) {
+      fetch(
+        CONFIG.baseUrl +
+          "/api/v1/embed/" +
+          CONFIG.botUuid +
+          "/turnstile/verify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      )
+        .then(function (res) {
+          return res.json();
+        })
+        .then(function (data) {
+          if (data && data.data && data.data.token) {
+            state.sessionToken = data.data.token;
+            flushQueue(true);
+          } else {
+            showError(t("botVerificationFailed"));
+            flushQueue(false);
+          }
+        })
+        .catch(function () {
+          showError(t("botVerificationNetworkError"));
+          flushQueue(false);
+        });
+    };
+
+    // Turnstile is off, but the server still signs a session token so the
+    // message history, reset, and WebSocket routes cannot be used anonymously.
+    if (
+      !CONFIG.turnstileSiteKey ||
+      CONFIG.turnstileSiteKey.indexOf("__LANGBOT") === 0
+    ) {
+      submitVerification({ token: "" });
+      return;
+    }
+
     var doRender = function () {
       var container = document.createElement("div");
       document.body.appendChild(container);
@@ -2106,33 +2157,7 @@
         sitekey: CONFIG.turnstileSiteKey,
         size: "invisible",
         callback: function (token) {
-          fetch(
-            CONFIG.baseUrl +
-              "/api/v1/embed/" +
-              CONFIG.botUuid +
-              "/turnstile/verify",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: token }),
-            },
-          )
-            .then(function (res) {
-              return res.json();
-            })
-            .then(function (data) {
-              if (data && data.data && data.data.token) {
-                state.sessionToken = data.data.token;
-                flushQueue(true);
-              } else {
-                showError(t("botVerificationFailed"));
-                flushQueue(false);
-              }
-            })
-            .catch(function () {
-              showError(t("botVerificationNetworkError"));
-              flushQueue(false);
-            });
+          submitVerification({ token: token });
         },
         "error-callback": function () {
           showError(t("botVerificationError"));

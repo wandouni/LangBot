@@ -65,7 +65,13 @@ def fake_embed_app():
     app.instance_config.data.update(
         {
             'api': {'port': 5300},
-            'system': {'allow_modify_login_info': True, 'limitation': {}},
+            'system': {
+                'allow_modify_login_info': True,
+                'limitation': {},
+                # Embed session tokens are signed even when Turnstile is off;
+                # this mirrors the secret genkeys.py writes at boot.
+                'jwt': {'secret': 'test-jwt-secret-for-embed-tokens'},
+            },
         }
     )
 
@@ -141,6 +147,18 @@ async def quart_test_client(fake_embed_app, http_controller_cls):
 
     client = controller.quart_app.test_client()
     yield client
+
+
+@pytest.fixture(scope='module')
+async def embed_session_token(quart_test_client):
+    """Mint a real session token through the public verification route."""
+    response = await quart_test_client.post(
+        '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/turnstile/verify',
+        json={},
+    )
+    data = await response.get_json()
+    assert data['code'] == 0
+    return data['data']['token']
 
 
 @pytest.mark.usefixtures('mock_circular_import_chain')
@@ -328,8 +346,8 @@ class TestEmbedTurnstileVerifyEndpoint:
     """Tests for Turnstile verification endpoint."""
 
     @pytest.mark.asyncio
-    async def test_turnstile_verify_no_secret(self, quart_test_client, monkeypatch):
-        """POST turnstile verify without secret returns dummy token."""
+    async def test_turnstile_verify_no_secret_issues_signed_token(self, quart_test_client, monkeypatch):
+        """Without Turnstile the route still mints an HMAC session token."""
         import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
 
         monkeypatch.setattr(embed.time, 'time', lambda: 1720000000.25)
@@ -340,9 +358,10 @@ class TestEmbedTurnstileVerifyEndpoint:
         assert response.status_code == 200
         data = await response.get_json()
         assert data['code'] == 0
-        assert 'token' in data['data']
-
-        assert data['data']['token'] == '1720000000.25.dummy'
+        token = data['data']['token']
+        assert token.startswith('1720000000.25.')
+        assert token != '1720000000.25.dummy'
+        assert len(token.rsplit('.', 1)[1]) == 64
 
     @pytest.mark.asyncio
     async def test_turnstile_verify_invalid_uuid(self, quart_test_client):
@@ -354,12 +373,29 @@ class TestEmbedTurnstileVerifyEndpoint:
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_turnstile_verify_missing_token(self, quart_test_client):
-        """POST turnstile verify without token returns 400."""
+    async def test_turnstile_verify_missing_token_without_configured_secret(self, quart_test_client):
+        """Turnstile off means there is no challenge token to require."""
         response = await quart_test_client.post(
             '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/turnstile/verify', json={}
         )
 
+        assert response.status_code == 200
+        data = await response.get_json()
+        assert data['data']['token']
+
+    @pytest.mark.asyncio
+    async def test_turnstile_verify_requires_token_when_configured(self, quart_test_client, fake_embed_app):
+        """With Turnstile on, a missing challenge token is rejected."""
+        config = fake_embed_app.platform_mgr.resolve_public_bot.side_effect(
+            'a1b2c3d4-5678-90ab-cdef-123456789abc'
+        ).bot_entity.adapter_config
+        config['turnstile_secret_key'] = 'test-secret'
+        try:
+            response = await quart_test_client.post(
+                '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/turnstile/verify', json={}
+            )
+        finally:
+            config['turnstile_secret_key'] = ''
         assert response.status_code == 400
 
 
@@ -368,11 +404,11 @@ class TestEmbedMessagesEndpoint:
     """Tests for messages endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_messages_person_success(self, quart_test_client, fake_embed_app):
+    async def test_get_messages_person_success(self, quart_test_client, fake_embed_app, embed_session_token):
         """GET messages/person returns messages."""
         response = await quart_test_client.get(
             f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/person?session_id={SESSION_ID}',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
         )
 
         assert response.status_code == 200
@@ -383,11 +419,11 @@ class TestEmbedMessagesEndpoint:
         proxy_bot.adapter.get_websocket_messages.assert_called_with('test-pipeline-uuid', 'person', SESSION_ID)
 
     @pytest.mark.asyncio
-    async def test_get_messages_group_success(self, quart_test_client, fake_embed_app):
+    async def test_get_messages_group_success(self, quart_test_client, fake_embed_app, embed_session_token):
         """GET messages/group returns messages."""
         response = await quart_test_client.get(
             f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/group?session_id={SESSION_ID}',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
         )
 
         assert response.status_code == 200
@@ -399,21 +435,61 @@ class TestEmbedMessagesEndpoint:
         adapter.get_websocket_messages.assert_called_with('test-pipeline-uuid', 'group', SESSION_ID)
 
     @pytest.mark.asyncio
-    async def test_get_messages_requires_session_id(self, quart_test_client):
+    async def test_get_messages_without_token_is_rejected(self, quart_test_client):
+        """Anonymous callers cannot read session history, even without Turnstile."""
+        response = await quart_test_client.get(
+            f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/person?session_id={SESSION_ID}'
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_get_messages_tampered_token_is_rejected(self, quart_test_client, embed_session_token):
+        """A modified MAC must not be accepted."""
+        ts_str, mac = embed_session_token.rsplit('.', 1)
+        tampered = f'{ts_str}.{"0" * len(mac)}'
+        response = await quart_test_client.get(
+            f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/person?session_id={SESSION_ID}',
+            headers={'Authorization': f'Bearer {tampered}'},
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_get_messages_expired_token_is_rejected(self, quart_test_client, monkeypatch):
+        """Tokens older than the 24h TTL must not be accepted."""
+        import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(embed.time, 'time', lambda: 1000000000.0)
+            issued = await quart_test_client.post(
+                '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/turnstile/verify', json={}
+            )
+        expired = (await issued.get_json())['data']['token']
+
+        response = await quart_test_client.get(
+            f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/person?session_id={SESSION_ID}',
+            headers={'Authorization': f'Bearer {expired}'},
+        )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_get_messages_requires_session_id(self, quart_test_client, embed_session_token):
         """GET messages without a client session identifier returns 400."""
         response = await quart_test_client.get(
             '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/person',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
         )
 
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_get_messages_invalid_session_type(self, quart_test_client):
+    async def test_get_messages_invalid_session_type(self, quart_test_client, embed_session_token):
         """GET messages with invalid session_type returns 400."""
         response = await quart_test_client.get(
             f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/messages/invalid?session_id={SESSION_ID}',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
         )
 
         assert response.status_code == 400
@@ -426,11 +502,11 @@ class TestEmbedResetEndpoint:
     """Tests for session reset endpoint."""
 
     @pytest.mark.asyncio
-    async def test_reset_session_person_success(self, quart_test_client, fake_embed_app):
+    async def test_reset_session_person_success(self, quart_test_client, fake_embed_app, embed_session_token):
         """POST reset/person resets session."""
         response = await quart_test_client.post(
             f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/reset/person?session_id={SESSION_ID}',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
         )
 
         assert response.status_code == 200
@@ -440,20 +516,20 @@ class TestEmbedResetEndpoint:
         proxy_bot.adapter.reset_session.assert_called_with('test-pipeline-uuid', 'person', SESSION_ID)
 
     @pytest.mark.asyncio
-    async def test_reset_session_requires_session_id(self, quart_test_client):
+    async def test_reset_session_requires_session_id(self, quart_test_client, embed_session_token):
         """POST reset without a client session identifier returns 400."""
         response = await quart_test_client.post(
             '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/reset/person',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
         )
 
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_reset_session_invalid_uuid(self, quart_test_client):
+    async def test_reset_session_invalid_uuid(self, quart_test_client, embed_session_token):
         """POST reset with invalid UUID returns 400."""
         response = await quart_test_client.post(
-            '/api/v1/embed/invalid-uuid/reset/person', headers={'Authorization': 'Bearer 1234567890.dummy'}
+            '/api/v1/embed/invalid-uuid/reset/person', headers={'Authorization': f'Bearer {embed_session_token}'}
         )
 
         assert response.status_code == 400
@@ -464,7 +540,7 @@ class TestEmbedFeedbackEndpoint:
     """Tests for feedback submission endpoint."""
 
     @pytest.mark.asyncio
-    async def test_submit_feedback_like(self, quart_test_client, fake_embed_app, monkeypatch):
+    async def test_submit_feedback_like(self, quart_test_client, fake_embed_app, monkeypatch, embed_session_token):
         """POST feedback with type=1 (like) succeeds."""
         import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
 
@@ -472,7 +548,7 @@ class TestEmbedFeedbackEndpoint:
         fake_embed_app.monitoring_service.record_feedback.reset_mock()
         response = await quart_test_client.post(
             '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/feedback',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
             json={'message_id': 'msg-123', 'feedback_type': 1},
         )
 
@@ -498,7 +574,7 @@ class TestEmbedFeedbackEndpoint:
         }
 
     @pytest.mark.asyncio
-    async def test_submit_feedback_dislike(self, quart_test_client, fake_embed_app, monkeypatch):
+    async def test_submit_feedback_dislike(self, quart_test_client, fake_embed_app, monkeypatch, embed_session_token):
         """POST feedback with type=2 (dislike) succeeds."""
         import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
 
@@ -506,7 +582,7 @@ class TestEmbedFeedbackEndpoint:
         fake_embed_app.monitoring_service.record_feedback.reset_mock()
         response = await quart_test_client.post(
             '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/feedback',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
             json={'message_id': 'msg-123', 'feedback_type': 2},
         )
 
@@ -529,11 +605,11 @@ class TestEmbedFeedbackEndpoint:
         }
 
     @pytest.mark.asyncio
-    async def test_submit_feedback_invalid_type(self, quart_test_client):
+    async def test_submit_feedback_invalid_type(self, quart_test_client, embed_session_token):
         """POST feedback with invalid type returns 400."""
         response = await quart_test_client.post(
             '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/feedback',
-            headers={'Authorization': 'Bearer 1234567890.dummy'},
+            headers={'Authorization': f'Bearer {embed_session_token}'},
             json={'message_id': 'msg-123', 'feedback_type': 99},
         )
 
@@ -655,7 +731,7 @@ class TestEmbedWebSocketEndpoint:
     """The public socket authenticates before resolving shared runtime state."""
 
     @pytest.mark.asyncio
-    async def test_authenticates_before_connecting(self, quart_test_client, fake_embed_app, monkeypatch):
+    async def test_authenticates_before_connecting(self, quart_test_client, fake_embed_app, monkeypatch, embed_session_token):
         import langbot.pkg.api.http.controller.groups.pipelines.embed as embed
 
         authenticated = False
@@ -684,7 +760,7 @@ class TestEmbedWebSocketEndpoint:
             f'?session_type=person&session_id={SESSION_ID}',
             headers={'Origin': 'http://localhost'},
         ) as websocket:
-            await websocket.send(json.dumps({'type': 'authenticate', 'token': ''}))
+            await websocket.send(json.dumps({'type': 'authenticate', 'token': embed_session_token}))
             connected = json.loads(await websocket.receive())
             assert connected['type'] == 'connected'
             assert connected['bot_uuid'] == 'a1b2c3d4-5678-90ab-cdef-123456789abc'
@@ -694,6 +770,23 @@ class TestEmbedWebSocketEndpoint:
             'workspace-test',
             expected_generation=1,
         )
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_token_when_turnstile_disabled(self, quart_test_client, fake_embed_app):
+        """Turnstile disabled must not mean anonymous WebSocket access."""
+        fake_embed_app.platform_mgr.get_websocket_proxy_bot.reset_mock()
+
+        async with quart_test_client.websocket(
+            f'/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/ws/connect'
+            f'?session_type=person&session_id={SESSION_ID}',
+            headers={'Origin': 'http://localhost'},
+        ) as websocket:
+            await websocket.send(json.dumps({'type': 'authenticate', 'token': ''}))
+            response = json.loads(await websocket.receive())
+            assert response['type'] == 'error'
+            assert response['code'] == 'unauthorized'
+
+        fake_embed_app.platform_mgr.get_websocket_proxy_bot.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_non_auth_first_frame_before_runtime_lookup(self, quart_test_client, fake_embed_app):
@@ -706,7 +799,7 @@ class TestEmbedWebSocketEndpoint:
         ) as websocket:
             await websocket.send(json.dumps({'type': 'message', 'message': []}))
             response = json.loads(await websocket.receive())
-            assert response == {'type': 'error', 'message': 'Unauthorized'}
+            assert response == {'type': 'error', 'message': 'Unauthorized', 'code': 'unauthorized'}
 
         fake_embed_app.platform_mgr.get_websocket_proxy_bot.assert_not_awaited()
 
@@ -725,14 +818,14 @@ class TestEmbedWebSocketEndpoint:
             ) as websocket:
                 await websocket.send(json.dumps({'type': 'authenticate', 'token': 'invalid'}))
                 response = json.loads(await websocket.receive())
-                assert response == {'type': 'error', 'message': 'Unauthorized'}
+                assert response == {'type': 'error', 'message': 'Unauthorized', 'code': 'unauthorized'}
         finally:
             config['turnstile_secret_key'] = ''
 
         fake_embed_app.platform_mgr.get_websocket_proxy_bot.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_rejects_message_when_bot_is_disabled_after_connect(self, quart_test_client, fake_embed_app):
+    async def test_rejects_message_when_bot_is_disabled_after_connect(self, quart_test_client, fake_embed_app, embed_session_token):
         runtime_bot = fake_embed_app.platform_mgr.resolve_public_bot.side_effect('a1b2c3d4-5678-90ab-cdef-123456789abc')
         adapter = fake_embed_app.platform_mgr.get_websocket_proxy_bot.return_value.adapter
         adapter.handle_websocket_message.reset_mock()
@@ -742,7 +835,7 @@ class TestEmbedWebSocketEndpoint:
             f'?session_type=person&session_id={SESSION_ID}',
             headers={'Origin': 'http://localhost'},
         ) as websocket:
-            await websocket.send(json.dumps({'type': 'authenticate', 'token': ''}))
+            await websocket.send(json.dumps({'type': 'authenticate', 'token': embed_session_token}))
             connected = json.loads(await websocket.receive())
             assert connected['type'] == 'connected'
             # WebSocket handlers have no request context; the visitor IP must
@@ -761,3 +854,72 @@ class TestEmbedWebSocketEndpoint:
                 runtime_bot.bot_entity.enable = True
 
         adapter.handle_websocket_message.assert_not_awaited()
+
+
+@pytest.mark.usefixtures('mock_circular_import_chain')
+class TestCorsPolicy:
+    """Only the public embed routes keep wildcard CORS."""
+
+    @pytest.mark.asyncio
+    async def test_embed_route_allows_any_origin(self, quart_test_client):
+        response = await quart_test_client.get(
+            '/api/v1/embed/logo', headers={'Origin': 'https://customer.example'}
+        )
+
+        assert response.status_code == 200
+        assert response.headers.get('Access-Control-Allow-Origin') == '*'
+
+    @pytest.mark.asyncio
+    async def test_embed_preflight_allows_authorization(self, quart_test_client):
+        response = await quart_test_client.options(
+            '/api/v1/embed/a1b2c3d4-5678-90ab-cdef-123456789abc/turnstile/verify',
+            headers={
+                'Origin': 'https://customer.example',
+                'Access-Control-Request-Method': 'POST',
+                'Access-Control-Request-Headers': 'authorization,content-type',
+            },
+        )
+
+        assert response.status_code in (200, 204)
+        assert response.headers.get('Access-Control-Allow-Origin') == '*'
+        assert 'POST' in response.headers.get('Access-Control-Allow-Methods', '')
+
+    @pytest.mark.asyncio
+    async def test_authenticated_route_rejects_unlisted_origin(self, quart_test_client):
+        response = await quart_test_client.get(
+            '/api/v1/user/info', headers={'Origin': 'https://evil.example'}
+        )
+
+        assert response.headers.get('Access-Control-Allow-Origin') is None
+
+    @pytest.mark.asyncio
+    async def test_authenticated_route_allows_configured_dev_origin(self, quart_test_client):
+        response = await quart_test_client.get(
+            '/api/v1/user/info', headers={'Origin': 'http://localhost:3000'}
+        )
+
+        assert response.headers.get('Access-Control-Allow-Origin') == 'http://localhost:3000'
+
+
+@pytest.mark.usefixtures('mock_circular_import_chain')
+class TestWebSocketOriginPolicy:
+    """Dashboard sockets reject foreign origins; the embed socket is exempt."""
+
+    DASHBOARD_WS = f'/api/v1/pipelines/test-pipeline-uuid/ws/connect?session_type=person&session_id={SESSION_ID}'
+
+    @pytest.mark.asyncio
+    async def test_disallowed_origin_is_rejected(self, quart_test_client):
+        with pytest.raises(Exception):
+            async with quart_test_client.websocket(
+                self.DASHBOARD_WS, headers={'Origin': 'https://evil.example'}
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_configured_dev_origin_is_accepted(self, quart_test_client):
+        async with quart_test_client.websocket(
+            self.DASHBOARD_WS, headers={'Origin': 'http://localhost:3000'}
+        ) as websocket:
+            await websocket.send(json.dumps({'type': 'authenticate', 'token': 'invalid'}))
+            response = json.loads(await websocket.receive())
+            assert response == {'type': 'error', 'message': 'Unauthorized'}
