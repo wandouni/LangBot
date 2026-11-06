@@ -22,7 +22,8 @@ async def generate_files() -> list[str]:
 
     for path in required_paths:
         if not os.path.exists(path):
-            os.mkdir(path)
+            # data/ holds config secrets, the database, and cached media.
+            os.makedirs(path, mode=0o700 if path == 'data' or path.startswith('data/') else 0o755)
 
     generated_files = []
     for file in required_files:

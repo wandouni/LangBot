@@ -312,3 +312,36 @@ class TestConfigExists:
 
         json_file = JSONConfigFile(str(config_file), template_data={})
         assert json_file.exists() is False
+
+
+class TestConfigFilePermissions:
+    """data/config.yaml carries secrets and must not be world-readable."""
+
+    @pytest.mark.asyncio
+    async def test_load_restricts_existing_permissions(self, tmp_path):
+        config_file = tmp_path / 'config.yaml'
+        config_file.write_text('system:\n  jwt:\n    secret: test\n')
+        config_file.chmod(0o644)
+
+        yaml_file = YAMLConfigFile(str(config_file), template_data={})
+        await yaml_file.load(completion=False)
+
+        assert (config_file.stat().st_mode & 0o777) == 0o600
+
+    @pytest.mark.asyncio
+    async def test_save_creates_private_file(self, tmp_path):
+        config_file = tmp_path / 'config.yaml'
+        yaml_file = YAMLConfigFile(str(config_file), template_data={})
+
+        await yaml_file.save({'system': {'jwt': {'secret': 'test'}}})
+
+        assert (config_file.stat().st_mode & 0o777) == 0o600
+
+    @pytest.mark.asyncio
+    async def test_create_uses_private_file(self, tmp_path):
+        config_file = tmp_path / 'config.yaml'
+        yaml_file = YAMLConfigFile(str(config_file), template_data={'name': 'default'})
+
+        await yaml_file.create()
+
+        assert (config_file.stat().st_mode & 0o777) == 0o600
