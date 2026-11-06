@@ -61,6 +61,9 @@ def index_functions(path: Path) -> dict[int, dict]:
 
 
 def measure(root: Path) -> list[dict]:
+    # Ruff reports canonicalized filenames (macOS resolves /var -> /private/var),
+    # so relative_to() must compare against a canonical root.
+    root = root.resolve()
     source = root / SOURCE
     if not source.is_dir():
         return []

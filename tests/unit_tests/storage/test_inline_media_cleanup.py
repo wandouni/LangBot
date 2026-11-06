@@ -216,6 +216,12 @@ async def test_event_scan_budget_advances_past_foreign_events_without_reading_pa
             )
             if 'CORRELATED' in plan:
                 assert 'SEARCH agent_run_event USING INTEGER PRIMARY KEY' in plan, plan
+            elif 'agent_run_event.id =' in statement:
+                # Payload fetches filter by primary key, so the primary-key search
+                # is the intended plan. SQLite >= 3.53 flattens the EXISTS scope
+                # into a semi-join and drops the CORRELATED marker, which used to
+                # route this statement into the branch below.
+                assert 'SEARCH agent_run_event USING INTEGER PRIMARY KEY' in plan, plan
             else:
                 assert 'COVERING INDEX ix_agent_run_event_media_ttl' in plan, plan
             assert 'TEMP B-TREE' not in plan, plan
