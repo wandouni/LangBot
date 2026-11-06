@@ -16,6 +16,9 @@ from langbot.pkg.utils import httpclient
 
 QQ_SELECT_ACTION_PREFIX = '__langbot_select__:'
 _MAX_CALLBACK_BODY_BYTES = 1024 * 1024
+# QQ signs each callback with the timestamp it sent; allow modest clock skew
+# while still preventing an old captured request from being replayed forever.
+_SIGNATURE_TIMESTAMP_TOLERANCE_SECONDS = 300
 
 
 def get_select_field_options(form_data: dict) -> tuple[str, list[str]]:
@@ -271,6 +274,12 @@ class QQOfficialClient:
                 return {'error': 'callback body exceeds the size limit'}, 413
 
             payload = await asyncio.to_thread(json.loads, body)
+
+            # op=13 is the callback URL challenge: QQ expects our signature in
+            # the response, so there is nothing to verify on the request.
+            if payload.get('op') != 13 and not await self.verify_callback_signature(req, body):
+                await self.logger.warning('QQ callback signature verification failed, rejecting request')
+                return {'error': 'invalid signature'}, 403
 
             if payload.get('op') == 13:
                 validation_data = payload.get('d')
@@ -903,6 +912,38 @@ class QQOfficialClient:
         target_size = max(int(target_size), 1)
         repeats = (target_size + len(bot_secret) - 1) // len(bot_secret)
         return (bot_secret * repeats)[:target_size].encode('utf-8')
+
+    async def verify_callback_signature(self, req, body: bytes) -> bool:
+        """Verify the Ed25519 signature QQ attaches to callback events.
+
+        QQ signs ``timestamp + raw_body`` with the bot secret and sends the
+        result in ``X-Signature-Ed25519``. Rejecting requests without a valid
+        signature prevents anyone who knows the webhook URL from injecting
+        forged message events.
+        """
+        if not self.secret:
+            return False
+        signature_hex = req.headers.get('X-Signature-Ed25519', '')
+        timestamp = req.headers.get('X-Signature-Timestamp', '')
+        if not signature_hex or not timestamp:
+            return False
+        try:
+            timestamp_value = int(timestamp)
+        except (TypeError, ValueError):
+            return False
+        # Accept both second and millisecond timestamps.
+        if timestamp_value > 10_000_000_000:
+            timestamp_value //= 1000
+        if abs(time.time() - timestamp_value) > _SIGNATURE_TIMESTAMP_TOLERANCE_SECONDS:
+            return False
+        try:
+            signature = bytes.fromhex(signature_hex)
+            seed = await self.repeat_seed(self.secret)
+            public_key = ed25519.Ed25519PrivateKey.from_private_bytes(seed).public_key()
+            public_key.verify(signature, timestamp.encode('utf-8') + body)
+            return True
+        except Exception:
+            return False
 
     async def verify(self, validation_payload: dict):
         seed = await self.repeat_seed(self.secret)

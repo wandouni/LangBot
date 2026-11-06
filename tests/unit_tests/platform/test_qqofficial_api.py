@@ -352,3 +352,77 @@ async def test_qq_select_click_enqueues_input_progress_query():
     assert form_action['_current_input_field'] == 'choice'
     assert form_action['_input_progress'] is True
     adapter.bot.ack_interaction.assert_awaited_once_with('interaction-1', code=0)
+
+
+def _qq_sign(secret: str, timestamp: str, body: bytes) -> str:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    repeats = (32 + len(secret) - 1) // len(secret)
+    seed = (secret * repeats)[:32].encode()
+    private_key = ed25519.Ed25519PrivateKey.from_private_bytes(seed)
+    return private_key.sign(timestamp.encode() + body).hex()
+
+
+def _qq_request(headers: dict, body: bytes):
+    from types import SimpleNamespace
+
+    async def get_data():
+        return body
+
+    return SimpleNamespace(headers=headers, get_data=get_data)
+
+
+@pytest.mark.asyncio
+async def test_qq_webhook_accepts_valid_ed25519_signature():
+    body = b'{"op":0,"t":"C2C_MESSAGE_CREATE","d":{}}'
+    timestamp = str(int(time.time()))
+    signature = _qq_sign('test-secret', timestamp, body)
+    req = _qq_request({
+        'X-Signature-Ed25519': signature,
+        'X-Signature-Timestamp': timestamp,
+    }, body)
+
+    client = QQOfficialClient('test-secret', 'token', 'app-id', AsyncMock())
+
+    assert await client.verify_callback_signature(req, body) is True
+
+
+@pytest.mark.asyncio
+async def test_qq_webhook_rejects_missing_invalid_and_stale_signatures():
+    body = b'{"op":0,"t":"C2C_MESSAGE_CREATE","d":{}}'
+    timestamp = str(int(time.time()))
+    client = QQOfficialClient('test-secret', 'token', 'app-id', AsyncMock())
+
+    missing = _qq_request({}, body)
+    assert await client.verify_callback_signature(missing, body) is False
+
+    wrong = _qq_request({
+        'X-Signature-Ed25519': _qq_sign('other-secret', timestamp, body),
+        'X-Signature-Timestamp': timestamp,
+    }, body)
+    assert await client.verify_callback_signature(wrong, body) is False
+
+    stale_ts = str(int(time.time()) - 3600)
+    stale = _qq_request({
+        'X-Signature-Ed25519': _qq_sign('test-secret', stale_ts, body),
+        'X-Signature-Timestamp': stale_ts,
+    }, body)
+    assert await client.verify_callback_signature(stale, body) is False
+
+    tampered = _qq_request({
+        'X-Signature-Ed25519': _qq_sign('test-secret', timestamp, body),
+        'X-Signature-Timestamp': timestamp,
+    }, body + b' ')
+    assert await client.verify_callback_signature(tampered, body + b' ') is False
+
+
+@pytest.mark.asyncio
+async def test_qq_webhook_handler_rejects_unsigned_event():
+    body = b'{"op":0,"t":"C2C_MESSAGE_CREATE","d":{}}'
+    client = QQOfficialClient('test-secret', 'token', 'app-id', AsyncMock())
+    client.get_message = AsyncMock()
+
+    result, status = await client._handle_callback_internal(_qq_request({}, body))
+
+    assert status == 403
+    client.get_message.assert_not_awaited()
