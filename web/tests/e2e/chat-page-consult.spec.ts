@@ -801,32 +801,209 @@ test.describe('quick links on a phone', () => {
     isMobile: true,
   });
 
-  test('tap toggles the menu and keeps it inside the viewport', async ({
+  test('tap toggles the menu above the bottom bar', async ({ page }) => {
+    await mockChatBackend(page);
+    await page.goto('/chat.html');
+    // The widget auto-focuses the composer 300ms after opening; focusing it
+    // later would steal focus from the toggle and close the menu via focusout.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = document.getElementById('langbot-widget-root');
+          return Boolean(
+            host?.shadowRoot?.activeElement?.classList.contains('lb-input'),
+          );
+        }),
+      )
+      .toBe(true);
+
+    const toggle = page.locator('#ln-quick-toggle');
+    const menu = page.locator('#ln-quick-menu');
+    const tools = page.locator('#ln-consult-tools');
+    // Both labels fit in the bottom bar, so the full wording is kept.
+    await expect(toggle.locator('.ln-quick-label-full')).toBeVisible();
+    await expect(toggle.locator('.ln-quick-label-short')).toBeHidden();
+
+    await toggle.tap();
+    await expect(menu).toBeVisible();
+    const box = await menu.boundingBox();
+    const toolsBox = await tools.boundingBox();
+    expect(box).not.toBeNull();
+    expect(toolsBox).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    // The menu opens upward, leaving an 8px gap above the action bar.
+    expect(box!.y + box!.height).toBeLessThanOrEqual(toolsBox!.y - 7);
+
+    await toggle.tap();
+    await expect(menu).toBeHidden();
+
+    await toggle.tap();
+    await expect(menu).toBeVisible();
+    await page.touchscreen.tap(20, 120);
+    await expect(menu).toBeHidden();
+  });
+});
+
+async function expectMobileChatLayout(page: Page, width: number) {
+  const tools = page.locator('#ln-consult-tools');
+  const panel = page.locator('.lb-panel');
+  const bubble = page.locator('.lb-bubble');
+
+  await expect(panel).toHaveClass(/lb-visible/);
+  await expect(tools).toBeVisible();
+
+  const toolsBox = await tools.boundingBox();
+  const panelBox = await panel.boundingBox();
+  expect(toolsBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+  // The action bar owns the bottom edge and the panel ends exactly above it.
+  expect(toolsBox!.y + toolsBox!.height).toBeCloseTo(844, 0);
+  expect(toolsBox!.height).toBeCloseTo(64, 0);
+  expect(panelBox!.y).toBeCloseTo(0, 0);
+  expect(panelBox!.y + panelBox!.height).toBeCloseTo(toolsBox!.y, 0);
+  expect(panelBox!.x + panelBox!.width).toBeCloseTo(width, 0);
+
+  // Long titles stay on one line and never run under the header actions.
+  const title = page.locator('.lb-header-title');
+  const actions = page.locator('.lb-header-actions');
+  await expect(title).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(title).toHaveCSS('white-space', 'nowrap');
+  const titleBox = await title.boundingBox();
+  const actionsBox = await actions.boundingBox();
+  expect(titleBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(
+    actionsBox!.x + 0.5,
+  );
+
+  await expect(page.locator('.lb-input')).toHaveCSS('font-size', '16px');
+
+  const vvHeight = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue(
+      '--lb-vv-height',
+    ),
+  );
+  expect(vvHeight.trim()).toBe('844px');
+
+  // On phones the bubble would overlap the composer, so the header minimize
+  // button is the only close affordance while the panel is open.
+  await expect(bubble).toBeHidden();
+  await page.locator('.lb-header-btn').last().click();
+  await expect(panel).not.toHaveClass(/lb-visible/);
+  await expect(tools).toBeHidden();
+  await expect(bubble).toBeVisible();
+
+  await bubble.click();
+  await expect(panel).toHaveClass(/lb-visible/);
+  await expect(tools).toBeVisible();
+}
+
+test.describe('mobile chat layout at 390px', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test('chat.html uses a bottom bar and hides the bubble while open', async ({
+    page,
+  }) => {
+    await mockChatBackend(page);
+    await page.goto('/chat.html');
+    await expectMobileChatLayout(page, 390);
+  });
+
+  test('chat-jishi.html keeps its tools in sync with the panel', async ({
+    page,
+  }) => {
+    await mockChatBackend(page);
+    await page.goto('/chat-jishi.html');
+
+    const tools = page.locator('#ln-consult-tools');
+    const panel = page.locator('.lb-panel');
+    const bubble = page.locator('.lb-bubble');
+    await expect(panel).toHaveClass(/lb-visible/);
+    await expect(tools).toBeVisible();
+    const toolsBox = await tools.boundingBox();
+    expect(toolsBox).not.toBeNull();
+    expect(toolsBox!.y + toolsBox!.height).toBeCloseTo(844, 0);
+
+    await page.locator('.lb-header-btn').last().click();
+    await expect(tools).toBeHidden();
+    await expect(bubble).toBeVisible();
+
+    await bubble.click();
+    await expect(tools).toBeVisible();
+  });
+
+  test('default.html fills the visual viewport without page tools', async ({
+    page,
+  }) => {
+    await mockChatBackend(page);
+    await page.goto('/default.html');
+
+    const panel = page.locator('.lb-panel');
+    const bubble = page.locator('.lb-bubble');
+    await expect(panel).toHaveClass(/lb-visible/);
+    await expect(page.locator('#ln-consult-tools')).toHaveCount(0);
+
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox!.y).toBeCloseTo(0, 0);
+    expect(panelBox!.y + panelBox!.height).toBeCloseTo(844, 0);
+    await expect(bubble).toBeHidden();
+
+    await page.locator('.lb-header-btn').last().click();
+    await expect(bubble).toBeVisible();
+  });
+});
+
+test.describe('mobile chat layout at 320px', () => {
+  test.use({
+    viewport: { width: 320, height: 568 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test('the bottom bar and message board fit a narrow screen', async ({
     page,
   }) => {
     await mockChatBackend(page);
     await page.goto('/chat.html');
 
     const toggle = page.locator('#ln-quick-toggle');
-    const menu = page.locator('#ln-quick-menu');
-    await expect(toggle.locator('.ln-quick-label-short')).toBeVisible();
-    await expect(toggle.locator('.ln-quick-label-full')).toBeHidden();
+    const launcher = page.locator('#ln-consult-launcher');
+    const tools = page.locator('#ln-consult-tools');
+    await expect(tools).toBeVisible();
+    const toggleBox = await toggle.boundingBox();
+    const launcherBox = await launcher.boundingBox();
+    expect(toggleBox).not.toBeNull();
+    expect(launcherBox).not.toBeNull();
+    expect(toggleBox!.x).toBeGreaterThanOrEqual(0);
+    expect(launcherBox!.x + launcherBox!.width).toBeLessThanOrEqual(320);
+    expect(toggleBox!.x + toggleBox!.width).toBeLessThanOrEqual(launcherBox!.x);
 
-    await toggle.tap();
-    await expect(menu).toBeVisible();
-    const box = await menu.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
-    expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+    const title = page.locator('.lb-header-title');
+    await expect(title).toHaveCSS('white-space', 'nowrap');
+    const titleBox = await title.boundingBox();
+    const actionsBox = await page.locator('.lb-header-actions').boundingBox();
+    expect(titleBox).not.toBeNull();
+    expect(actionsBox).not.toBeNull();
+    expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(
+      actionsBox!.x + 0.5,
+    );
 
-    await toggle.tap();
-    await expect(menu).toBeHidden();
-
-    await toggle.tap();
-    await expect(menu).toBeVisible();
-    await page.touchscreen.tap(20, 500);
-    await expect(menu).toBeHidden();
+    await launcher.tap();
+    const dialog = page.locator('#ln-consult-dialog');
+    await expect(dialog).toBeVisible();
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+    expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(320);
+    expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(568);
   });
 });
 
