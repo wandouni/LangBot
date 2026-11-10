@@ -151,6 +151,10 @@ services:
       POSTGRES_PASSWORD: ${SQLBOT_POSTGRES_PASSWORD:?SQLBOT_POSTGRES_PASSWORD must be set in .env}
       # The gateway forwards /sqlbot/ with the prefix intact.
       CONTEXT_PATH: /sqlbot
+      # Stable key for JWT signing, datasource credential encryption and the
+      # local g2-ssr renderer token. g2-ssr refuses to start without it, and
+      # changing it breaks stored credentials and active sessions.
+      SECRET_KEY: ${SQLBOT_SECRET_KEY:?SQLBOT_SECRET_KEY must be set in .env}
       LANGBOT_SSO_ENABLED: "true"
       LANGBOT_SSO_SHARED_SECRET: ${SQLBOT_SSO_SHARED_SECRET}
       LANGBOT_SSO_PERSONAL_WORKSPACE: ${SQLBOT_SSO_PERSONAL_WORKSPACE:-true}
