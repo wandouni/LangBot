@@ -154,6 +154,9 @@
       BUBBLE_RESERVED +
       'px);' +
       '  border-radius: 0;' +
+      // A full-viewport panel should appear in place; the widget's default
+      // scale/fade entrance reads as a shrunk page on these standalone pages.
+      '  transition: none;' +
       '}' +
       // Standalone consultation pages carry the school's own branding, so the
       // "Powered by LangBot" line is hidden here only; embedded widgets on
@@ -174,10 +177,25 @@
     }
 
     if (apply()) return;
-    document.addEventListener('DOMContentLoaded', apply);
+
+    // The widget script creates its root and auto-opens the panel in one
+    // synchronous task. Watching body insertions lets us append the override
+    // in the microtask right after that task, before the browser paints;
+    // polling alone can flash the default 400x600 popup in the bottom-right
+    // corner for a frame before the panel expands to the viewport.
+    var observer = new MutationObserver(function () {
+      if (apply()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true });
+
+    // Fallback for roots created outside a body insertion. Stop after ~5
+    // seconds so a failed widget.js does not leave an interval running.
     var tries = 0;
     var timer = setInterval(function () {
-      if (apply() || ++tries > 100) clearInterval(timer);
+      if (apply() || ++tries > 100) {
+        clearInterval(timer);
+        observer.disconnect();
+      }
     }, 50);
   }
 

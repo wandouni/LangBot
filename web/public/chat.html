@@ -16,6 +16,11 @@
     Quick question tabs come only from the bot's saved "quick question
     groups" configuration. Pages no longer define fallback roles; a bot with
     no groups shows the plain welcome screen.
+
+    The "links" array powers the top-right quick link navigation. It is read
+    by the page script below, not by chat-shell.js, so ?config= and the URL
+    parameters above do not override it; edit this block to change the menu.
+    Only absolute http(s) URLs are rendered.
   -->
   <script type="application/json" id="chat-config">
   {
@@ -25,18 +30,132 @@
     "accent": "#72030C",
     "accentHover": "#932020",
     "accentBorder": "#E0BFBC",
-    "logo": "/brand/lingnan-logo-symbol.png"
+    "logo": "/brand/lingnan-logo-symbol.png",
+    "links": [
+      { "label": "广州校区VR全景", "url": "https://www.720yun.com/vr/89cjtgkkrw7?s=19327510" },
+      { "label": "清远校区VR全景", "url": "https://www.720yun.com/vr/408jtgkkuO1?s=19217486" },
+      { "label": "录取查询", "url": "https://lnc.edu.cn/zsw/xszn/lqcxl" },
+      { "label": "招生计划", "url": "https://lnc.edu.cn/zsw/zsjh/byaejbejqq" },
+      { "label": "招生简章", "url": "https://lnc.edu.cn/zsw/zsjz/2021nzsjz" },
+      { "label": "新生指南", "url": "https://lnc.edu.cn/zsw/xszn/jtzn" }
+    ]
   }
   </script>
   <script src="/chat-shell.js"></script>
   <style>
-    /* Message board entry for the standalone consultation page. Keep this
-       block in sync with chat-jishi.html; only the accent color differs. */
-    #ln-consult-launcher {
+    /* Top-right tools: quick link navigation and the message board. The
+       message board keeps its original right offset (88px desktop / 80px
+       narrow), so the quick link button sits to its left without touching the
+       widget's own reset/close actions. The message board styles stay in sync
+       with chat-jishi.html; the quick link block is chat.html only for now. */
+    #ln-consult-tools {
       position: fixed;
       top: 16px;
       right: 88px;
       z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #ln-consult-tools[hidden] { display: none; }
+    #ln-quick-nav { position: relative; }
+    #ln-quick-nav[hidden] { display: none; }
+    .ln-quick-label-short { display: none; }
+    #ln-quick-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: 1px solid #E0BFBC;
+      border-radius: 999px;
+      background: #fff;
+      color: #72030C;
+      font: 600 14px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    #ln-quick-toggle:hover { background: #FFF6F5; border-color: #932020; }
+    #ln-quick-toggle[aria-expanded="true"] { background: #FFF1EF; border-color: #932020; }
+    #ln-quick-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .ln-quick-caret {
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid currentColor;
+      transition: transform 0.15s ease;
+    }
+    #ln-quick-toggle[aria-expanded="true"] .ln-quick-caret { transform: rotate(180deg); }
+    #ln-quick-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 252px;
+      max-width: calc(100vw - 24px);
+      max-height: min(calc(100dvh - 80px), 420px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 6px;
+      border: 1px solid #E0BFBC;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    }
+    #ln-quick-menu[hidden] { display: none; }
+    #ln-quick-menu:not([hidden]) { animation: ln-quick-drop 0.14s ease-out; }
+    @keyframes ln-quick-drop {
+      from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+      to { opacity: 1; transform: none; }
+    }
+    .ln-quick-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: #111827;
+      font: 500 14px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      text-decoration: none;
+    }
+    .ln-quick-item:hover { background: #FDF2F1; }
+    .ln-quick-item:active { background: #FBE5E3; }
+    .ln-quick-item:focus-visible {
+      outline: none;
+      background: #FDF2F1;
+      box-shadow: inset 0 0 0 2px #72030C;
+    }
+    .ln-quick-icon {
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: #F7E9E8;
+      color: #72030C;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .ln-quick-item:nth-child(6n+2) .ln-quick-icon { background: #E8F1FB; color: #1D4ED8; }
+    .ln-quick-item:nth-child(6n+3) .ln-quick-icon { background: #E7F6EF; color: #0F766E; }
+    .ln-quick-item:nth-child(6n+4) .ln-quick-icon { background: #FDF1E3; color: #B45309; }
+    .ln-quick-item:nth-child(6n+5) .ln-quick-icon { background: #F1ECFE; color: #6D28D9; }
+    .ln-quick-item:nth-child(6n) .ln-quick-icon { background: #FDECEF; color: #BE123C; }
+    .ln-quick-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ln-quick-ext { flex-shrink: 0; color: #9CA3AF; font-size: 12px; }
+    @media (prefers-reduced-motion: reduce) {
+      #ln-quick-menu:not([hidden]) { animation: none; }
+      .ln-quick-caret { transition: none; }
+    }
+    #ln-consult-launcher {
       display: inline-flex;
       align-items: center;
       padding: 8px 16px;
@@ -49,7 +168,13 @@
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
       -webkit-tap-highlight-color: transparent;
     }
-    #ln-consult-launcher[hidden] { display: none; }
+    /* The launcher stays hidden until the widget script exposes the bot uuid.
+       Reserving its width avoids shifting the quick link button on load. */
+    #ln-consult-launcher[hidden] {
+      display: inline-flex;
+      visibility: hidden;
+      pointer-events: none;
+    }
     #ln-consult-launcher:hover { filter: brightness(1.12); }
     #ln-consult-launcher:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     #ln-consult-overlay {
@@ -122,14 +247,39 @@
     .ln-consult-btn.primary { border: 1px solid #72030C; background: #72030C; color: #fff; }
     .ln-consult-btn.primary:disabled { opacity: 0.65; cursor: default; filter: none; }
     @media (max-width: 480px) {
-      #ln-consult-launcher { top: 12px; right: 80px; padding: 7px 14px; font-size: 13px; }
+      #ln-consult-tools { top: 12px; right: 80px; gap: 7px; }
+      #ln-quick-toggle { padding: 7px 14px; font-size: 13px; }
+      .ln-quick-label-full { display: none; }
+      .ln-quick-label-short { display: inline; }
+      /* Expand from the viewport edge: anchored to the button, the menu would
+         be clipped off the left of a narrow screen. */
+      #ln-quick-menu {
+        position: fixed;
+        top: 52px;
+        right: 12px;
+        width: min(280px, calc(100vw - 24px));
+        max-height: calc(100dvh - 72px);
+      }
+      #ln-consult-launcher { padding: 7px 14px; font-size: 13px; }
       #ln-consult-dialog { padding: 18px; }
       .ln-consult-field input { font-size: 16px; }
     }
   </style>
 </head>
 <body>
-  <button type="button" id="ln-consult-launcher" hidden>留言板</button>
+  <div id="ln-consult-tools">
+    <div id="ln-quick-nav" hidden>
+      <button type="button" id="ln-quick-toggle"
+              aria-haspopup="menu" aria-expanded="false"
+              aria-controls="ln-quick-menu" aria-label="快捷链接导航">
+        <span class="ln-quick-label-full" aria-hidden="true">快捷链接导航</span>
+        <span class="ln-quick-label-short" aria-hidden="true">快捷链接</span>
+        <span class="ln-quick-caret" aria-hidden="true"></span>
+      </button>
+      <div id="ln-quick-menu" role="menu" aria-labelledby="ln-quick-toggle" hidden></div>
+    </div>
+    <button type="button" id="ln-consult-launcher" hidden>留言板</button>
+  </div>
   <div id="ln-consult-overlay" hidden>
     <div id="ln-consult-dialog" role="dialog" aria-modal="true" aria-labelledby="ln-consult-title">
       <h2 id="ln-consult-title">留言板</h2>
@@ -175,6 +325,10 @@
       var GENERIC_ERROR_TEXT = '提交失败，请稍后重试。';
       var NETWORK_ERROR_TEXT = '网络异常，请稍后重试。';
 
+      var tools = document.getElementById('ln-consult-tools');
+      var quickNav = document.getElementById('ln-quick-nav');
+      var quickToggle = document.getElementById('ln-quick-toggle');
+      var quickMenu = document.getElementById('ln-quick-menu');
       var launcher = document.getElementById('ln-consult-launcher');
       var overlay = document.getElementById('ln-consult-overlay');
       var form = document.getElementById('ln-consult-form');
@@ -192,6 +346,157 @@
       var lastFocus = null;
       var previousBodyOverflow = '';
       var closeTimer = null;
+      var quickOpen = false;
+      var quickOpenTimer = null;
+      var quickCloseTimer = null;
+
+      // Quick links live in the same inline #chat-config block as the brand
+      // fields, but only this script reads them: chat-shell ignores the
+      // unknown key, so ?config= and URL parameters never override them.
+      function readQuickLinks() {
+        var node = document.getElementById('chat-config');
+        var links = [];
+        if (!node) return links;
+        var config;
+        try {
+          config = JSON.parse(node.textContent);
+        } catch (error) {
+          return links;
+        }
+        if (!config || !Array.isArray(config.links)) return links;
+        for (var i = 0; i < config.links.length; i++) {
+          var entry = config.links[i];
+          if (!entry || typeof entry.label !== 'string' || typeof entry.url !== 'string') continue;
+          var label = entry.label.replace(/^\s+|\s+$/g, '');
+          var rawUrl = entry.url.replace(/^\s+|\s+$/g, '');
+          if (!label || !rawUrl) continue;
+          // Parse without a base: relative paths, //host and non-http(s)
+          // schemes all fail the protocol check and are skipped silently.
+          var parsed;
+          try {
+            parsed = new URL(rawUrl);
+          } catch (error) {
+            continue;
+          }
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+          links.push({ label: label.slice(0, 48), url: parsed.href });
+        }
+        return links;
+      }
+
+      function createQuickItem(link) {
+        var item = document.createElement('a');
+        item.className = 'ln-quick-item';
+        item.href = link.url;
+        item.target = '_blank';
+        item.rel = 'noopener noreferrer';
+        item.setAttribute('role', 'menuitem');
+        item.tabIndex = -1;
+
+        var icon = document.createElement('span');
+        icon.className = 'ln-quick-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = Array.from(link.label)[0] || '链';
+
+        var text = document.createElement('span');
+        text.className = 'ln-quick-text';
+        text.textContent = link.label;
+
+        var ext = document.createElement('span');
+        ext.className = 'ln-quick-ext';
+        ext.setAttribute('aria-hidden', 'true');
+        ext.textContent = '↗';
+
+        item.appendChild(icon);
+        item.appendChild(text);
+        item.appendChild(ext);
+        item.addEventListener('click', function () { closeQuickMenu(false); });
+        return item;
+      }
+
+      function renderQuickLinks() {
+        var links = readQuickLinks();
+        if (!links.length) return;
+        for (var i = 0; i < links.length; i++) {
+          quickMenu.appendChild(createQuickItem(links[i]));
+        }
+        quickNav.hidden = false;
+      }
+
+      // The page-level tools belong to the chat view. When the visitor closes
+      // the widget with its floating close button, hide them too instead of
+      // leaving two buttons over a blank page; reopening from the bubble
+      // brings them back. If widget.js never loads, no panel appears and the
+      // quick links stay available on their own.
+      function attachPanelWatcher(panel) {
+        function sync() {
+          var visible = panel.classList.contains('lb-visible');
+          tools.hidden = !visible;
+          if (!visible) closeQuickMenu(false);
+        }
+        sync();
+        if (typeof MutationObserver === 'function') {
+          new MutationObserver(sync).observe(panel, {
+            attributes: true,
+            attributeFilter: ['class']
+          });
+        }
+      }
+
+      function watchWidgetPanel() {
+        var tries = 0;
+        function findPanel() {
+          var root = document.getElementById('langbot-widget-root');
+          return root && root.shadowRoot ? root.shadowRoot.querySelector('.lb-panel') : null;
+        }
+        function retry() {
+          var panel = findPanel();
+          if (panel) {
+            attachPanelWatcher(panel);
+            return;
+          }
+          if (++tries > 150) return;
+          window.setTimeout(retry, 100);
+        }
+        retry();
+      }
+
+      function clearQuickTimers() {
+        if (quickOpenTimer) {
+          window.clearTimeout(quickOpenTimer);
+          quickOpenTimer = null;
+        }
+        if (quickCloseTimer) {
+          window.clearTimeout(quickCloseTimer);
+          quickCloseTimer = null;
+        }
+      }
+
+      function focusQuickItem(index) {
+        var items = quickMenu.children;
+        if (!items.length) return;
+        if (index < 0) index = items.length - 1;
+        if (index >= items.length) index = 0;
+        items[index].focus();
+      }
+
+      function openQuickMenu() {
+        clearQuickTimers();
+        if (quickOpen) return;
+        quickOpen = true;
+        quickMenu.hidden = false;
+        quickToggle.setAttribute('aria-expanded', 'true');
+      }
+
+      function closeQuickMenu(restoreFocus) {
+        clearQuickTimers();
+        if (!quickOpen) return;
+        quickOpen = false;
+        quickMenu.hidden = true;
+        quickToggle.setAttribute('aria-expanded', 'false');
+        if (restoreFocus) quickToggle.focus();
+      }
+
       function findBotUuid() {
         var scripts = document.querySelectorAll('script[src*="/api/v1/embed/"]');
         for (var i = 0; i < scripts.length; i++) {
@@ -229,6 +534,7 @@
 
       function openModal() {
         if (!botUuid) return;
+        closeQuickMenu(false);
         if (closeTimer) {
           window.clearTimeout(closeTimer);
           closeTimer = null;
@@ -326,6 +632,88 @@
         });
       }
 
+      // Hover opens the menu, but touch has no hover: pointerType tells them
+      // apart so a tap only goes through the click toggle and never double
+      // fires. Leaving gets a short grace period to cross the 8px gap into
+      // the menu without the menu flickering shut.
+      quickNav.addEventListener('pointerenter', function (event) {
+        if (event.pointerType === 'touch') return;
+        clearQuickTimers();
+        if (quickOpen) return;
+        quickOpenTimer = window.setTimeout(function () {
+          quickOpenTimer = null;
+          openQuickMenu();
+        }, 100);
+      });
+      quickNav.addEventListener('pointerleave', function (event) {
+        if (event.pointerType === 'touch') return;
+        clearQuickTimers();
+        quickCloseTimer = window.setTimeout(function () {
+          quickCloseTimer = null;
+          if (quickNav.contains(document.activeElement)) return;
+          closeQuickMenu(false);
+        }, 200);
+      });
+      quickMenu.addEventListener('pointerenter', function () {
+        if (quickCloseTimer) {
+          window.clearTimeout(quickCloseTimer);
+          quickCloseTimer = null;
+        }
+      });
+
+      quickToggle.addEventListener('click', function () {
+        if (quickOpen) closeQuickMenu(false);
+        else openQuickMenu();
+      });
+      quickToggle.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          openQuickMenu();
+          focusQuickItem(0);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          openQuickMenu();
+          focusQuickItem(-1);
+        } else if (event.key === 'Escape' && quickOpen) {
+          event.preventDefault();
+          closeQuickMenu(true);
+        }
+      });
+      quickMenu.addEventListener('keydown', function (event) {
+        var index = Array.prototype.indexOf.call(quickMenu.children, document.activeElement);
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          focusQuickItem(index + 1);
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          focusQuickItem(index - 1);
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          focusQuickItem(0);
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          focusQuickItem(-1);
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          closeQuickMenu(true);
+        }
+      });
+
+      document.addEventListener('pointerdown', function (event) {
+        if (!quickOpen || tools.contains(event.target)) return;
+        closeQuickMenu(false);
+      }, true);
+      tools.addEventListener('focusout', function () {
+        if (!quickOpen) return;
+        window.setTimeout(function () {
+          if (!quickOpen || tools.contains(document.activeElement)) return;
+          closeQuickMenu(false);
+        }, 0);
+      });
+      window.addEventListener('resize', function () {
+        if (quickOpen) closeQuickMenu(false);
+      });
+
       launcher.addEventListener('click', openModal);
       closeButton.addEventListener('click', closeModal);
       overlay.addEventListener('click', function (event) {
@@ -336,8 +724,18 @@
         submitPayload();
       });
       document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && !overlay.hidden) closeModal();
+        if (event.key !== 'Escape') return;
+        if (!overlay.hidden) {
+          closeModal();
+          return;
+        }
+        if (quickOpen) closeQuickMenu(true);
       });
+
+      // Quick links do not depend on the bot: render them immediately even if
+      // widget.js fails to load and the message board stays hidden.
+      renderQuickLinks();
+      watchWidgetPanel();
 
       if (!enableLauncher(findBotUuid())) {
         var observer = new MutationObserver(function () {
