@@ -3,12 +3,7 @@ import {
   SYSTEM_FIELD_PREFIX,
   DynamicFormItemType,
 } from '@/app/infra/entities/form/dynamic';
-import {
-  useForm,
-  useFormContext,
-  useWatch,
-  type UseFormReturn,
-} from 'react-hook-form';
+import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import type { ControllerRenderProps } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isJsonValue, isPromptValue } from './StructuredFieldValue';
@@ -55,8 +50,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  buildQuickQuestionPreviewHash,
-  buildWelcomePreviewHash,
   buildStandaloneChatPageUrl,
   type StandaloneChatPage,
 } from './standaloneChatPages';
@@ -186,7 +179,6 @@ function EmbedCodeField({
   botUuid: string;
 }) {
   const { t } = useTranslation();
-  const { getValues } = useFormContext();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -195,23 +187,16 @@ function EmbedCodeField({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const openTestPage = (page: StandaloneChatPage) => {
-    const url = new URL(
-      buildStandaloneChatPageUrl(window.location.origin, page, botUuid),
+  const openPublicPage = (page: StandaloneChatPage) => {
+    // Open the shareable page as visitors see it: no cache-busting timestamp
+    // and no draft hash. The address bar then holds the public link that can
+    // be copied directly, and the page shows the saved bot configuration.
+    const url = buildStandaloneChatPageUrl(
+      window.location.origin,
+      page,
+      botUuid,
     );
-    // The widget script is cached for five minutes. A fresh query parameter
-    // makes the test page pick up quick-question changes immediately instead
-    // of waiting for the old cache entry.
-    url.searchParams.set('v', Date.now().toString());
-    // Preview the current form draft, including edits that have not been
-    // saved yet. The hash never reaches the server, so a full six-group draft
-    // cannot overflow a request header.
-    const previewParams = [
-      buildQuickQuestionPreviewHash(getValues('quick_question_groups')),
-      buildWelcomePreviewHash(getValues('welcome_message')),
-    ].filter(Boolean);
-    if (previewParams.length) url.hash = previewParams.join('&');
-    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -249,23 +234,25 @@ function EmbedCodeField({
               className="shrink-0 gap-1.5"
             >
               <ExternalLink className="size-4" />
-              {t('bots.testPageOpen')}
+              {t('bots.publicPageOpen')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel>{t('bots.testPageTitle')}</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('bots.publicPageTitle')}</DropdownMenuLabel>
             <p className="px-2 pb-2 text-xs text-muted-foreground">
-              {t('bots.testPageHint')}
+              {t('bots.publicPageHint')}
             </p>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => openTestPage('chat.html')}>
-              {t('bots.testPageCollege')}
+            <DropdownMenuItem onSelect={() => openPublicPage('chat.html')}>
+              {t('bots.publicPageCollege')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => openTestPage('chat-jishi.html')}>
-              {t('bots.testPageJishi')}
+            <DropdownMenuItem
+              onSelect={() => openPublicPage('chat-jishi.html')}
+            >
+              {t('bots.publicPageJishi')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => openTestPage('default.html')}>
-              {t('bots.testPageDefault')}
+            <DropdownMenuItem onSelect={() => openPublicPage('default.html')}>
+              {t('bots.publicPageDefault')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

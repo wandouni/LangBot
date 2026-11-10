@@ -893,12 +893,13 @@ const zhHans = {
     },
   },
   bots: {
-    testPageOpen: '测试页面',
-    testPageTitle: '打开测试咨询页',
-    testPageHint: '将在新窗口中打开，并预览当前编辑内容；无需先保存。',
-    testPageCollege: '职业技术学院页面',
-    testPageJishi: '技师学院页面',
-    testPageDefault: '默认页面',
+    publicPageOpen: '公开链接',
+    publicPageTitle: '打开公开咨询页',
+    publicPageHint:
+      '将在新窗口打开对外公开页面，展示已保存的配置；刚保存的修改最多约 5 分钟后生效。',
+    publicPageCollege: '职业技术学院页面',
+    publicPageJishi: '技师学院页面',
+    publicPageDefault: '默认页面',
     pluginSubscriptions: {
       incompleteEvents:
         '当前机器人仅支持部分事件（{{events}}），处理器表现可能不完整。',

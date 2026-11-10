@@ -8,8 +8,8 @@
  *   1. <script type="application/json" id="chat-config"> inline defaults
  *   2. ?config=<http(s) url> remote JSON, merged over the inline defaults
  *   3. URL parameters: embed, title, theme (alias of accent)
- *   4. #preview=<encoded roles>&previewWelcome=<encoded text> from the
- *      admin test page (unsaved draft override)
+ *   4. #preview=<encoded roles>&previewWelcome=<encoded text> in legacy
+ *      admin preview links (kept working for old bookmarks and shares)
  *
  * Vite copies web/public into web/dist, so the core serves this file at
  * /chat-shell.js and the widget URL stays same-origin -- no host or scheme
@@ -47,9 +47,10 @@
     return config;
   }
 
-  // The admin "test page" menu appends the unsaved quick-question draft as a
-  // URL hash: #preview=<encoded JSON array>. A hash is used instead of a query
-  // parameter because it is not sent to the server and can carry a full draft.
+  // Legacy admin preview links carry the quick-question draft as a URL hash:
+  // #preview=<encoded JSON array>. A hash is used instead of a query parameter
+  // because it is not sent to the server and can carry a full draft. The admin
+  // no longer generates these links, but old ones must keep rendering.
   // Returns null when the page was opened normally; [] is a real preview that
   // must hide every suggestion tab.
   function readPreviewRoles() {
@@ -66,7 +67,7 @@
     }
   }
 
-  // The same hash also carries the unsaved welcome message as
+  // Legacy preview hashes also carry the unsaved welcome message as
   // #previewWelcome=<encoded text>. Returns null when the page was opened
   // normally; an empty string is a real preview that clears the welcome text.
   function readPreviewWelcome() {
@@ -90,9 +91,10 @@
     document.title = title;
     if (config.locale) document.documentElement.lang = config.locale;
 
-    // The widget endpoint is cached for five minutes. The admin "test page"
-    // menu appends an opaque ?v= value so a freshly saved bot configuration
-    // is visible immediately instead of waiting for the cache to expire.
+    // The widget endpoint is cached for five minutes. An optional opaque ?v=
+    // value (added manually for self-testing) makes a freshly saved bot
+    // configuration visible immediately instead of waiting for the cache to
+    // expire. Shared public links should not carry it.
     var cacheVersion = new URLSearchParams(window.location.search).get('v');
 
     var script = document.createElement('script');
@@ -112,16 +114,17 @@
     setAttr(script, 'data-on-accent', config.onAccent);
     setAttr(script, 'data-logo', config.logo);
     setAttr(script, 'data-subtitle', config.subtitle);
-    // Preview an unsaved welcome message from the admin test page. An empty
-    // draft must clear the saved text, so the flag is set even without data.
+    // Preview an unsaved welcome message from a legacy admin preview link. An
+    // empty draft must clear the saved text, so the flag is set even without
+    // data.
     var previewWelcome = readPreviewWelcome();
     if (previewWelcome !== null) {
       script.setAttribute('data-preview-welcome', 'true');
       setAttr(script, 'data-welcome', previewWelcome);
     }
-    // Page-level roles are no longer a fallback. Only an explicit preview
-    // (the admin test page) may override the saved bot groups, and an empty
-    // preview must remain empty instead of reusing the saved groups.
+    // Page-level roles are no longer a fallback. Only an explicit legacy
+    // preview may override the saved bot groups, and an empty preview must
+    // remain empty instead of reusing the saved groups.
     var previewRoles = readPreviewRoles();
     if (previewRoles !== null) {
       script.setAttribute('data-preview-roles', 'true');

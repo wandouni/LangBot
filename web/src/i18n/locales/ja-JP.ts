@@ -956,13 +956,13 @@ const jaJP = {
     },
   },
   bots: {
-    testPageOpen: 'テストページ',
-    testPageTitle: 'テストチャットページを開く',
-    testPageHint:
-      '新しいウィンドウで開き、保存前の編集中の内容をプレビューします。',
-    testPageCollege: '職業技術学院ページ',
-    testPageJishi: '技師学院ページ',
-    testPageDefault: 'デフォルトページ',
+    publicPageOpen: '公開リンク',
+    publicPageTitle: '公開チャットページを開く',
+    publicPageHint:
+      '新しいウィンドウで公開ページを開きます。保存済みの設定が表示され、保存直後の変更は最大約 5 分後に反映されます。',
+    publicPageCollege: '職業技術学院ページ',
+    publicPageJishi: '技師学院ページ',
+    publicPageDefault: 'デフォルトページ',
     pluginSubscriptions: {
       incompleteEvents:
         'このボットは監視対象の一部のイベント（{{events}}）にのみ対応しています。プロセッサーが完全には動作しない可能性があります。',

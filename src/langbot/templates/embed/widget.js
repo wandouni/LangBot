@@ -30,8 +30,8 @@
     : null;
   var scriptLogo = scriptEl ? scriptEl.getAttribute("data-logo") : null;
   var scriptSubtitle = scriptEl ? scriptEl.getAttribute("data-subtitle") : null;
-  // The admin test page can preview an unsaved welcome message. The flag is
-  // explicit so an empty draft clears the text instead of falling back.
+  // Legacy admin preview links can supply an unsaved welcome message. The flag
+  // is explicit so an empty draft clears the text instead of falling back.
   var scriptWelcome = scriptEl ? scriptEl.getAttribute("data-welcome") : null;
   var scriptPreviewWelcome =
     scriptEl && scriptEl.getAttribute("data-preview-welcome") === "true";
@@ -278,10 +278,10 @@
     return result;
   }
 
-  // Role tabs come from the saved bot configuration. The admin test page may
-  // send a draft through data-preview-roles; that draft overrides the saved
-  // groups even when it is empty. There is no page-level fallback: a bot with
-  // no groups keeps the plain welcome screen.
+  // Role tabs come from the saved bot configuration. Legacy admin preview
+  // links may send a draft through data-preview-roles; that draft overrides
+  // the saved groups even when it is empty. There is no page-level fallback: a
+  // bot with no groups keeps the plain welcome screen.
   var MAX_ROLES = 6;
 
   function normalizeRoles(raw) {

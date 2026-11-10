@@ -967,13 +967,13 @@ const esES = {
     },
   },
   bots: {
-    testPageOpen: 'Página de prueba',
-    testPageTitle: 'Abrir una página de chat de prueba',
-    testPageHint:
-      'Se abre en una ventana nueva y muestra una vista previa de los cambios actuales sin guardarlos primero.',
-    testPageCollege: 'Página de la escuela vocacional',
-    testPageJishi: 'Página de la escuela de técnicos',
-    testPageDefault: 'Página predeterminada',
+    publicPageOpen: 'Enlace público',
+    publicPageTitle: 'Abrir la página de chat pública',
+    publicPageHint:
+      'Abre la página pública en una ventana nueva con la configuración guardada. Los cambios recién guardados pueden tardar hasta 5 minutos en aparecer.',
+    publicPageCollege: 'Página de la escuela vocacional',
+    publicPageJishi: 'Página de la escuela de técnicos',
+    publicPageDefault: 'Página predeterminada',
     pluginSubscriptions: {
       incompleteEvents:
         'Este bot solo admite algunos de los eventos suscritos ({{events}}). El procesador podría no comportarse como se espera en todos los casos.',

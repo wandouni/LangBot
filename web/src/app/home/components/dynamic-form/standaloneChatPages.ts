@@ -23,26 +23,3 @@ export function buildStandaloneChatPageUrl(
   if (uuid) url.searchParams.set('embed', uuid);
   return url.toString();
 }
-
-/**
- * Turn the quick-question draft into a URL hash for the test page.
- *
- * The test page reads this hash and renders the draft instead of the saved
- * bot groups. Returning an empty string means "not a page-bot form"; an empty
- * array still produces a hash so the preview can explicitly show no tabs.
- */
-export function buildQuickQuestionPreviewHash(value: unknown): string {
-  if (!Array.isArray(value)) return '';
-  return `preview=${encodeURIComponent(JSON.stringify(value))}`;
-}
-
-/**
- * Turn the welcome-message draft into a URL hash fragment for the test page.
- *
- * An empty string still produces a fragment so the preview can explicitly
- * clear the welcome text; non-strings mean "not a page-bot form".
- */
-export function buildWelcomePreviewHash(value: unknown): string {
-  if (typeof value !== 'string') return '';
-  return `previewWelcome=${encodeURIComponent(value)}`;
-}

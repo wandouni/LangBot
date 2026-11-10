@@ -889,12 +889,13 @@ const zhHant = {
     },
   },
   bots: {
-    testPageOpen: '測試頁面',
-    testPageTitle: '開啟測試諮詢頁',
-    testPageHint: '將在新視窗中開啟，並預覽目前編輯內容；無須先儲存。',
-    testPageCollege: '職業技術學院頁面',
-    testPageJishi: '技師學院頁面',
-    testPageDefault: '預設頁面',
+    publicPageOpen: '公開連結',
+    publicPageTitle: '開啟公開諮詢頁',
+    publicPageHint:
+      '將在新視窗開啟對外公開頁面，顯示已儲存的設定；剛儲存的修改最多約 5 分鐘後生效。',
+    publicPageCollege: '職業技術學院頁面',
+    publicPageJishi: '技師學院頁面',
+    publicPageDefault: '預設頁面',
     pluginSubscriptions: {
       incompleteEvents:
         '目前機器人僅支援部分事件（{{events}}），處理器表現可能不完整。',

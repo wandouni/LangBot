@@ -20,12 +20,9 @@ function loadTs(relativePath) {
   return m.exports;
 }
 
-const {
-  STANDALONE_CHAT_PAGES,
-  buildQuickQuestionPreviewHash,
-  buildStandaloneChatPageUrl,
-  buildWelcomePreviewHash,
-} = loadTs('../../src/app/home/components/dynamic-form/standaloneChatPages.ts');
+const { STANDALONE_CHAT_PAGES, buildStandaloneChatPageUrl } = loadTs(
+  '../../src/app/home/components/dynamic-form/standaloneChatPages.ts',
+);
 
 test('offers the three standalone chat pages', () => {
   assert.deepEqual(STANDALONE_CHAT_PAGES, [
@@ -64,32 +61,7 @@ test('omits the embed parameter when no bot is selected', () => {
   );
 });
 
-test('encodes the quick-question draft for the test page hash', () => {
-  const groups = [{ id: 'g1', label: '考生与家长', questions: ['学费多少？'] }];
-  assert.equal(
-    buildQuickQuestionPreviewHash(groups),
-    `preview=${encodeURIComponent(JSON.stringify(groups))}`,
-  );
-});
-
-test('keeps an empty draft and ignores non-page-bot forms', () => {
-  assert.equal(buildQuickQuestionPreviewHash([]), 'preview=%5B%5D');
-  assert.equal(buildQuickQuestionPreviewHash(undefined), '');
-  assert.equal(buildQuickQuestionPreviewHash({}), '');
-});
-
-test('encodes the welcome-message draft for the test page hash', () => {
-  assert.equal(
-    buildWelcomePreviewHash('你好，请问想了解什么？'),
-    `previewWelcome=${encodeURIComponent('你好，请问想了解什么？')}`,
-  );
-  // An empty draft is still a real preview: it clears the saved text.
-  assert.equal(buildWelcomePreviewHash(''), 'previewWelcome=');
-  assert.equal(buildWelcomePreviewHash(undefined), '');
-  assert.equal(buildWelcomePreviewHash([]), '');
-});
-
-test('every locale carries the test page menu labels', () => {
+test('every locale carries the public page menu labels', () => {
   const locales = [
     'en-US',
     'zh-Hans',
@@ -101,12 +73,12 @@ test('every locale carries the test page menu labels', () => {
     'ru-RU',
   ];
   const keys = [
-    'testPageOpen',
-    'testPageTitle',
-    'testPageHint',
-    'testPageCollege',
-    'testPageJishi',
-    'testPageDefault',
+    'publicPageOpen',
+    'publicPageTitle',
+    'publicPageHint',
+    'publicPageCollege',
+    'publicPageJishi',
+    'publicPageDefault',
   ];
   for (const locale of locales) {
     const translations = loadTs(`../../src/i18n/locales/${locale}.ts`).default;

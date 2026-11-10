@@ -951,13 +951,13 @@ const enUS = {
     },
   },
   bots: {
-    testPageOpen: 'Test page',
-    testPageTitle: 'Open a test chat page',
-    testPageHint:
-      'Opens in a new window and previews your current edits without saving first.',
-    testPageCollege: 'Vocational college page',
-    testPageJishi: 'Technician college page',
-    testPageDefault: 'Default page',
+    publicPageOpen: 'Public link',
+    publicPageTitle: 'Open the public chat page',
+    publicPageHint:
+      'Opens the public page in a new window using the saved configuration. Changes saved just now may take up to 5 minutes to appear.',
+    publicPageCollege: 'Vocational college page',
+    publicPageJishi: 'Technician college page',
+    publicPageDefault: 'Default page',
     pluginSubscriptions: {
       incompleteEvents:
         'This bot only supports some of the subscribed events ({{events}}). The processor may not behave as intended in all cases.',

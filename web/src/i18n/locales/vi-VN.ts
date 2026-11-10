@@ -948,13 +948,13 @@ const viVN = {
     },
   },
   bots: {
-    testPageOpen: 'Trang thử nghiệm',
-    testPageTitle: 'Mở trang trò chuyện thử nghiệm',
-    testPageHint:
-      'Mở trong cửa sổ mới và xem trước nội dung đang chỉnh sửa mà không cần lưu trước.',
-    testPageCollege: 'Trang trường cao đẳng nghề',
-    testPageJishi: 'Trang trường trung cấp kỹ thuật',
-    testPageDefault: 'Trang mặc định',
+    publicPageOpen: 'Liên kết công khai',
+    publicPageTitle: 'Mở trang trò chuyện công khai',
+    publicPageHint:
+      'Mở trang công khai trong cửa sổ mới bằng cấu hình đã lưu. Thay đổi vừa lưu có thể mất tới khoảng 5 phút để hiển thị.',
+    publicPageCollege: 'Trang trường cao đẳng nghề',
+    publicPageJishi: 'Trang trường trung cấp kỹ thuật',
+    publicPageDefault: 'Trang mặc định',
     pluginSubscriptions: {
       incompleteEvents:
         'Bot hiện chỉ hỗ trợ một số sự kiện mà bộ xử lý theo dõi ({{events}}). Bộ xử lý có thể không hoạt động đầy đủ trong mọi trường hợp.',

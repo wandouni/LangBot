@@ -54,14 +54,14 @@ spec:
         es_ES: "Mensaje de bienvenida"
         ru_RU: "Приветственное сообщение"
       description:
-        en_US: "Text shown in the welcome area before the conversation starts. Leave empty to use the standalone page subtitle or the widget default. The admin test page previews unsaved edits."
-        zh_Hans: "对话开始前显示在欢迎区的文字。留空则使用独立聊天页自带的副标题或组件默认文案；后台「测试页面」可预览尚未保存的修改。"
-        zh_Hant: "對話開始前顯示在歡迎區的文字。留空則使用獨立聊天頁自帶的副標題或元件預設文案；後台「測試頁面」可預覽尚未儲存的修改。"
-        ja_JP: "会話開始前にウェルカムエリアへ表示するテキストです。空欄の場合は単独チャットページのサブタイトル、またはウィジェットの既定文言を使用します。管理画面の「テストページ」では未保存の編集内容を確認できます。"
-        th_TH: "ข้อความที่แสดงในพื้นที่ต้อนรับก่อนเริ่มการสนทนา หากเว้นว่างจะใช้คำโปรยของหน้าแชทแบบสแตนด์อโลนหรือข้อความเริ่มต้นของวิดเจ็ต หน้า \"ทดสอบหน้า\" ในหลังบ้านสามารถดูตัวอย่างการแก้ไขที่ยังไม่บันทึกได้"
-        vi_VN: "Văn bản hiển thị ở khu vực chào mừng trước khi cuộc trò chuyện bắt đầu. Để trống sẽ dùng phụ đề của trang trò chuyện độc lập hoặc văn bản mặc định của widget. Trang kiểm tra trong trang quản trị có thể xem trước thay đổi chưa lưu."
-        es_ES: "Texto que se muestra en el área de bienvenida antes de iniciar la conversación. Si se deja vacío, se usa el subtítulo de la página de chat independiente o el texto predeterminado del widget. La página de prueba del panel permite previsualizar cambios sin guardar."
-        ru_RU: "Текст, отображаемый в приветственной области до начала разговора. Если оставить пустым, используется подзаголовок отдельной страницы чата или текст виджета по умолчанию. Страница тестирования в панели администратора показывает несохранённые изменения."
+        en_US: "Text shown in the welcome area before the conversation starts. Leave empty to use the standalone page subtitle or the widget default."
+        zh_Hans: "对话开始前显示在欢迎区的文字。留空则使用独立聊天页自带的副标题或组件默认文案。"
+        zh_Hant: "對話開始前顯示在歡迎區的文字。留空則使用獨立聊天頁自帶的副標題或元件預設文案。"
+        ja_JP: "会話開始前にウェルカムエリアへ表示するテキストです。空欄の場合は単独チャットページのサブタイトル、またはウィジェットの既定文言を使用します。"
+        th_TH: "ข้อความที่แสดงในพื้นที่ต้อนรับก่อนเริ่มการสนทนา หากเว้นว่างจะใช้คำโปรยของหน้าแชทแบบสแตนด์อโลนหรือข้อความเริ่มต้นของวิดเจ็ต"
+        vi_VN: "Văn bản hiển thị ở khu vực chào mừng trước khi cuộc trò chuyện bắt đầu. Để trống sẽ dùng phụ đề của trang trò chuyện độc lập hoặc văn bản mặc định của widget."
+        es_ES: "Texto que se muestra en el área de bienvenida antes de iniciar la conversación. Si se deja vacío, se usa el subtítulo de la página de chat independiente o el texto predeterminado del widget."
+        ru_RU: "Текст, отображаемый в приветственной области до начала разговора. Если оставить пустым, используется подзаголовок отдельной страницы чата или текст виджета по умолчанию."
       type: text
       required: false
       default: "你好，请问想了解什么？可以咨询招生报名、专业设置、校园服务等公开事项。"
