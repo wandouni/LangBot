@@ -135,6 +135,7 @@
     document.head.appendChild(script);
 
     installLayoutOverride();
+    installViewportTracking();
   }
 
   // The widget renders inside a Shadow DOM, so a plain <style> on the page
@@ -160,6 +161,50 @@
       // A full-viewport panel should appear in place; the widget's default
       // scale/fade entrance reads as a shrunk page on these standalone pages.
       '  transition: none;' +
+      '}' +
+      // Phones use the visual viewport so the panel sits above the keyboard,
+      // and the page can reserve space for a bottom action bar. On desktop the
+      // original full-width panel with the 76px bubble strip is unchanged.
+      '@media (max-width: 480px) {' +
+      '  .lb-panel {' +
+      '    top: var(--lb-vv-top, 0px);' +
+      '    bottom: calc(var(--lb-vv-bottom, 0px) + var(--lb-tools-reserve, 0px));' +
+      '    height: auto;' +
+      '    max-height: none;' +
+      '  }' +
+      '  .lb-header {' +
+      '    padding: calc(12px + env(safe-area-inset-top)) 12px 12px;' +
+      '  }' +
+      '  .lb-header-left { flex: 1; min-width: 0; }' +
+      '  .lb-header-logo { width: 26px; height: 26px; flex-shrink: 0; }' +
+      // A long bot title must not wrap under the reset/minimize buttons.
+      '  .lb-header-title {' +
+      '    white-space: nowrap; overflow: hidden;' +
+      '    text-overflow: ellipsis; min-width: 0;' +
+      '  }' +
+      '  .lb-header-actions { flex-shrink: 0; gap: 4px; }' +
+      '  .lb-header-btn { width: 36px; height: 36px; padding: 0; }' +
+      '  .lb-header-btn svg { width: 20px; height: 20px; }' +
+      '  .lb-messages {' +
+      '    padding: 12px; gap: 12px;' +
+      '    -webkit-overflow-scrolling: touch;' +
+      '    overscroll-behavior: contain;' +
+      '  }' +
+      // 16px avoids the automatic page zoom iOS applies to smaller inputs.
+      '  .lb-input-area {' +
+      '    gap: 6px;' +
+      '    padding: 10px 12px calc(10px + var(--lb-composer-safe-bottom, env(safe-area-inset-bottom)));' +
+      '  }' +
+      '  .lb-input { min-height: 44px; padding: 11px 12px; font-size: 16px; }' +
+      '  .lb-send-btn { width: 44px; height: 44px; }' +
+      '  .lb-img-upload-btn { width: 40px; height: 40px; padding: 0; }' +
+      '  .lb-bubble {' +
+      '    bottom: calc(16px + env(safe-area-inset-bottom) + var(--lb-vv-bottom, 0px));' +
+      '    right: calc(16px + env(safe-area-inset-right));' +
+      '  }' +
+      // While the panel is open the bubble would overlap the composer or the
+      // bottom action bar; the header minimize button closes the panel.
+      '  .lb-bubble.lb-open { display: none; }' +
       '}' +
       // Standalone consultation pages carry the school's own branding, so the
       // "Powered by LangBot" line is hidden here only; embedded widgets on
@@ -200,6 +245,90 @@
         observer.disconnect();
       }
     }, 50);
+  }
+
+  // Publish the visual viewport to CSS so the panel can shrink above the
+  // on-screen keyboard instead of hiding the composer behind it. iOS keeps
+  // window.innerHeight unchanged while visualViewport.height shrinks; Android
+  // usually shrinks the layout viewport instead, so both are checked.
+  function installViewportTracking() {
+    var root = document.documentElement;
+    var maxInnerHeight = window.innerHeight;
+    var maxInnerWidth = window.innerWidth;
+    var frame = null;
+
+    function isEditingInput() {
+      var active = document.activeElement;
+      if (!active) return false;
+      if (active.classList && active.classList.contains('lb-input'))
+        return true;
+      var inner = active.shadowRoot && active.shadowRoot.activeElement;
+      return !!(
+        inner &&
+        inner.classList &&
+        inner.classList.contains('lb-input')
+      );
+    }
+
+    function sync() {
+      frame = null;
+      var viewport = window.visualViewport;
+      var height = viewport ? viewport.height : window.innerHeight;
+      var top = viewport ? Math.max(0, viewport.offsetTop) : 0;
+      var bottom = viewport
+        ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+
+      // Re-baseline after rotation; otherwise a landscape width change would
+      // look like a permanently open keyboard.
+      if (window.innerWidth !== maxInnerWidth) {
+        maxInnerWidth = window.innerWidth;
+        maxInnerHeight = window.innerHeight;
+      }
+      if (window.innerHeight > maxInnerHeight) {
+        maxInnerHeight = window.innerHeight;
+      }
+
+      var visualShrink = viewport
+        ? window.innerHeight - viewport.height > 120
+        : false;
+      var layoutShrink = maxInnerHeight - window.innerHeight > 120;
+      var keyboardOpen = isEditingInput() && (visualShrink || layoutShrink);
+
+      root.style.setProperty('--lb-vv-height', height + 'px');
+      root.style.setProperty('--lb-vv-top', top + 'px');
+      root.style.setProperty('--lb-vv-bottom', bottom + 'px');
+
+      if (keyboardOpen) {
+        // Pages with a bottom action bar declare --lb-tools-reserve in their
+        // stylesheet; zeroing it here lets the composer hug the keyboard.
+        root.classList.add('lb-keyboard-open');
+        root.style.setProperty('--lb-tools-reserve', '0px');
+        root.style.setProperty('--lb-composer-safe-bottom', '0px');
+      } else {
+        root.classList.remove('lb-keyboard-open');
+        root.style.removeProperty('--lb-tools-reserve');
+        root.style.removeProperty('--lb-composer-safe-bottom');
+      }
+    }
+
+    function schedule() {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame
+        ? window.requestAnimationFrame(sync)
+        : window.setTimeout(sync, 16);
+    }
+
+    sync();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', schedule);
+      window.visualViewport.addEventListener('scroll', schedule);
+    }
+    window.addEventListener('resize', schedule);
+    // Focus changes decide whether a viewport shrink belongs to the composer;
+    // without this, rotating with another input focused could hide the bar.
+    document.addEventListener('focusin', schedule);
+    document.addEventListener('focusout', schedule);
   }
 
   function boot() {

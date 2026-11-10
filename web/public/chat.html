@@ -2,7 +2,7 @@
 <html lang="zh-Hans">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>广东岭南职业技术学院公共咨询机器人</title>
   <!--
     Page-level configuration for the standalone chat widget.
@@ -43,6 +43,13 @@
   </script>
   <script src="/chat-shell.js"></script>
   <style>
+    /* On phones the tools become a bottom action bar. chat-shell.js reads the
+       reserve from here to keep the chat panel above the bar; the composer
+       does not add the safe-area inset twice because the bar already owns it. */
+    html {
+      --lb-tools-reserve: calc(64px + env(safe-area-inset-bottom));
+      --lb-composer-safe-bottom: 0px;
+    }
     /* Top-right tools: quick link navigation and the message board. The
        message board keeps its original right offset (88px desktop / 80px
        narrow), so the quick link button sits to its left without touching the
@@ -247,21 +254,74 @@
     .ln-consult-btn.primary { border: 1px solid #72030C; background: #72030C; color: #fff; }
     .ln-consult-btn.primary:disabled { opacity: 0.65; cursor: default; filter: none; }
     @media (max-width: 480px) {
-      #ln-consult-tools { top: 12px; right: 80px; gap: 7px; }
-      #ln-quick-toggle { padding: 7px 14px; font-size: 13px; }
-      .ln-quick-label-full { display: none; }
-      .ln-quick-label-short { display: inline; }
-      /* Expand from the viewport edge: anchored to the button, the menu would
-         be clipped off the left of a narrow screen. */
+      /* The toolbar moves below the composer so it no longer covers the chat
+         title or the widget's reset/minimize buttons. Both actions stay
+         visible, thumb-sized, and include the home-indicator safe area. */
+      #ln-consult-tools {
+        top: auto;
+        left: 0;
+        right: 0;
+        /* Lift the bar above mobile browser chrome too, matching the panel. */
+        bottom: var(--lb-vv-bottom, 0px);
+        height: var(--lb-tools-reserve);
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        justify-content: center;
+        gap: 10px;
+        box-sizing: border-box;
+        background: #fff;
+        border-top: 1px solid #ececec;
+      }
+      /* The keyboard covers the bar; hiding it also frees its reserved space
+         so the composer sits directly on top of the keyboard. */
+      html.lb-keyboard-open #ln-consult-tools { display: none; }
+      #ln-quick-nav { flex: 1 1 0; max-width: 170px; }
+      #ln-quick-toggle {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 14px;
+        justify-content: center;
+        font-size: 14px;
+      }
+      .ln-quick-label-full { display: inline; }
+      .ln-quick-label-short { display: none; }
+      #ln-consult-launcher {
+        flex: 1 1 0;
+        max-width: 170px;
+        min-height: 44px;
+        padding: 10px 14px;
+        justify-content: center;
+        font-size: 14px;
+      }
+      /* Above the bar and anchored to both screen edges: the old top-right
+         menu would now open off-screen. */
       #ln-quick-menu {
         position: fixed;
-        top: 52px;
+        top: auto;
+        left: 12px;
         right: 12px;
-        width: min(280px, calc(100vw - 24px));
-        max-height: calc(100dvh - 72px);
+        bottom: calc(var(--lb-vv-bottom, 0px) + var(--lb-tools-reserve) + 8px);
+        width: auto;
+        max-width: none;
+        max-height: min(60dvh, 420px);
       }
-      #ln-consult-launcher { padding: 7px 14px; font-size: 13px; }
-      #ln-consult-dialog { padding: 18px; }
+      /* Keep the message-board dialog inside the visual viewport so focusing
+         an input never pushes the Save button under the keyboard. */
+      #ln-consult-overlay {
+        top: var(--lb-vv-top, 0px);
+        height: var(--lb-vv-height, 100dvh);
+        bottom: auto;
+        box-sizing: border-box;
+        padding: calc(12px + env(safe-area-inset-top)) 12px
+                 calc(12px + env(safe-area-inset-bottom));
+      }
+      #ln-consult-dialog {
+        width: 100%;
+        max-height: calc(
+          var(--lb-vv-height, 100dvh) - 24px -
+          env(safe-area-inset-top) - env(safe-area-inset-bottom)
+        );
+        padding: 18px;
+      }
       .ln-consult-field input { font-size: 16px; }
     }
   </style>
@@ -713,6 +773,18 @@
       window.addEventListener('resize', function () {
         if (quickOpen) closeQuickMenu(false);
       });
+      // Opening the keyboard hides the bottom bar and its menu; close the menu
+      // state too so it does not reappear open when the keyboard goes away.
+      if (window.visualViewport) {
+        var lastViewportHeight = window.visualViewport.height;
+        window.visualViewport.addEventListener('resize', function () {
+          var height = window.visualViewport.height;
+          if (lastViewportHeight - height > 120 && quickOpen) {
+            closeQuickMenu(false);
+          }
+          lastViewportHeight = height;
+        });
+      }
 
       launcher.addEventListener('click', openModal);
       closeButton.addEventListener('click', closeModal);

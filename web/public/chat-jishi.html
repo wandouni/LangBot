@@ -2,7 +2,7 @@
 <html lang="zh-Hans">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>广东岭南现代技师学院咨询机器人</title>
   <!--
     Same structure as chat.html, branded for the technician college.
@@ -37,15 +37,24 @@
   <script src="/chat-shell.js"></script>
   <style>
     /* Message board entry for the standalone consultation page. Keep the
-       launcher base styles in sync with chat.html; only the accent color
-       differs. The quick link navigation is currently chat.html only: to
-       enable it here, copy the #ln-consult-tools / #ln-quick-* blocks and the
-       page script from chat.html and replace the accent color. */
-    #ln-consult-launcher {
+       launcher and tools base styles in sync with chat.html; only the accent
+       color differs. The quick link navigation is currently chat.html only:
+       to enable it here, copy the #ln-quick-* blocks and the page script from
+       chat.html and replace the accent color. */
+    html {
+      --lb-tools-reserve: calc(64px + env(safe-area-inset-bottom));
+      --lb-composer-safe-bottom: 0px;
+    }
+    #ln-consult-tools {
       position: fixed;
       top: 16px;
       right: 88px;
       z-index: 2147483647;
+      display: flex;
+      align-items: center;
+    }
+    #ln-consult-tools[hidden] { display: none; }
+    #ln-consult-launcher {
       display: inline-flex;
       align-items: center;
       padding: 8px 16px;
@@ -131,14 +140,55 @@
     .ln-consult-btn.primary { border: 1px solid #0f6fa8; background: #0f6fa8; color: #fff; }
     .ln-consult-btn.primary:disabled { opacity: 0.65; cursor: default; filter: none; }
     @media (max-width: 480px) {
-      #ln-consult-launcher { top: 12px; right: 80px; padding: 7px 14px; font-size: 13px; }
-      #ln-consult-dialog { padding: 18px; }
+      /* The message board moves below the composer so it no longer covers the
+         chat title or the widget's reset/minimize buttons. */
+      #ln-consult-tools {
+        top: auto;
+        left: 0;
+        right: 0;
+        /* Lift the bar above mobile browser chrome too, matching the panel. */
+        bottom: var(--lb-vv-bottom, 0px);
+        height: var(--lb-tools-reserve);
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        justify-content: center;
+        box-sizing: border-box;
+        background: #fff;
+        border-top: 1px solid #ececec;
+      }
+      html.lb-keyboard-open #ln-consult-tools { display: none; }
+      #ln-consult-launcher {
+        flex: 1 1 0;
+        max-width: 170px;
+        min-height: 44px;
+        padding: 10px 14px;
+        justify-content: center;
+        font-size: 14px;
+      }
+      /* Keep the dialog inside the visual viewport while the keyboard is up. */
+      #ln-consult-overlay {
+        top: var(--lb-vv-top, 0px);
+        height: var(--lb-vv-height, 100dvh);
+        bottom: auto;
+        box-sizing: border-box;
+        padding: calc(12px + env(safe-area-inset-top)) 12px
+                 calc(12px + env(safe-area-inset-bottom));
+      }
+      #ln-consult-dialog {
+        width: 100%;
+        max-height: calc(
+          var(--lb-vv-height, 100dvh) - 24px -
+          env(safe-area-inset-top) - env(safe-area-inset-bottom)
+        );
+        padding: 18px;
+      }
       .ln-consult-field input { font-size: 16px; }
     }
   </style>
 </head>
 <body>
-  <button type="button" id="ln-consult-launcher" hidden>留言板</button>
+  <div id="ln-consult-tools" hidden>
+    <button type="button" id="ln-consult-launcher" hidden>留言板</button>
+  </div>
   <div id="ln-consult-overlay" hidden>
     <div id="ln-consult-dialog" role="dialog" aria-modal="true" aria-labelledby="ln-consult-title">
       <h2 id="ln-consult-title">留言板</h2>
@@ -184,6 +234,7 @@
       var GENERIC_ERROR_TEXT = '提交失败，请稍后重试。';
       var NETWORK_ERROR_TEXT = '网络异常，请稍后重试。';
 
+      var tools = document.getElementById('ln-consult-tools');
       var launcher = document.getElementById('ln-consult-launcher');
       var overlay = document.getElementById('ln-consult-overlay');
       var form = document.getElementById('ln-consult-form');
@@ -210,10 +261,51 @@
         return '';
       }
 
+      // The launcher belongs to the chat view: hide it when the visitor closes
+      // the panel so the bottom action bar does not sit over a blank page.
+      // Reopening from the bubble brings it back, matching chat.html.
+      function attachPanelWatcher(panel) {
+        function sync() {
+          tools.hidden = !panel.classList.contains('lb-visible');
+        }
+        sync();
+        if (typeof MutationObserver === 'function') {
+          new MutationObserver(sync).observe(panel, {
+            attributes: true,
+            attributeFilter: ['class']
+          });
+        }
+      }
+
+      var panelWatcherStarted = false;
+      function watchWidgetPanel() {
+        if (panelWatcherStarted) return;
+        panelWatcherStarted = true;
+        var tries = 0;
+        function findPanel() {
+          var root = document.getElementById('langbot-widget-root');
+          return root && root.shadowRoot
+            ? root.shadowRoot.querySelector('.lb-panel')
+            : null;
+        }
+        function retry() {
+          var panel = findPanel();
+          if (panel) {
+            attachPanelWatcher(panel);
+            return;
+          }
+          if (++tries > 150) return;
+          window.setTimeout(retry, 100);
+        }
+        retry();
+      }
+
       function enableLauncher(uuid) {
         if (!uuid) return false;
         botUuid = uuid;
         launcher.hidden = false;
+        tools.hidden = false;
+        watchWidgetPanel();
         return true;
       }
 
