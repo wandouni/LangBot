@@ -104,6 +104,54 @@ function widgetSource(origin: string, roleGroups: QuickQuestionGroup[] = []) {
     .replaceAll('"__LANGBOT_WELCOME_MESSAGE__"', JSON.stringify(''));
 }
 
+// The quick link menu is driven by the inline #chat-config JSON. These are the
+// six production entries; keep the expected hrefs in sync with chat.html.
+const QUICK_LINKS = [
+  {
+    label: '广州校区VR全景',
+    href: 'https://www.720yun.com/vr/89cjtgkkrw7?s=19327510',
+  },
+  {
+    label: '清远校区VR全景',
+    href: 'https://www.720yun.com/vr/408jtgkkuO1?s=19217486',
+  },
+  { label: '录取查询', href: 'https://lnc.edu.cn/zsw/xszn/lqcxl' },
+  { label: '招生计划', href: 'https://lnc.edu.cn/zsw/zsjh/byaejbejqq' },
+  { label: '招生简章', href: 'https://lnc.edu.cn/zsw/zsjz/2021nzsjz' },
+  { label: '新生指南', href: 'https://lnc.edu.cn/zsw/xszn/jtzn' },
+];
+
+type ChatConfig = {
+  links?: Array<{ label: string; url: string }>;
+};
+
+// Rewrite the inline config before the page script parses it. Registered with
+// page.route() before goto so the test never touches the real chat.html file.
+function rewriteChatConfig(html: string, mutate: (config: ChatConfig) => void) {
+  return html.replace(
+    /(<script type="application\/json" id="chat-config">)([\s\S]*?)(<\/script>)/,
+    (_match, open: string, body: string, close: string) => {
+      const config = JSON.parse(body) as ChatConfig;
+      mutate(config);
+      return `${open}\n${JSON.stringify(config, null, 2)}\n${close}`;
+    },
+  );
+}
+
+async function serveChatHtml(page: Page, mutate: (config: ChatConfig) => void) {
+  const html = fs.readFileSync(
+    path.resolve(process.cwd(), 'public/chat.html'),
+    'utf8',
+  );
+  await page.route('**/chat.html', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: rewriteChatConfig(html, mutate),
+    }),
+  );
+}
+
 async function mockChatBackend(
   page: Page,
   roleGroups: QuickQuestionGroup[] = [],
@@ -569,4 +617,258 @@ test('default.html has no message board entry', async ({ page }) => {
 
   await expect(page.locator('#langbot-widget-root')).toBeAttached();
   await expect(page.locator('#ln-consult-launcher')).toHaveCount(0);
+});
+
+test('the quick link button sits left of the message board', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const toggle = page.locator('#ln-quick-toggle');
+  const launcher = page.locator('#ln-consult-launcher');
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-label', '快捷链接导航');
+  await expect(page.locator('#ln-quick-menu')).toBeHidden();
+
+  await expect(launcher).toBeVisible();
+  const toggleBox = await toggle.boundingBox();
+  const launcherBox = await launcher.boundingBox();
+  const viewport = page.viewportSize();
+  expect(toggleBox).not.toBeNull();
+  expect(launcherBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+
+  // Both buttons share the fixed right offset: the message board keeps the
+  // original 88px gap to the widget's own reset/close actions.
+  expect(viewport!.width - (launcherBox!.x + launcherBox!.width)).toBeCloseTo(
+    88,
+    0,
+  );
+  expect(toggleBox!.x + toggleBox!.width).toBeLessThanOrEqual(launcherBox!.x);
+});
+
+test('hovering the quick link button opens six external links', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const toggle = page.locator('#ln-quick-toggle');
+  const menu = page.locator('#ln-quick-menu');
+  await toggle.hover();
+  await expect(menu).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+  const items = menu.locator('[role="menuitem"]');
+  await expect(items).toHaveCount(QUICK_LINKS.length);
+  await expect(menu.locator('.ln-quick-text')).toHaveText(
+    QUICK_LINKS.map((link) => link.label),
+  );
+
+  for (let index = 0; index < QUICK_LINKS.length; index += 1) {
+    await expect(items.nth(index)).toHaveAttribute(
+      'href',
+      QUICK_LINKS[index].href,
+    );
+    await expect(items.nth(index)).toHaveAttribute('target', '_blank');
+    await expect(items.nth(index)).toHaveAttribute(
+      'rel',
+      'noopener noreferrer',
+    );
+  }
+
+  // The menu must stay inside the hover container, otherwise crossing the 8px
+  // gap between button and menu closes it.
+  expect(await menu.evaluate((node) => node.parentElement?.id)).toBe(
+    'ln-quick-nav',
+  );
+});
+
+test('moving the pointer away closes the quick link menu', async ({ page }) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const menu = page.locator('#ln-quick-menu');
+  await page.locator('#ln-quick-toggle').hover();
+  await expect(menu).toBeVisible();
+
+  await page.mouse.move(20, 500);
+  await expect(menu).toBeHidden();
+});
+
+test('Escape closes the quick link menu and restores focus', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const toggle = page.locator('#ln-quick-toggle');
+  const menu = page.locator('#ln-quick-menu');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+});
+
+test('the quick link menu supports arrow, Home and End keys', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const toggle = page.locator('#ln-quick-toggle');
+  const menu = page.locator('#ln-quick-menu');
+  const items = menu.locator('[role="menuitem"]');
+
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await expect(items.nth(0)).toBeFocused();
+
+  await page.keyboard.press('ArrowDown');
+  await expect(items.nth(1)).toBeFocused();
+
+  await page.keyboard.press('End');
+  await expect(items.nth(QUICK_LINKS.length - 1)).toBeFocused();
+
+  await page.keyboard.press('Home');
+  await expect(items.nth(0)).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(toggle).toBeFocused();
+});
+
+test('clicking outside closes the quick link menu', async ({ page }) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const menu = page.locator('#ln-quick-menu');
+  await page.locator('#ln-quick-toggle').focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeVisible();
+
+  await page.mouse.click(20, 500);
+  await expect(menu).toBeHidden();
+});
+
+test('closing the chat hides the page tools until it reopens', async ({
+  page,
+}) => {
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  const tools = page.locator('#ln-consult-tools');
+  const panel = page.locator('.lb-panel');
+  const bubble = page.locator('.lb-bubble');
+  await expect(panel).toHaveClass(/lb-visible/);
+  await expect(tools).toBeVisible();
+
+  // While the panel is open the floating bubble doubles as its close button.
+  await bubble.click();
+  await expect(panel).not.toHaveClass(/lb-visible/);
+  await expect(tools).toBeHidden();
+
+  await bubble.click();
+  await expect(panel).toHaveClass(/lb-visible/);
+  await expect(tools).toBeVisible();
+
+  // chat-shell injects the full-viewport override as soon as the widget root
+  // appears, so the default bottom-right popup never paints. It also disables
+  // the widget's scale/fade entrance, which would shrink the whole page.
+  const override = await page
+    .locator('#langbot-widget-root')
+    .evaluate((root) => {
+      const style = root.shadowRoot?.querySelector(
+        'style[data-layout-override]',
+      );
+      return style?.textContent ?? '';
+    });
+  expect(override).toContain('transition: none');
+});
+
+test.describe('quick links on a phone', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test('tap toggles the menu and keeps it inside the viewport', async ({
+    page,
+  }) => {
+    await mockChatBackend(page);
+    await page.goto('/chat.html');
+
+    const toggle = page.locator('#ln-quick-toggle');
+    const menu = page.locator('#ln-quick-menu');
+    await expect(toggle.locator('.ln-quick-label-short')).toBeVisible();
+    await expect(toggle.locator('.ln-quick-label-full')).toBeHidden();
+
+    await toggle.tap();
+    await expect(menu).toBeVisible();
+    const box = await menu.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+
+    await toggle.tap();
+    await expect(menu).toBeHidden();
+
+    await toggle.tap();
+    await expect(menu).toBeVisible();
+    await page.touchscreen.tap(20, 500);
+    await expect(menu).toBeHidden();
+  });
+});
+
+test('quick links skip non-http(s) urls', async ({ page }) => {
+  await serveChatHtml(page, (config) => {
+    config.links![0].url = 'javascript:alert(1)';
+    config.links![3].url = 'ftp://example.com/x';
+  });
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  await page.locator('#ln-quick-toggle').hover();
+  const items = page.locator('#ln-quick-menu [role="menuitem"]');
+  await expect(items).toHaveCount(QUICK_LINKS.length - 2);
+  await expect(
+    page.locator('#ln-quick-menu a[href^="javascript:"]'),
+  ).toHaveCount(0);
+  await expect(page.locator('#ln-quick-menu a[href^="ftp:"]')).toHaveCount(0);
+  await expect(page.locator('#ln-quick-menu .ln-quick-text')).toHaveText([
+    QUICK_LINKS[1].label,
+    QUICK_LINKS[2].label,
+    QUICK_LINKS[4].label,
+    QUICK_LINKS[5].label,
+  ]);
+});
+
+test('an empty links array hides the quick link button', async ({ page }) => {
+  await serveChatHtml(page, (config) => {
+    config.links = [];
+  });
+  await mockChatBackend(page);
+  await page.goto('/chat.html');
+
+  await expect(page.locator('#ln-quick-nav')).toBeHidden();
+  await expect(page.locator('#ln-consult-launcher')).toBeVisible();
+});
+
+test('the quick link navigation is chat.html only', async ({ page }) => {
+  await mockChatBackend(page);
+  await page.goto('/chat-jishi.html');
+  await expect(page.locator('#ln-quick-toggle')).toHaveCount(0);
+
+  await page.goto('/default.html');
+  await expect(page.locator('#ln-quick-toggle')).toHaveCount(0);
 });
